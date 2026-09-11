@@ -149,7 +149,7 @@ function DisplayPanel() {
           const mark = m.focused ? " (focused)" : ""
           const hz = Math.round(m.refreshRate || 0)
           const modes = (m.availableModes || []).slice(0, 8).join(", ")
-          return `${m.name || "?"}${mark}\n  ${m.width}×${m.height} @ ${hz} Hz  scale ${m.scale}\n  modes: ${modes || "preferred / hyprctl"}`
+          return `${m.name || "?"}${mark}\n  ${m.width}×${m.height} @ ${hz} Hz  scale ${m.scale}\n  modes: ${modes || "1920x1080@60"}`
         })
         .join("\n\n")
     } catch {
@@ -169,21 +169,25 @@ function DisplayPanel() {
         class="control-sub"
         wrap
         xalign={0}
-        label="Resolution is applied with Hyprland (hyprctl). wlr-randr is used when present. QEMU guests must start virtio-vga at 1920×1080 or the device stays 640×480."
+        label="Hyprland preferred on QEMU virtio EDID picks 640×480@120 (listed first), even when 1920×1080 is available. Session default is 1920×1080@60. Applies with hyprctl; wlr-randr if present."
       />
       <label class="display-info" wrap xalign={0} label={info} />
       <label class="section" xalign={0} label="Apply to focused output" />
       <box spacing={8}>
-        <button hexpand onClicked={() => applyDisplay("1920x1080")}>
-          <label label="1920×1080" />
+        <button hexpand onClicked={() => applyDisplay("1920x1080@60")}>
+          <label label="1920×1080@60" />
         </button>
-        <button hexpand onClicked={() => applyDisplay("1280x720")}>
-          <label label="1280×720" />
-        </button>
-        <button hexpand onClicked={() => applyDisplay("preferred")}>
-          <label label="Preferred" />
+        <button hexpand onClicked={() => applyDisplay("1280x720@60")}>
+          <label label="1280×720@60" />
         </button>
       </box>
+      <button
+        hexpand
+        tooltipText="On QEMU virtio this often becomes 640×480@120"
+        onClicked={() => applyDisplay("preferred")}
+      >
+        <label label="Preferred (avoid on QEMU)" />
+      </button>
       <button hexpand onClicked={() => launch("display")}>
         <label label="Monitor details…" />
       </button>
@@ -304,9 +308,6 @@ export default function ControlCenter() {
       exclusivity={Astal.Exclusivity.IGNORE}
       keymode={Astal.Keymode.EXCLUSIVE}
       application={app}
-      onNotifyVisible={({ visible }) => {
-        if (visible) setPage("overview")
-      }}
     >
       <Gtk.EventControllerKey onKeyPressed={onKey} />
       <Gtk.GestureClick onPressed={onClick} />
@@ -324,13 +325,14 @@ export default function ControlCenter() {
             class="control-sub"
             xalign={0}
             wrap
-            label="One place for device settings"
+            label="System settings in one place"
           />
           <NavItem
             id="overview"
             label="Overview"
             icon="preferences-system-symbolic"
           />
+          <label class="nav-group" xalign={0} label="Hardware" />
           <NavItem
             id="display"
             label="Display"
@@ -351,6 +353,7 @@ export default function ControlCenter() {
             label="Bluetooth"
             icon="bluetooth-symbolic"
           />
+          <label class="nav-group" xalign={0} label="Personalization" />
           <NavItem
             id="appearance"
             label="Appearance"
@@ -361,6 +364,7 @@ export default function ControlCenter() {
             label="Input"
             icon="input-keyboard-symbolic"
           />
+          <label class="nav-group" xalign={0} label="System" />
           <NavItem
             id="about"
             label="About"

@@ -85,7 +85,8 @@ focused_monitor() {
 
 show_display() {
   echo "CodaLinux display (Hyprland — hyprctl; optional wlr-randr)"
-  echo "QEMU guests need virtio-vga,xres=1920,yres=1080 or the device stays 640x480."
+  echo "Session default is 1920x1080@60. Do not use preferred on QEMU virtio:"
+  echo "EDID lists 640x480@119.99 first even when 1920x1080 is available."
   echo
   if command -v hyprctl >/dev/null 2>&1; then
     hyprctl monitors || true
@@ -98,16 +99,36 @@ show_display() {
     wlr-randr || true
     echo
   fi
-  echo "Apply: coda-settings display apply 1920x1080"
-  echo "       coda-settings display apply 1280x720"
-  echo "       coda-settings display apply preferred [OUTPUT]"
+  echo "Apply: coda-settings display apply 1920x1080@60"
+  echo "       coda-settings display apply 1280x720@60"
+  echo "       coda-settings display apply preferred [OUTPUT]  (avoid on QEMU)"
+}
+
+# Accept 1920x1080, 1920x1080@60, or 1920x1080@60.00Hz.
+normalize_mode() {
+  local mode="${1:-}"
+  if [[ "${mode}" == preferred ]]; then
+    printf '%s' preferred
+    return
+  fi
+  mode="${mode%Hz}"
+  mode="${mode%.00}"
+  if [[ "${mode}" == *@* ]]; then
+    printf '%s' "${mode}"
+    return
+  fi
+  if [[ "${mode}" == *[0-9]x[0-9]* ]]; then
+    printf '%s@60' "${mode}"
+    return
+  fi
+  printf '%s' "${mode}"
 }
 
 apply_display() {
   local mode="${1:-}"
   local output="${2:-}"
   if [[ -z "${mode}" ]]; then
-    echo "coda-settings: display apply needs a mode (1920x1080, 1280x720, preferred)" >&2
+    echo "coda-settings: display apply needs a mode (1920x1080@60, 1280x720@60, preferred)" >&2
     exit 2
   fi
   if [[ -z "${output}" ]]; then
@@ -118,8 +139,11 @@ apply_display() {
     exit 1
   fi
 
+  mode="$(normalize_mode "${mode}")"
+
   if [[ "${mode}" != preferred ]] && command -v wlr-randr >/dev/null 2>&1; then
-    if wlr-randr --output "${output}" --mode "${mode}"; then
+    local wr_mode="${mode%@*}"
+    if wlr-randr --output "${output}" --mode "${wr_mode}"; then
       return 0
     fi
   fi
@@ -130,7 +154,7 @@ apply_display() {
       spec="${output},preferred,auto,1"
       ;;
     *[0-9]x[0-9]*)
-      spec="${output},${mode}@60,auto,1"
+      spec="${output},${mode},auto,1"
       ;;
     *)
       echo "coda-settings: unknown mode ${mode}" >&2
@@ -152,7 +176,7 @@ open_display() {
     apply)
       apply_display "${2:-}" "${3:-}"
       ;;
-    1920x1080|1280x720|preferred)
+    1920x1080|1920x1080@60|1280x720|1280x720@60|preferred)
       apply_display "${sub}" "${2:-}"
       ;;
     *)

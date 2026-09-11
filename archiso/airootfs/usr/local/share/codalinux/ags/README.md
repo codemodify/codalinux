@@ -47,7 +47,9 @@ style.css               shell theme
 - Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize is `/usr/local/bin/coda-hypr-ws minimize` → `special:minimized` (same restore path as the taskbar). Scroll the titlebar to shade / unshade (`coda-hypr-ws shade`). Tiled windows hide the bar.
 - The Settings hub (window name `control-center`) is a System Settings-style sidebar: Overview, Display, Sound, Network, Bluetooth, Appearance, Input, About. Lock still runs `coda-hyprlock`. Live hypridle does not lock on idle.
 
-Display uses `hyprctl` (optional `wlr-randr`). Network stays systemd-networkd + iwd; Wi-Fi UI is `impala`. Other pages launch official apps: `pavucontrol`, `blueman-manager`, `nwg-look`, `snapshot`, plus input-help / about.
+Display uses `hyprctl` (optional `wlr-randr`). Session default is `1920x1080@60` because QEMU virtio `preferred` picks `640x480@119.99`. Network stays systemd-networkd + iwd; Wi-Fi UI is `impala`. Other pages launch official apps: `pavucontrol`, `blueman-manager`, `nwg-look`, `snapshot`, plus input-help / about.
+
+Sidebar groups Hardware / Personalization / System like a System Settings hub. The last category stays selected when the window is reopened.
 
 ## Build deps
 

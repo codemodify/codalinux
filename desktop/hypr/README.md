@@ -2,6 +2,10 @@
 
 Lua compositor config is `hyprland.lua` (Hyprland 0.55+). Companions still use hyprlang: `hyprpaper.conf`, `hyprlock.conf`, `hypridle.conf`.
 
+## Display mode
+
+`hl.monitor` uses `1920x1080@60`, not `preferred`. QEMU virtio EDID lists `640x480@119.99` first; Hyprland preferred picks that even when 1920x1080 is available and QEMU was started with `-device virtio-vga,xres=1920,yres=1080`. Settings → Display can apply another mode at runtime.
+
 ## Stack = overlapping float
 
 Super+T and the AGS Tile/Stack control run `coda-hypr-ws toggle-stack`. That floats every window on the current workspace and cascades them. It is **not** Hyprland tabbed groups. Floating windows are resizable: grab borders/corners (`resize_on_border`), Super+RMB, or Alt+RMB.
