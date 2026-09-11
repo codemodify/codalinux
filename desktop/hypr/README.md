@@ -20,7 +20,7 @@ Official [hyprbars](https://github.com/hyprwm/hyprland-plugins/tree/main/hyprbar
 
 Buttons are registered with `hl.plugin.hyprbars.add_button` (Lua). Do not use the hyprlang `hyprbars-button` keyword — Hyprland 0.55’s legacy parser does not call that handler.
 
-Build deps are official only (`packages/hyprbars-build-deps.txt`), including `hyprland` so headers match the compositor on the image. **Do not** use `hyprpm` on the live ISO (that needs a compiler). **Do not** add AUR plugin packages. **Do not** track hyprland-plugins `main`: commits after the 0.56.2 pin expect `hyprland/src/desktop/view/window/Window.hpp`, which Arch `hyprland` 0.56.2 does not ship. When Arch rolls Hyprland, update the pin from upstream `hyprpm.toml` `commit_pins`.
+Build deps are official only (`packages/hyprbars-build-deps.txt`), including `hyprland` so headers match the compositor on the image. The vendor script compiles with `-std=c++23` (Arch GCC 16 needs that for `std::expected` in the 0.56.2 headers; the upstream Makefile’s `-std=c++2b` is replaced, not dropped). **Do not** use `hyprpm` on the live ISO (that needs a compiler). **Do not** add AUR plugin packages. **Do not** track hyprland-plugins `main`: commits after the 0.56.2 pin expect `hyprland/src/desktop/view/window/Window.hpp`, which Arch `hyprland` 0.56.2 does not ship. When Arch rolls Hyprland, update the pin from upstream `hyprpm.toml` `commit_pins`.
 
 hyprbars is drawn inside Hyprland (cairo/pango decoration), not a separate Wayland client. It should follow the VirtualBox pixman path in `coda-hyprland`. If the plugin fails to load, floating still works — you just lose titlebar buttons (usually an ABI mismatch: rebuild the ISO so vendor-hyprbars and pacstrap see the same `hyprland`).
 
