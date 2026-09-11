@@ -22,3 +22,6 @@ install/*credentials*.json
 # python leftovers if someone runs archinstall profile fragments
 __pycache__/
 *.pyc
+
+# Local ISO copies (do not commit)
+/artifacts/
