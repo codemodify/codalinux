@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Coda Settings — official-repo tools for the live/interim desktop.
+# Network stays systemd-networkd + iwd (impala). No NetworkManager.
+set -euo pipefail
+
+term() {
+  if command -v foot >/dev/null 2>&1; then
+    exec foot --title="Coda Settings" "$@"
+  fi
+  exec "$@"
+}
+
+open_wifi() {
+  if command -v impala >/dev/null 2>&1; then
+    term impala
+  fi
+  term iwctl
+}
+
+open_netstatus() {
+  term bash -lc 'echo "=== networkctl ==="; networkctl status; echo; echo "=== iwctl devices ==="; iwctl device list 2>/dev/null || true; echo; read -r -p "Enter to close "'
+}
+
+open_bluetooth() {
+  if command -v blueman-manager >/dev/null 2>&1; then
+    exec blueman-manager
+  fi
+  if command -v bluetui >/dev/null 2>&1; then
+    term bluetui
+  fi
+  term bluetoothctl
+}
+
+open_audio() {
+  exec pavucontrol
+}
+
+open_webcam() {
+  if command -v snapshot >/dev/null 2>&1; then
+    exec snapshot
+  fi
+  echo "snapshot is not installed" >&2
+  exit 1
+}
+
+open_appearance() {
+  exec nwg-look
+}
+
+open_input() {
+  term bash -lc 'cat /usr/local/share/codalinux/input-help.txt; echo; read -r -p "Enter to close. Appearance/cursors: nwg-look. "'
+}
+
+pick() {
+  local choice
+  choice="$(
+    printf '%s\n' \
+      "Network / Wi-Fi" \
+      "Network status" \
+      "Bluetooth" \
+      "Audio" \
+      "Webcam" \
+      "Appearance" \
+      "Mouse & keyboard" \
+      | fuzzel --dmenu --prompt="Coda Settings> " --lines=8
+  )" || exit 0
+  case "${choice}" in
+    "Network / Wi-Fi") open_wifi ;;
+    "Network status") open_netstatus ;;
+    "Bluetooth") open_bluetooth ;;
+    "Audio") open_audio ;;
+    "Webcam") open_webcam ;;
+    "Appearance") open_appearance ;;
+    "Mouse & keyboard") open_input ;;
+    *) exit 0 ;;
+  esac
+}
+
+cmd="${1:-menu}"
+case "${cmd}" in
+  menu|"") pick ;;
+  wifi|network) open_wifi ;;
+  netstatus|status) open_netstatus ;;
+  bluetooth|bt) open_bluetooth ;;
+  audio|sound) open_audio ;;
+  webcam|camera) open_webcam ;;
+  appearance|look) open_appearance ;;
+  input|keyboard|mouse) open_input ;;
+  *)
+    echo "usage: coda-settings [menu|wifi|netstatus|bluetooth|audio|webcam|appearance|input]" >&2
+    exit 2
+    ;;
+esac

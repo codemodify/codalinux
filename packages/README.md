@@ -16,7 +16,7 @@ Compose default sets into ISO and installer consumers:
 | `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo |
 | `hardware.txt` | yes | Mesa, PipeWire, BlueZ |
 | `network.txt` | yes | iwd + resolved-related tools (not NetworkManager) |
-| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, XWayland |
+| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, interim waybar/fuzzel/mako |
 | `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura |
 | `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools |
 | `ags-build-deps.txt` | no | Official-repo deps to *build* AGS/Astal from `desktop/ags/` |

@@ -69,7 +69,7 @@ archinstall's guided installer historically defaults toward NetworkManager for d
 | Alternate session | XLibre (X11) path — packaging unresolved; not default |
 | Display manager | greetd |
 | Greeter UI | Stub / custom placeholder (`agreety` until a branded greeter exists) |
-| Shell | AGS/Astal unified shell (in-tree under `desktop/ags/`) |
+| Shell | **Long-term:** AGS/Astal (in-tree stubs). **Interim live ISO:** official-repo waybar + fuzzel + mako + Coda Settings |
 | Companions | hyprlock, hypridle, hyprpaper |
 | Portals | `xdg-desktop-portal-hyprland` + `xdg-desktop-portal-gtk` as needed |
 | Branding | Light: `/etc/os-release` as CodaLinux, theme/wallpaper placeholders, greetd theming hooks |
@@ -85,6 +85,7 @@ Official-repo packages only:
 - Video: `mpv`
 - Images: `imv`
 - Documents: `zathura` + `zathura-pdf-mupdf`
+- Settings tools (interim): `impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`
 
 ### Delivery
 
@@ -117,6 +118,8 @@ v1 approach:
 2. Install official-repo **build/runtime GTK dependencies** from [`packages/ags-build-deps.txt`](packages/ags-build-deps.txt) on systems that will compile the shell.
 3. Decide later (not in this scaffold) whether the ISO vendors a prebuilt tree under `/usr/local` or documents a post-install source build.
 4. Do not add `yay -S aylurs-gtk-shell` to any default path.
+
+Until that ships, the live session is usable with official `extra` tools only: **waybar** (panel), **fuzzel** (launcher), **mako** (notifications), **hyprpaper** (wallpaper), and **coda-settings** (Wi-Fi via `impala` / iwd, Bluetooth via `blueman` or `bluetui`, audio via `pavucontrol`, webcam via `snapshot`, appearance via `nwg-look`). `blueman` depends on `libnm`; it does **not** install or enable NetworkManager.
 
 ### XLibre session path
 
@@ -204,6 +207,7 @@ Live GUI notes:
 - `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, logs to `/var/log/coda-hyprland.log`, and execs `start-hyprland` (not the bare `Hyprland` binary).
 - greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
 - Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
+- Interim shell autostarts waybar, mako, hyprpaper, the polkit agent, and blueman-applet. Super+Space / Super+D opens fuzzel; Super+, opens Coda Settings.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 
@@ -224,8 +228,10 @@ Do not add `bios.syslinux.*`.
 | --- | --- |
 | `sessions/wayland/codalinux-hyprland.desktop` | `/usr/share/wayland-sessions/` |
 | `desktop/hypr/*` (`hyprland.lua` + companion `.conf`) | `/etc/skel/.config/hypr/` and `/etc/xdg/hypr/` |
+| `desktop/waybar`, `desktop/fuzzel`, `desktop/mako` | `/etc/xdg/` and `/etc/skel/.config/` |
+| `desktop/applications/*.desktop` | `/usr/share/applications/` |
 | `branding/os-release` | `/usr/lib/os-release` via hook |
-| `branding/wallpapers/` | `/usr/share/backgrounds/codalinux/` (when assets exist) |
+| `branding/wallpapers/default.png` | `/usr/share/backgrounds/codalinux/` |
 
 `build-iso.sh` is responsible for copying those trees into `airootfs/` at build time so we do not maintain duplicates.
 

@@ -11,7 +11,8 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
 - [ ] Verify the os-release pacman hook wins over the `filesystem` package.
 - [x] Live autologin: user `live` via `coda-hyprland` (VM software-render path + `/var/log/coda-hyprland.log`). Verify on VirtualBox EFI/VMSVGA.
-- [ ] Confirm greetd + Hyprland + PipeWire actually start on the live image (tty2 is the rescue console).
+- [x] Interim official-repo shell on the live ISO: waybar, fuzzel, mako, hyprpaper, Coda Settings (impala / blueman / pavucontrol / snapshot / nwg-look).
+- [ ] Confirm greetd + Hyprland + PipeWire + waybar actually start on the live image (tty2 is the rescue console).
 - [ ] Accessibility / speech boot entry (optional; not in v1).
 - [ ] Keep the ISO official-repos-only; no `[codalinux]` repo, no AUR helper.
 - [ ] Periodic rebuild pipeline (manual first; CI only if an Arch builder exists).
@@ -39,12 +40,12 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [ ] Implement the unified shell (bar, notifications, launcher/control center) against the placeholder tree.
 - [ ] Build from this source using official-repo deps in `packages/ags-build-deps.txt` (meson/npm/go/GTK). Do not add an AUR helper to the default path.
 - [ ] Decide ISO integration: vendor a build into `/usr/local` at image-build time, or post-install compile.
-- [ ] Start the shell from `desktop/hypr/hyprland.lua` (`hl.on("hyprland.start", …)`) once it starts.
+- [ ] Start AGS from `desktop/hypr/hyprland.lua` (`hl.on("hyprland.start", …)`) once it replaces the interim waybar shell.
 
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 
 - [ ] Branded greetd greeter (theme hooks are placeholders).
-- [ ] Wallpaper and icon/cursor theme assets under `branding/`.
+- [x] Default hyprpaper still at `branding/wallpapers/default.png` (simple branded gradient). Full theme assets still later.
 - [ ] XLibre session packaging decision (see [DESIGN.md](../DESIGN.md#xlibre-session-path)); still no Coda repo.
 - [ ] NVIDIA detect/install hook implementation.
 - [ ] Optional CUPS profile using `packages/optional-cups.txt`.

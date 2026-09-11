@@ -101,7 +101,33 @@ prepare_overlay() {
   # Live root session uses the same Hyprland configs.
   install_hypr_configs "${overlay}/root/.config/hypr"
 
+  install_xdg_app() {
+    local name="$1"
+    local dest_xdg="${overlay}/etc/xdg/${name}"
+    local dest_skel="${overlay}/etc/skel/.config/${name}"
+    install -d "${dest_xdg}" "${dest_skel}"
+    local src
+    for src in "${root}/desktop/${name}/"*; do
+      [[ -f "${src}" ]] || continue
+      install -m 0644 "${src}" "${dest_xdg}/"
+      install -m 0644 "${src}" "${dest_skel}/"
+    done
+  }
+  install_xdg_app waybar
+  install_xdg_app fuzzel
+  install_xdg_app mako
+
   install -d "${overlay}/usr/share/backgrounds/codalinux"
+  if [[ -f "${root}/branding/wallpapers/default.png" ]]; then
+    install -m 0644 "${root}/branding/wallpapers/default.png" \
+      "${overlay}/usr/share/backgrounds/codalinux/default.png"
+  fi
+  install -d "${overlay}/usr/share/applications"
+  install -m 0644 "${root}/desktop/applications/"*.desktop \
+    "${overlay}/usr/share/applications/"
+  install -d "${overlay}/usr/local/share/codalinux"
+  install -m 0644 "${root}/desktop/share/input-help.txt" \
+    "${overlay}/usr/local/share/codalinux/input-help.txt"
   install -d "${overlay}/usr/local/share/codalinux/ags"
   cp -a "${root}/desktop/ags/." "${overlay}/usr/local/share/codalinux/ags/"
 
@@ -117,6 +143,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-install"
   install -m 0755 "${root}/scripts/coda-hyprland" \
     "${overlay}/usr/local/bin/coda-hyprland"
+  install -m 0755 "${root}/scripts/coda-settings" \
+    "${overlay}/usr/local/bin/coda-settings"
 
   mkdir -p "${work}" "${out}"
 }

@@ -28,12 +28,20 @@ usermod -aG wheel,video,audio,input,render,storage,lp,optical,users live 2>/dev/
   || usermod -aG wheel,video,audio,input,users live || true
 
 install -d -o live -g live -m 0755 /home/live
-install -d -o live -g live -m 0700 /home/live/.config/hypr
 shopt -s nullglob
-hypr_src=(/etc/xdg/hypr/*.conf /etc/xdg/hypr/*.lua)
-if ((${#hypr_src[@]})); then
-  install -o live -g live -m 0644 "${hypr_src[@]}" /home/live/.config/hypr/
-fi
+copy_xdg_config() {
+  local name="$1"
+  local dest="/home/live/.config/${name}"
+  install -d -o live -g live -m 0700 "${dest}"
+  local files=(/etc/xdg/"${name}"/*)
+  if ((${#files[@]})) && [[ -e "${files[0]}" ]]; then
+    install -o live -g live -m 0644 "${files[@]}" "${dest}/"
+  fi
+}
+copy_xdg_config hypr
+copy_xdg_config waybar
+copy_xdg_config fuzzel
+copy_xdg_config mako
 # Hyprland 0.56+ warns on legacy hyprland.conf; 0.57 removes it.
 rm -f /home/live/.config/hypr/hyprland.conf
 chown -R live:live /home/live

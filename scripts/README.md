@@ -7,6 +7,7 @@
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo** |
 | `coda-install` | Live helper: Bozeman locale defaults; disk is the only prompt |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
+| `coda-settings` | Fuzzel menu: Wi-Fi (impala), Bluetooth, audio, webcam, appearance |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |
 

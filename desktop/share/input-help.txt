@@ -1,0 +1,26 @@
+CodaLinux pointer and keyboard defaults
+======================================
+
+Keyboard layout: us (Bozeman / US default — not prompted at install)
+Modifier: Super (Windows key)
+
+  Super+Return     Terminal (foot)
+  Super+Space      App launcher (fuzzel)
+  Super+D          App launcher (fuzzel)
+  Super+,          Coda Settings
+  Super+E          Files (Thunar)
+  Super+F          Firefox
+  Super+L          Lock
+  Super+Q          Close window
+  Super+1..0       Workspaces
+  Volume / media   wpctl + playerctl
+
+Touchpad (laptops):
+  natural scroll   on
+  tap to click     on
+
+To change compositor input, edit:
+  ~/.config/hypr/hyprland.lua
+
+GTK fonts, icons, and cursors:
+  Super+,  →  Appearance  (nwg-look)
