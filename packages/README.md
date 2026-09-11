@@ -20,6 +20,7 @@ Compose default sets into ISO and installer consumers:
 | `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura, settings apps |
 | `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools |
 | `ags-build-deps.txt` | no | Official-repo deps to *compile* AGS/Astal at ISO build time |
+| `hyprbars-build-deps.txt` | no | Official-repo deps to *compile* hyprbars (includes `hyprland` headers) |
 | `nvidia.txt` | no | Proprietary NVIDIA path (hook later) |
 | `optional-cups.txt` | no | Printing stack, not base |
 
@@ -31,6 +32,6 @@ Compose default sets into ISO and installer consumers:
 - No Coda-specific package names — this repo does not publish a pacman repo.
 - Pin pacman providers so unattended builds never prompt: `iptables`, `pipewire-jack`, `tesseract-data-eng`.
 
-AGS/Astal themselves are vendored from source into `/usr/local` by `scripts/vendor-ags.sh` (not listed here).
+AGS/Astal themselves are vendored from source into `/usr/local` by `scripts/vendor-ags.sh` (not listed here). hyprbars is vendored the same way by `scripts/vendor-hyprbars.sh`.
 
 `scripts/check-package-lists.sh` greps for the known-forbidden names above and requires the provider pins.

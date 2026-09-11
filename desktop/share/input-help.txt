@@ -18,6 +18,7 @@ Modifier: Super (Windows key)
   Super+-          Remove empty workspace
   Super+T          Tile ↔ stack (overlapping float) on this workspace
   Super+Tab        Next window
+  Titlebar (float) close / maximize / minimize (hyprbars)
   Volume / media   wpctl + playerctl
 
 Touchpad (laptops):

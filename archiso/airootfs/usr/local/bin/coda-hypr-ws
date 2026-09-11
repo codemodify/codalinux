@@ -15,7 +15,7 @@ Commands:
   mode             print ``tile`` or ``stack``
   apply-new        float a newly opened window when the workspace is stacked
   focus ADDRESS    focus a window (restore from special:minimized if needed)
-  minimize ADDRESS hide a window on special:minimized
+  minimize [ADDR]  hide a window on special:minimized (active if omitted)
   toggle ADDRESS   focus, or minimize when it is already focused
 """
 
@@ -435,7 +435,13 @@ def cmd_focus(address: str) -> None:
     )
 
 
-def cmd_minimize(address: str) -> None:
+def cmd_minimize(address: str | None = None) -> None:
+    if not address:
+        focused = hypr_json("activewindow")
+        address = str((focused or {}).get("address") or "")
+    if not address:
+        print("coda-hypr-ws: no active window to minimize", file=sys.stderr)
+        raise SystemExit(1)
     sel = win_sel(address)
     dispatch(
         f'hl.dsp.window.move({{ workspace = "{MINIMIZED_WS}", window = "{sel}" }})',
@@ -489,7 +495,7 @@ def usage() -> None:
     print(
         "usage: coda-hypr-ws "
         "[add|switch ID|remove|toggle-stack [on|off]|mode|apply-new|"
-        "focus ADDR|minimize ADDR|toggle ADDR]",
+        "focus ADDR|minimize [ADDR]|toggle ADDR]",
         file=sys.stderr,
     )
 
@@ -525,10 +531,7 @@ def main(argv: list[str]) -> int:
                 return 2
             cmd_focus(argv[1])
         elif cmd == "minimize":
-            if len(argv) < 2:
-                usage()
-                return 2
-            cmd_minimize(argv[1])
+            cmd_minimize(argv[1] if len(argv) > 1 else None)
         elif cmd == "toggle":
             if len(argv) < 2:
                 usage()

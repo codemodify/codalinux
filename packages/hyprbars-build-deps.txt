@@ -1,0 +1,21 @@
+# Official-repo dependencies for building hyprbars (hyprland-plugins)
+# at ISO image-build time (scripts/vendor-hyprbars.sh). Not composed
+# into the live ISO. Do not list AUR plugin packages here.
+#
+# hyprland is required for matching headers / hyprland.pc so the .so
+# ABI matches the compositor pacstrapped onto the image.
+
+hyprland
+meson
+ninja
+gcc
+pkgconf
+pixman
+libdrm
+libinput
+systemd-libs
+wayland
+libxkbcommon
+cairo
+pango
+curl

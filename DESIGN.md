@@ -123,6 +123,10 @@ Pinned commits and the vendored Astal library set are documented in [`desktop/ag
 
 Official settings apps remain available and are opened from the AGS control center: `impala` (Wi-Fi / iwd), `blueman` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`. `blueman` depends on `libnm`; it does **not** install or enable NetworkManager.
 
+### hyprbars
+
+[hyprbars](https://github.com/hyprwm/hyprland-plugins/tree/main/hyprbars) is not an official Arch package. v1 vendors it from the pinned hyprland-plugins commit at ISO build time (`scripts/vendor-hyprbars.sh`) into `/usr/local/lib/hyprland/libhyprbars.so`, compiled against official `hyprland` headers. Do not add `hyprpm` as a live-session workflow and do not list AUR plugin packages.
+
 ### XLibre session path
 
 XLibre is not in official Arch repos (AUR and a third-party `[xlibre-stable]` repo exist upstream). CodaLinux **must not** enable that third-party repo in `pacman.conf`.
@@ -157,6 +161,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 - [`scripts/compose-package-lists.sh`](scripts/compose-package-lists.sh) concatenates the default sets into `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `install/user_configuration.json`.
 - `packages/nvidia.txt` and `packages/optional-cups.txt` are **not** in the default compose.
 - `packages/ags-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-ags.sh` on the Arch ISO builder).
+- `packages/hyprbars-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-hyprbars.sh`).
 - `archiso/packages.x86_64` also includes archiso-mandatory packages (`mkinitcpio`, `mkinitcpio-archiso`) from `packages/live.txt`.
 - Unattended builds pin pacman providers in the default lists (`iptables`, `pipewire-jack`, `tesseract-data-eng`). `iptables` is a provider pin only — it does not enable a firewall.
 
@@ -210,7 +215,8 @@ Live GUI notes:
 - greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
 - Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
 - The vendored AGS shell autostarts as `coda-ags` (bar with workspaces, running-app taskbar, and tile/stack toggle; launcher; notifications; control center). hyprpaper, the polkit agent, and blueman-applet still start. Super+Space / Super+D toggles the AGS launcher; Super+, toggles the control center; Super+N / Super+= add a workspace; Super+- removes an empty one; Super+T toggles tiling ↔ overlapping float (hyprfloat-style workspace float mode implemented in `coda-hypr-ws`, not tabbed groups and not a hyprpm plugin).
-- Live wallpaper is `branding/wallpapers/default.png` via hyprpaper (`/usr/share/backgrounds/codalinux/default.png`). Generate with `scripts/gen-wallpaper.py` if the still is missing.
+- Floating windows use vendored **hyprbars** (`/usr/local/lib/hyprland/libhyprbars.so`, hyprland-plugins `722f15a77768eab13f01f5e5dce024bd2f61f270`) for close / maximize / minimize. Tiled windows keep `hyprbars:no_bar`. Minimize uses `coda-hypr-ws minimize` (`special:minimized`). The plugin is compiled at ISO build time against official `hyprland` headers; do not run `hyprpm` on the live image.
+- Live wallpaper is a bright branded still at `branding/wallpapers/default.png` via hyprpaper (`/usr/share/backgrounds/codalinux/default.png`). Generate with `scripts/gen-wallpaper.py` if the still is missing.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 

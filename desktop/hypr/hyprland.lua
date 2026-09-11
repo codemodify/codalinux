@@ -1,7 +1,15 @@
 -- CodaLinux Hyprland session (Lua / Hyprland 0.55+).
 -- Unified shell is vendored AGS/Astal (coda-ags). Waybar is not used.
 -- Super+T / bar Tile↔Stack = overlapping float (coda-hypr-ws), not tabbed groups.
+-- Floating titlebars: vendored hyprbars (/usr/local/lib/hyprland/libhyprbars.so).
 -- Docs: https://wiki.hypr.land/Configuring/Start/
+
+local hyprbars_so = "/usr/local/lib/hyprland/libhyprbars.so"
+if hl.plugin and hl.plugin.load then
+    pcall(function()
+        hl.plugin.load(hyprbars_so)
+    end)
+end
 
 local terminal = "foot"
 local fileManager = "thunar"
@@ -89,7 +97,63 @@ hl.config({
     cursor = {
         no_hardware_cursors = true,
     },
+
+    plugin = {
+        hyprbars = {
+            enabled = true,
+            bar_height = 28,
+            bar_color = "rgba(18, 32, 40, 0.94)",
+            ["col.text"] = "rgba(232, 238, 242, 1.0)",
+            bar_text_font = "Liberation Sans",
+            bar_text_size = 12,
+            bar_text_align = "left",
+            bar_buttons_alignment = "right",
+            bar_padding = 10,
+            bar_button_padding = 8,
+            bar_part_of_window = true,
+            bar_precedence_over_border = true,
+            bar_blur = false,
+            icon_on_hover = false,
+            on_double_click = "hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })'",
+        },
+    },
 })
+
+-- Titlebar only on floating windows (Stack). Tiled stays border-only.
+hl.window_rule({
+    name = "no-hyprbars-on-tiled",
+    match = { float = false },
+    ["hyprbars:no_bar"] = true,
+})
+
+if hl.plugin and hl.plugin.hyprbars and hl.plugin.hyprbars.add_button then
+    -- Buttons are right-to-left: close is the rightmost (Windows/KDE order).
+    hl.plugin.hyprbars.add_button({
+        bg_color = "rgb(e05a5a)",
+        fg_color = "rgb(ffffff)",
+        size = 12,
+        icon = "x",
+        action = "hyprctl dispatch 'hl.dsp.window.close()'",
+    })
+    hl.plugin.hyprbars.add_button({
+        bg_color = "rgb(3dd6f5)",
+        fg_color = "rgb(102028)",
+        size = 12,
+        icon = "+",
+        action = "hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })'",
+    })
+    hl.plugin.hyprbars.add_button({
+        bg_color = "rgb(8a9aa3)",
+        fg_color = "rgb(ffffff)",
+        size = 12,
+        icon = "-",
+        action = "coda-hypr-ws minimize",
+    })
+end
+
+if hl.permission then
+    pcall(hl.permission, hyprbars_so, "plugin", "allow")
+end
 
 hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
