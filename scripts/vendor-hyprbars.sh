@@ -3,7 +3,9 @@
 # into DESTDIR /usr/local/lib/hyprland/. Official Arch repos only.
 #
 # Must run on Arch (the ISO builder). Compiles against the builder's
-# hyprland package so the ABI matches the live compositor.
+# hyprland package so the ABI matches the live compositor. Arch hyprland
+# already ships the plugin header tree under /usr/include/hyprland/src;
+# there is no separate headers package and we do not vendor Hyprland source.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,8 +13,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Official hyprland-plugins hyprpm.toml pin for Hyprland 0.56.2
 # (hyprland commit efb5099… → plugin 7644cec…). Keep in sync with
 # desktop/hypr/README.md. Do not track hyprland-plugins main: later
-# chases expect headers Arch 0.56.2 does not ship
-# (hyprland/src/desktop/view/window/Window.hpp).
+# chases include hyprland/src/desktop/view/window/Window.hpp, which
+# Arch 0.56.2 installs as hyprland/src/desktop/view/Window.hpp.
 HYPRBARS_COMMIT="${CODA_HYPRBARS_COMMIT:-7644cecdb947060682891a0db2a0cdc5c0b9e704}"
 HYPRBARS_URL="https://github.com/hyprwm/hyprland-plugins/archive/${HYPRBARS_COMMIT}.tar.gz"
 # pkg-config --modversion hyprland series this pin matches.
@@ -23,6 +25,9 @@ DESTDIR="${1:-${root}/archiso/airootfs}"
 CACHE_ROOT="${CODA_HYPRBARS_CACHE:-${root}/.cache/coda-hyprbars}"
 CACHE="${CACHE_ROOT}/${HYPRBARS_COMMIT}"
 JOBS="${CODA_HYPRBARS_JOBS:-$(nproc 2>/dev/null || echo 4)}"
+
+# Arch 0.56.2 layout (confirmed from extra/hyprland file list).
+HYPRLAND_WINDOW_HPP="/usr/include/hyprland/src/desktop/view/Window.hpp"
 
 log() { printf 'vendor-hyprbars: %s\n' "$*"; }
 
@@ -56,8 +61,14 @@ install_build_deps() {
 
 fetch_tarball() {
   local dest="${CACHE}/src"
-  if [[ -d "${dest}" && -f "${dest}/hyprbars/Makefile" ]]; then
-    log "reusing hyprland-plugins sources in ${dest}"
+  local stamp="${dest}/.coda-hyprbars-commit"
+  # Old cache layout reused whatever tarball was unpacked first (722f15a).
+  if [[ -d "${CACHE_ROOT}/src" ]]; then
+    log "removing stale unversioned cache ${CACHE_ROOT}/src"
+    rm -rf "${CACHE_ROOT}/src"
+  fi
+  if [[ -d "${dest}" && -f "${dest}/hyprbars/Makefile" && -f "${stamp}" && "$(<"${stamp}")" == "${HYPRBARS_COMMIT}" ]]; then
+    log "reusing hyprland-plugins ${HYPRBARS_COMMIT} in ${dest}"
     return 0
   fi
   rm -rf "${dest}"
@@ -65,6 +76,37 @@ fetch_tarball() {
   log "fetching hyprland-plugins ${HYPRBARS_COMMIT}"
   curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "${HYPRBARS_URL}" \
     | tar -xz -C "${dest}" --strip-components=1
+  printf '%s\n' "${HYPRBARS_COMMIT}" > "${stamp}"
+}
+
+assert_header_layout() {
+  local src="${CACHE}/src/hyprbars"
+  if [[ ! -f "${HYPRLAND_WINDOW_HPP}" ]]; then
+    echo "vendor-hyprbars: official hyprland headers missing ${HYPRLAND_WINDOW_HPP}" >&2
+    echo "Install extra/hyprland; there is no separate headers package." >&2
+    exit 1
+  fi
+  if grep -Rqs 'hyprland/src/desktop/view/window/Window.hpp' "${src}"; then
+    echo "vendor-hyprbars: plugin sources expect view/window/Window.hpp" >&2
+    echo "Arch hyprland $(pkg-config --modversion hyprland 2>/dev/null || echo unknown) ships ${HYPRLAND_WINDOW_HPP}" >&2
+    echo "Pin hyprland-plugins to the hyprpm.toml commit for this series (0.56.2 → ${HYPRBARS_COMMIT})." >&2
+    exit 1
+  fi
+}
+
+lua_cflags() {
+  local flags=""
+  if flags="$(pkg-config --cflags lua54 2>/dev/null)" && [[ -n "${flags}" ]]; then
+    printf '%s' "${flags}"
+    return 0
+  fi
+  if flags="$(pkg-config --cflags lua5.4 2>/dev/null)" && [[ -n "${flags}" ]]; then
+    printf '%s' "${flags}"
+    return 0
+  fi
+  echo "vendor-hyprbars: lua54.pc missing (hyprland.pc does not add <lua.h>)" >&2
+  echo "Install official lua54, then retry." >&2
+  exit 1
 }
 
 build_and_install() {
@@ -84,8 +126,11 @@ build_and_install() {
       exit 1
       ;;
   esac
-  log "building hyprbars ${HYPRBARS_COMMIT} against ${hypr_ver} hyprland.pc"
-  make -C "${src}" -j "${JOBS}" all
+  assert_header_layout
+  local extra
+  extra="$(lua_cflags)"
+  log "building hyprbars ${HYPRBARS_COMMIT} against ${hypr_ver} hyprland.pc (${HYPRLAND_WINDOW_HPP})"
+  make -C "${src}" -j "${JOBS}" all CXXFLAGS="-O2 ${extra}"
   local so=""
   if [[ -f "${src}/hyprbars.so" ]]; then
     so="${src}/hyprbars.so"

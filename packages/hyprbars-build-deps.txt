@@ -6,8 +6,11 @@
 # ABI matches the compositor pacstrapped onto the image.
 # vendor-hyprbars.sh pins hyprland-plugins to the official hyprpm
 # commit for Hyprland 0.56.2 (7644cecdb947060682891a0db2a0cdc5c0b9e704).
+# lua54 is required because hyprbars includes <lua.h> and hyprland.pc
+# does not add those cflags.
 
 hyprland
+lua54
 meson
 ninja
 gcc
