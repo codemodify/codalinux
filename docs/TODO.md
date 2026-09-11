@@ -7,7 +7,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [x] Profile includes mkinitcpio-archiso hooks, pacman-init, UEFI systemd-boot entries, greetd/iwd/networkd enables, os-release overlay, `coda-install`.
 - [x] `scripts/build-iso.sh` prefers native/rootless `mkarchiso`; Docker/Podman only if already usable without sudo (no sudo fallbacks).
 - [x] First `mkarchiso` completed (ISO 9660, label `CODA_202609`). Boot on OVMF/hardware still unverified.
-- [ ] Run `mkarchiso` and boot the image on UEFI hardware or firmware (OVMF).
+- [ ] Run `mkarchiso` and boot the image on UEFI firmware. Preferred automated path is `./scripts/qemu-boot-test.sh` (QEMU/KVM + OVMF). VirtualBox EFI/VMSVGA remains a manual check only.
 - [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
 - [ ] Verify the os-release pacman hook wins over the `filesystem` package.
 - [x] Live autologin: user `live` via `coda-hyprland` (VM software-render path + `/var/log/coda-hyprland.log`). Verify on VirtualBox EFI/VMSVGA.
@@ -42,7 +42,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [x] Floating titlebars via vendored hyprbars (close / max / min); tiled windows stay border-only.
 - [x] Vendor from source at ISO build time with official-repo deps in `packages/ags-build-deps.txt`. No AUR helper, no Coda repo.
 - [x] Start AGS from `desktop/hypr/hyprland.lua` via `coda-ags` (Waybar is not a fallback).
-- [ ] Confirm the vendored shell on a real live boot (VirtualBox / OVMF).
+- [ ] Confirm the vendored shell on a real live boot (`scripts/qemu-boot-test.sh`; VirtualBox VMSVGA still optional).
 
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 
