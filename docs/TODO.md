@@ -38,6 +38,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 - [x] Pin AGS 3.1.2 + Astal commits in `desktop/ags/README.md` and `scripts/vendor-ags.sh`.
 - [x] Implement the unified shell (bar, notifications, launcher, control center).
+- [x] AGS taskbar of running apps, workspace add/remove, and per-workspace tile ↔ stack (Hyprland groups) via `coda-hypr-ws`.
 - [x] Vendor from source at ISO build time with official-repo deps in `packages/ags-build-deps.txt`. No AUR helper, no Coda repo.
 - [x] Start AGS from `desktop/hypr/hyprland.lua` via `coda-ags` (Waybar is not a fallback).
 - [ ] Confirm the vendored shell on a real live boot (VirtualBox / OVMF).

@@ -14,6 +14,10 @@ Modifier: Super (Windows key)
   Super+L          Lock
   Super+Q          Close window
   Super+1..0       Workspaces
+  Super+N / Super+=  New empty workspace
+  Super+-          Remove empty workspace
+  Super+T          Tile ↔ stack on this workspace
+  Super+Tab        Next window in a stack
   Volume / media   wpctl + playerctl
 
 Touchpad (laptops):

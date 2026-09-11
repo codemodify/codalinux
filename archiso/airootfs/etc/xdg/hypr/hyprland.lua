@@ -44,10 +44,32 @@ hl.config({
     general = {
         gaps_in     = 6,
         gaps_out    = 12,
-        border_size = 2,
+        border_size = 4,
         col = {
-            active_border   = { colors = { "rgba(7fb4c8ee)" } },
-            inactive_border = "rgba(595959aa)",
+            active_border   = { colors = { "rgba(3dd6f5ff)" } },
+            inactive_border = "rgba(3a4550ff)",
+        },
+    },
+
+    -- Tabbed stack uses Hyprland window groups (no i3 stacked layout).
+    -- auto_group keeps new windows in the workspace stack after Super+T.
+    group = {
+        auto_group = true,
+        col = {
+            border_active   = "rgba(3dd6f5ff)",
+            border_inactive = "rgba(3a4550ff)",
+        },
+        groupbar = {
+            enabled       = true,
+            font_size     = 11,
+            height        = 18,
+            stacked       = false,
+            render_titles = true,
+            text_color    = "0xffe8eef2",
+            col = {
+                active   = "rgba(3dd6f5cc)",
+                inactive = "rgba(2a343acc)",
+            },
         },
     },
 
@@ -88,6 +110,14 @@ hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(launcher))
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(launcher))
 hl.bind(mainMod .. " + comma", hl.dsp.exec_cmd(settings))
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd(clipboard))
+hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("coda-hypr-ws add"))
+hl.bind(mainMod .. " + equal", hl.dsp.exec_cmd("coda-hypr-ws add"))
+hl.bind(mainMod .. " + SHIFT + equal", hl.dsp.exec_cmd("coda-hypr-ws add"))
+hl.bind(mainMod .. " + plus", hl.dsp.exec_cmd("coda-hypr-ws add"))
+hl.bind(mainMod .. " + minus", hl.dsp.exec_cmd("coda-hypr-ws remove"))
+hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("coda-hypr-ws toggle-stack"))
+hl.bind(mainMod .. " + TAB", hl.dsp.group.next())
+hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.group.prev())
 
 for i = 1, 10 do
     local key = i % 10

@@ -139,6 +139,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-settings"
   install -m 0755 "${root}/scripts/coda-ags" \
     "${overlay}/usr/local/bin/coda-ags"
+  install -m 0755 "${root}/scripts/coda-hypr-ws" \
+    "${overlay}/usr/local/bin/coda-hypr-ws"
 
   mkdir -p "${work}" "${out}"
 }
