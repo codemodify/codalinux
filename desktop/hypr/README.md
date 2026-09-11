@@ -15,7 +15,8 @@ Official [hyprbars](https://github.com/hyprwm/hyprland-plugins/tree/main/hyprbar
 | hyprland-plugins commit | `7644cecdb947060682891a0db2a0cdc5c0b9e704` (official hyprpm pin for Hyprland 0.56.2) |
 | Plugin path | `/usr/local/lib/hyprland/libhyprbars.so` |
 | Load | `hl.plugin.load(...)` at the top of `hyprland.lua` |
-| Buttons | close → `hl.dsp.window.close()`; max → maximized fullscreen toggle; min → `coda-hypr-ws minimize` (`special:minimized`) |
+| Buttons | close → `hl.dsp.window.close()`; max → maximized fullscreen toggle; min → `/usr/local/bin/coda-hypr-ws minimize` (`special:minimized`; hyprbars `exec`s the action) |
+| Titlebar scroll | Wheel up rolls the float up to the titlebar (KDE shade); wheel down restores. hyprbars has no axis hook — `mouse_up` / `mouse_down` are non-consuming binds that call `coda-hypr-ws shade` only when the pointer is on the titlebar. |
 | Tiled windows | `hyprbars:no_bar` when `float = false` |
 
 Buttons are registered with `hl.plugin.hyprbars.add_button` (Lua). Do not use the hyprlang `hyprbars-button` keyword — Hyprland 0.55’s legacy parser does not call that handler.
