@@ -16,6 +16,7 @@ gtk-layer-shell
 gtk4-layer-shell
 vala
 glib2
+glib2-devel
 json-glib
 gdk-pixbuf2
 upower
