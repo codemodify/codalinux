@@ -25,5 +25,6 @@ file_permissions=(
   ["/usr/local/bin/coda-settings"]="0:0:755"
   ["/usr/local/bin/coda-ags"]="0:0:755"
   ["/usr/local/bin/coda-hypr-ws"]="0:0:755"
+  ["/usr/local/bin/coda-hyprlock"]="0:0:755"
   ["/usr/local/bin/ags"]="0:0:755"
 )

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Write a bright branded CodaLinux still (no extra image libs)."""
+"""Fallback CodaLinux still. Does not overwrite branding/wallpapers/default.png."""
 from __future__ import annotations
 
 import struct
+import sys
 import zlib
 from pathlib import Path
 
@@ -77,6 +78,10 @@ def blit_text(
 
 
 def main() -> None:
+    dest = Path(__file__).resolve().parents[1] / "branding" / "wallpapers" / "default.png"
+    if dest.exists() and "--force" not in sys.argv:
+        print(f"refusing to overwrite real wallpaper {dest} (pass --force)")
+        return
     width, height = 1600, 900
     # Light steel → vivid teal. Must stay readable on a dark VBox capture.
     top = (176, 214, 228)
@@ -103,7 +108,6 @@ def main() -> None:
     blit_text(pixels, width, height, "CODA", 114, 354, 18, (255, 255, 255))
     blit_text(pixels, width, height, "LINUX", 120, 520, 8, (24, 64, 74))
     blit_text(pixels, width, height, "LINUX", 118, 518, 8, (232, 246, 248))
-    dest = Path(__file__).resolve().parents[1] / "branding" / "wallpapers" / "default.png"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(png_rgba(width, height, bytes(pixels)))
     print(f"wrote {dest} ({dest.stat().st_size} bytes)")

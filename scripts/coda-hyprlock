@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Explicit hyprlock launch for the live session. Always pass the xdg
+# config so a missing ~/.config copy cannot start an empty lockscreen.
+# VirtualBox/pixman can still kill hyprlock; see desktop/share/input-help.txt
+# for Hyprland's crashed-lockscreen recovery.
+set -euo pipefail
+
+conf="${HYPRLOCK_CONF:-/etc/xdg/hypr/hyprlock.conf}"
+wall="/usr/share/backgrounds/codalinux/default.png"
+
+if [[ ! -f "${conf}" ]]; then
+  echo "coda-hyprlock: missing ${conf}" >&2
+  exit 1
+fi
+if [[ ! -f "${wall}" ]]; then
+  echo "coda-hyprlock: missing wallpaper ${wall} (hyprlock may crash)" >&2
+fi
+
+if command -v pidof >/dev/null 2>&1 && pidof hyprlock >/dev/null 2>&1; then
+  exit 0
+fi
+
+exec hyprlock -c "${conf}"

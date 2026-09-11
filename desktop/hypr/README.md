@@ -25,3 +25,16 @@ Build deps are official only (`packages/hyprbars-build-deps.txt`), including `hy
 hyprbars is drawn inside Hyprland (cairo/pango decoration), not a separate Wayland client. It should follow the VirtualBox pixman path in `coda-hyprland`. If the plugin fails to load, floating still works — you just lose titlebar buttons (usually an ABI mismatch: rebuild the ISO so vendor-hyprbars and pacstrap see the same `hyprland`).
 
 Blur on the bar is left off (`bar_blur = false`) because live VMs use software rendering.
+
+## Lock screen (live VM)
+
+hypridle does **not** lock or DPMS-off on idle. hyprlock dies under VirtualBox/pixman and Hyprland then shows the crashed-lockscreen recovery UI. Super+L and the AGS Lock tile run `coda-hyprlock` (`hyprlock -c /etc/xdg/hypr/hyprlock.conf`). Recover a dead lockscreen with:
+
+```text
+hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'
+killall -9 hyprlock
+```
+
+## Wallpaper
+
+hyprpaper and hyprlock both use `/usr/share/backgrounds/codalinux/default.png` (Plasma Horos — see `branding/wallpapers/README.md`).

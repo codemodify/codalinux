@@ -47,7 +47,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 
 - [ ] Branded greetd greeter (theme hooks are placeholders).
-- [x] Default hyprpaper / hyprlock still at `branding/wallpapers/default.png` (branded gradient). Full theme assets still later.
+- [x] Default hyprpaper / hyprlock still is Plasma Horos at `branding/wallpapers/default.png`. Full theme assets still later.
 - [ ] XLibre session packaging decision (see [DESIGN.md](../DESIGN.md#xlibre-session-path)); still no Coda repo.
 - [ ] NVIDIA detect/install hook implementation.
 - [ ] Optional CUPS profile using `packages/optional-cups.txt`.

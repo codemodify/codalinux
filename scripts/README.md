@@ -11,7 +11,9 @@
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
 | `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`) |
 | `coda-hypr-ws` | Workspace add/remove, tile↔overlapping-float, and taskbar focus/minimize |
-| `gen-wallpaper.py` | Write `branding/wallpapers/default.png` (stdlib PNG, no extra image libs) |
+| `coda-hyprlock` | Start hyprlock with `/etc/xdg/hypr/hyprlock.conf` |
+| `import-wallpaper.sh` | Copy a host still into `branding/wallpapers/default.png` (never generates) |
+| `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |
 | `coda-settings` | Open official Wi-Fi / BT / audio / webcam / appearance tools |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |

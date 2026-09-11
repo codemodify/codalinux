@@ -108,6 +108,7 @@ prepare_overlay() {
     "${overlay}/etc/xdg/mako" "${overlay}/etc/skel/.config/mako"
 
   install -d "${overlay}/usr/share/backgrounds/codalinux"
+  # Never overwrite a committed wallpaper. Generator is last-resort only.
   if [[ ! -f "${root}/branding/wallpapers/default.png" ]]; then
     python3 "${root}/scripts/gen-wallpaper.py"
   fi
@@ -142,6 +143,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-ags"
   install -m 0755 "${root}/scripts/coda-hypr-ws" \
     "${overlay}/usr/local/bin/coda-hypr-ws"
+  install -m 0755 "${root}/scripts/coda-hyprlock" \
+    "${overlay}/usr/local/bin/coda-hyprlock"
 
   mkdir -p "${work}" "${out}"
 }

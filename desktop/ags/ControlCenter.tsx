@@ -260,7 +260,7 @@ export default function ControlCenter() {
             hexpand
             onClicked={() => {
               hide()
-              execAsync("hyprlock").catch(console.error)
+              execAsync("coda-hyprlock").catch(console.error)
             }}
           >
             <label label="Lock screen" />
