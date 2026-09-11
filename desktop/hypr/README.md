@@ -37,4 +37,4 @@ killall -9 hyprlock
 
 ## Wallpaper
 
-hyprpaper and hyprlock both use `/usr/share/backgrounds/codalinux/default.png` (Plasma Horos — see `branding/wallpapers/README.md`).
+hyprpaper 0.8+ uses a `wallpaper { }` block (legacy `preload` / `wallpaper=` lines are ignored and leave a black desktop). hyprpaper and hyprlock both use `/usr/share/backgrounds/codalinux/default.png` (Plasma Horos — see `branding/wallpapers/README.md`).
