@@ -51,6 +51,10 @@ if grep -qiE 'virtualbox|vbox|vmware|qemu|kvm|bochs' \
   use_software=1
 fi
 
+# Keep pixman on every VM, including QEMU/KVM with /dev/dri. Skipping
+# it for virtio-gpu is unverified and would risk the VBox VMSVGA path.
+# Wallpaper fallback is swaybg (coda-wallpaper), which does not need
+# hyprtoolkit EGL.
 if [[ "${use_software}" -eq 1 ]]; then
   export WLR_RENDERER="${WLR_RENDERER:-pixman}"
   export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"

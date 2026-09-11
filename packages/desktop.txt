@@ -7,6 +7,8 @@ hyprland
 hyprlock
 hypridle
 hyprpaper
+# Live/VM fallback when hyprpaper/hyprtoolkit cannot create a layer.
+swaybg
 hyprcursor
 xdg-desktop-portal
 xdg-desktop-portal-hyprland

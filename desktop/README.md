@@ -2,7 +2,7 @@
 
 Hyprland + companion configs live here. The unified shell is AGS/Astal in `ags/` (vendored into `/usr/local` at ISO image-build time).
 
-**Live desktop:** AGS top bar (workspaces, running-app taskbar, tile/stack toggle), launcher, notifications, and control center. Official settings apps (`impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`) are opened from that shell. Wallpaper is Plasma Horos via `hypr/hyprpaper.conf` → `/usr/share/backgrounds/codalinux/default.png` (same path for hyprlock).
+**Live desktop:** AGS top bar (workspaces, running-app taskbar, tile/stack toggle), launcher, notifications, and control center. Official settings apps (`impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`) are opened from that shell. Wallpaper is Plasma Horos via `coda-wallpaper` (hyprpaper, then swaybg) → `/usr/share/backgrounds/codalinux/default.png` (same path for hyprlock).
 
 Workspace add/remove and per-workspace tiling ↔ **overlapping float** go through `scripts/coda-hypr-ws`. That is hyprfloat-style float mode (all windows on the workspace float and cascade), not Hyprland tabbed groups. Floating windows get hyprbars titlebars (close / maximize / minimize); tiled windows stay border-only. hyprbars is vendored from hyprland-plugins at ISO build time (`scripts/vendor-hyprbars.sh`). Window borders and light shadows are set in `hypr/hyprland.lua`.
 

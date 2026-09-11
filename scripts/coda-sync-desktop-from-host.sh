@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run inside the live guest after the virtio-9p share is mounted.
-# Copies hypr configs, Horos wallpaper, and the AGS tree from the host
-# share into live paths. Restart hyprpaper / AGS from a Hyprland
-# terminal if this is not already one (needs HYPRLAND_INSTANCE_SIGNATURE).
+# Copies hypr configs, Horos wallpaper, AGS, and wallpaper wrappers
+# from the host share into live paths. Restart coda-wallpaper / AGS
+# from a Hyprland terminal if this is not already one.
 set -euo pipefail
 
 share="${1:-${CODA_HOST_SHARE:-/mnt/coda-host}}"
@@ -79,12 +79,29 @@ if [[ -n "${ags_src}" ]]; then
   log "ags → /usr/local/share/codalinux/ags/"
 fi
 
+scripts_src=""
+if [[ -d "${share}/scripts" ]]; then
+  scripts_src="${share}/scripts"
+fi
+if [[ -n "${scripts_src}" ]]; then
+  install -d /usr/local/bin
+  local_bin=""
+  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland; do
+    if [[ -f "${scripts_src}/${local_bin}" ]]; then
+      install -m 0755 "${scripts_src}/${local_bin}" "/usr/local/bin/${local_bin}"
+      log "wrapper → /usr/local/bin/${local_bin}"
+    fi
+  done
+fi
+
 restart_session_tools() {
   if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     return 1
   fi
-  killall hyprpaper 2>/dev/null || true
-  if command -v coda-hyprpaper >/dev/null 2>&1; then
+  killall swaybg hyprpaper coda-hyprpaper coda-wallpaper 2>/dev/null || true
+  if command -v coda-wallpaper >/dev/null 2>&1; then
+    coda-wallpaper >/dev/null 2>&1 &
+  elif command -v coda-hyprpaper >/dev/null 2>&1; then
     coda-hyprpaper >/dev/null 2>&1 &
   fi
   if command -v coda-ags >/dev/null 2>&1; then
@@ -96,15 +113,16 @@ restart_session_tools() {
 }
 
 if restart_session_tools; then
-  log "restarted coda-hyprpaper / coda-ags and hyprctl reload"
+  log "restarted coda-wallpaper / coda-ags and hyprctl reload"
 else
   cat <<'EOF'
 Copied. Restart from a Hyprland terminal (user live):
 
-  killall hyprpaper; coda-hyprpaper
+  killall swaybg hyprpaper; coda-wallpaper
   coda-ags quit; coda-ags &
   hyprctl reload
 
-Some hyprland.lua changes still need a session restart (greetd retry).
+If swaybg is missing on this ISO: pacman -S --noconfirm swaybg
+(or rebuild). Some hyprland.lua changes still need a session restart.
 EOF
 fi
