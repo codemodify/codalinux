@@ -158,7 +158,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 
 archiso copies `airootfs/` **before** installing packages. Files owned by packages (notably `/usr/lib/os-release` from `filesystem`) will be overwritten.
 
-Assumption: branding is re-applied with a pacman hook installed from [`branding/hooks/`](branding/hooks/codalinux-os-release.hook) into the airootfs. The hook writes `branding/os-release` over `/usr/lib/os-release` after `filesystem` is installed. `/etc/os-release` remains the usual symlink.
+Assumption: branding is re-applied with a pacman hook installed from [`branding/hooks/`](branding/hooks/codalinux-os-release.hook) into the airootfs. Templates live under `/usr/local/share/codalinux/` (not packaged paths). The hook writes `os-release` and `issue*` after `filesystem` is installed. `/etc/os-release` remains the usual symlink. Do not pre-copy packaged paths into `airootfs/` — pacstrap will fail with “exists in filesystem”.
 
 ### Service enablement
 
