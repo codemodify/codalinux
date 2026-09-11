@@ -6,8 +6,8 @@ v1 branding is light. Tokens below are for later assets — do not invent a seco
 | --- | --- | --- |
 | GTK 4 / GTK 3 theme name | AGS/Astal, Thunar, portals | placeholder (`Coda`) |
 | Icon theme | same | placeholder |
-| Cursor theme | Hyprland `env = XCURSOR_THEME` | placeholder |
+| Cursor theme | Hyprland `hl.env("XCURSOR_THEME", …)` | placeholder |
 | greetd greeter CSS/colors | branded greeter (not agreety) | hook only |
-| hyprland decoration colors | `desktop/hypr/hyprland.conf` | stub values |
+| hyprland decoration colors | `desktop/hypr/hyprland.lua` | stub values |
 
 Plymouth theme: deferred (see DESIGN.md).

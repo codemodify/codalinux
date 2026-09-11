@@ -82,13 +82,24 @@ prepare_overlay() {
   install -m 0644 "${root}/sessions/wayland/codalinux-hyprland.desktop" \
     "${overlay}/usr/share/wayland-sessions/codalinux-hyprland.desktop"
 
-  install -d "${overlay}/etc/skel/.config/hypr"
-  install -m 0644 "${root}/desktop/hypr/"*.conf "${overlay}/etc/skel/.config/hypr/"
-  install -d "${overlay}/etc/xdg/hypr"
-  install -m 0644 "${root}/desktop/hypr/"*.conf "${overlay}/etc/xdg/hypr/"
+  install_hypr_configs() {
+    local dest="$1"
+    install -d "${dest}"
+    # Drop leftover hyprlang compositor config (removed in Hyprland 0.57).
+    rm -f "${dest}/hyprland.conf"
+    local src
+    for src in "${root}/desktop/hypr/"*; do
+      [[ -f "${src}" ]] || continue
+      case "${src}" in
+        *.md) continue ;;
+      esac
+      install -m 0644 "${src}" "${dest}/"
+    done
+  }
+  install_hypr_configs "${overlay}/etc/skel/.config/hypr"
+  install_hypr_configs "${overlay}/etc/xdg/hypr"
   # Live root session uses the same Hyprland configs.
-  install -d "${overlay}/root/.config/hypr"
-  install -m 0644 "${root}/desktop/hypr/"*.conf "${overlay}/root/.config/hypr/"
+  install_hypr_configs "${overlay}/root/.config/hypr"
 
   install -d "${overlay}/usr/share/backgrounds/codalinux"
   install -d "${overlay}/usr/local/share/codalinux/ags"

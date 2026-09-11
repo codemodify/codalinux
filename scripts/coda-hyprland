@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Live-session wrapper: set a VM-safe environment and exec Hyprland.
+# Live-session wrapper: set a VM-safe environment and exec start-hyprland.
 # greetd initial_session and default_session both point here so a crash
-# retries the GUI instead of dropping to agreety.
+# retries the GUI instead of dropping to agreety. Do not exec the bare
+# Hyprland binary — current Hyprland warns and expects this watchdog.
 set +e
 umask 022
 
@@ -17,8 +18,8 @@ echo "tty=$(tty 2>/dev/null || true) XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-}"
 echo "virt=$(systemd-detect-virt 2>/dev/null || echo unknown)"
 echo "product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
 echo "dri=$(ls -l /dev/dri 2>/dev/null || echo none)"
-command -v Hyprland
-ls -l /usr/bin/Hyprland
+command -v start-hyprland || true
+ls -l /usr/bin/start-hyprland /usr/bin/Hyprland 2>/dev/null || true
 
 if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
@@ -55,6 +56,17 @@ if [[ "${use_software}" -eq 1 ]]; then
 fi
 
 echo "env WLR_RENDERER=${WLR_RENDERER:-} LIBGL_ALWAYS_SOFTWARE=${LIBGL_ALWAYS_SOFTWARE:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
-echo "starting Hyprland"
 
-exec /usr/bin/Hyprland
+launcher=""
+if command -v start-hyprland >/dev/null 2>&1; then
+  launcher="$(command -v start-hyprland)"
+elif [[ -x /usr/bin/start-hyprland ]]; then
+  launcher=/usr/bin/start-hyprland
+else
+  echo "start-hyprland not found. Install the official hyprland package."
+  echo "Refusing to exec bare Hyprland (watchdog warning / missing wrapper)."
+  exit 1
+fi
+
+echo "starting ${launcher}"
+exec "${launcher}"
