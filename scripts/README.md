@@ -18,7 +18,7 @@
 | `vendor-hyprbars.sh` | Compile pinned hyprbars against official `hyprland` headers into `/usr/local/lib/hyprland` |
 | `coda-install` | Live helper: Bozeman locale defaults; disk is the only prompt |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
-| `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`) |
+| `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`); cds to `$HOME`/`/tmp` first |
 | `coda-hypr-ws` | Workspace add/remove, tile↔overlapping-float, and taskbar focus/minimize |
 | `coda-hyprlock` | Start hyprlock with `/etc/xdg/hypr/hyprlock.conf` |
 | `coda-hyprpaper` | Start hyprpaper with the xdg config (`monitor = *`); log `/tmp/hyprpaper.log` + `/var/log` |
