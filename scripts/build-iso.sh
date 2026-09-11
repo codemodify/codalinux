@@ -145,6 +145,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-hypr-ws"
   install -m 0755 "${root}/scripts/coda-hyprlock" \
     "${overlay}/usr/local/bin/coda-hyprlock"
+  install -m 0755 "${root}/scripts/coda-hyprpaper" \
+    "${overlay}/usr/local/bin/coda-hyprpaper"
 
   mkdir -p "${work}" "${out}"
 }

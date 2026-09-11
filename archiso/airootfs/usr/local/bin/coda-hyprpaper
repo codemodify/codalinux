@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Start hyprpaper with the xdg config. Log to /tmp/hyprpaper.log and
+# apply Horos over IPC once the socket is up (config-only apply can
+# still miss if hyprlang drops the wallpaper target).
+set -euo pipefail
+
+conf="${HYPRPAPER_CONF:-/etc/xdg/hypr/hyprpaper.conf}"
+wall="${HYPRPAPER_WALL:-/usr/share/backgrounds/codalinux/default.png}"
+log="${HYPRPAPER_LOG:-/tmp/hyprpaper.log}"
+
+{
+  echo "coda-hyprpaper: start $(date -Iseconds 2>/dev/null || date)"
+  echo "coda-hyprpaper: conf=${conf} wall=${wall}"
+} >>"${log}" || true
+
+if [[ ! -f "${conf}" ]]; then
+  echo "coda-hyprpaper: missing ${conf}" | tee -a "${log}" >&2
+  exit 1
+fi
+if [[ ! -f "${wall}" ]]; then
+  echo "coda-hyprpaper: missing wallpaper ${wall}" | tee -a "${log}" >&2
+fi
+
+apply_wallpaper() {
+  # * = all outputs. Third field is fit_mode (hyprpaper 0.8+).
+  hyprctl hyprpaper wallpaper "*,${wall},cover"
+}
+
+if command -v pidof >/dev/null 2>&1 && pidof hyprpaper >/dev/null 2>&1; then
+  apply_wallpaper >>"${log}" 2>&1 || true
+  exit 0
+fi
+
+(
+  for _ in $(seq 1 10); do
+    sleep 1
+    if apply_wallpaper >>"${log}" 2>&1; then
+      echo "coda-hyprpaper: IPC wallpaper apply ok" >>"${log}"
+      exit 0
+    fi
+  done
+  echo "coda-hyprpaper: IPC wallpaper apply failed after retries" >>"${log}"
+) &
+
+exec hyprpaper -c "${conf}" --verbose >>"${log}" 2>&1

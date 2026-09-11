@@ -37,4 +37,4 @@ killall -9 hyprlock
 
 ## Wallpaper
 
-hyprpaper 0.8+ uses a `wallpaper { }` block (legacy `preload` / `wallpaper=` lines are ignored and leave a black desktop). hyprpaper and hyprlock both use `/usr/share/backgrounds/codalinux/default.png` (Plasma Horos — see `branding/wallpapers/README.md`).
+hyprpaper 0.8+ uses a `wallpaper { }` block (legacy `preload` / `wallpaper=` lines are ignored and leave a black desktop). Use `monitor = *` for all outputs — hyprlang drops empty special-category keys, so `monitor =` registers no targets. Launch is `coda-hyprpaper` (`--verbose` to `/tmp/hyprpaper.log`, plus a delayed `hyprctl hyprpaper wallpaper` apply). hyprpaper and hyprlock both use `/usr/share/backgrounds/codalinux/default.png` (Plasma Horos — see `branding/wallpapers/README.md`).
