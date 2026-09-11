@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Settings
-Comment=Display, sound, Wi-Fi, Bluetooth, appearance, and system info
+Comment=System Settings — display, sound, Wi-Fi, appearance, workspace
 Exec=coda-settings
 TryExec=coda-settings
 Icon=preferences-system

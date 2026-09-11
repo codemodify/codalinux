@@ -4,11 +4,21 @@
 # Display uses hyprctl; wlr-randr if present. No NetworkManager / Plasma.
 set -euo pipefail
 
+WALL_DEFAULT="/usr/share/backgrounds/codalinux/default.png"
+
 term() {
   if command -v foot >/dev/null 2>&1; then
     exec foot --title="Coda Settings" "$@"
   fi
   exec "$@"
+}
+
+hypr_int() {
+  hyprctl getoption "$1" 2>/dev/null | awk '/^[[:space:]]*(int|float):/{print $2; exit}'
+}
+
+hypr_set() {
+  hyprctl keyword "$1" "$2"
 }
 
 open_wifi() {
@@ -32,6 +42,7 @@ open_netstatus() {
     echo "=== iwctl devices ==="
     iwctl device list 2>/dev/null || true
     echo
+    echo "No NetworkManager, no nm-connection-editor, no Plasma proxy KCM."
     echo "Wi-Fi UI: coda-settings wifi  (impala)"
     echo
     read -r -p "Enter to close "
@@ -76,6 +87,14 @@ open_input() {
   term bash -lc 'cat /usr/local/share/codalinux/input-help.txt; echo; read -r -p "Enter to close. Appearance/cursors: nwg-look. "'
 }
 
+open_files() {
+  if command -v thunar >/dev/null 2>&1; then
+    exec thunar "${1:-$HOME}"
+  fi
+  echo "coda-settings: thunar is not installed." >&2
+  exit 1
+}
+
 focused_monitor() {
   hyprctl monitors 2>/dev/null | awk '
     /^Monitor / { name=$2 }
@@ -99,8 +118,10 @@ show_display() {
     wlr-randr || true
     echo
   fi
+  echo "No KWin compositor / Night Color KCM. Hyprland blur stays off on VMs."
   echo "Apply: coda-settings display apply 1920x1080@60"
   echo "       coda-settings display apply 1280x720@60"
+  echo "       coda-settings display scale 1|1.25"
   echo "       coda-settings display apply preferred [OUTPUT]  (avoid on QEMU)"
 }
 
@@ -164,6 +185,32 @@ apply_display() {
   hyprctl keyword monitor "${spec}"
 }
 
+apply_scale() {
+  local scale="${1:-1}"
+  local output="${2:-}"
+  if [[ -z "${output}" ]]; then
+    output="$(focused_monitor || true)"
+  fi
+  if [[ -z "${output}" ]]; then
+    echo "coda-settings: no focused monitor (is Hyprland running?)" >&2
+    exit 1
+  fi
+  local spec
+  spec="$(hyprctl -j monitors 2>/dev/null | python3 -c '
+import json, sys
+mons = json.load(sys.stdin)
+name, scale = sys.argv[1], sys.argv[2]
+m = next((x for x in mons if x.get("name") == name), None)
+if m is None:
+    m = next((x for x in mons if x.get("focused")), mons[0])
+w = int(m.get("width") or 1920)
+h = int(m.get("height") or 1080)
+hz = int(round(float(m.get("refreshRate") or 60)))
+print("%s,%sx%s@%s,auto,%s" % (m.get("name") or name, w, h, hz, scale))
+' "${output}" "${scale}")"
+  hyprctl keyword monitor "${spec}"
+}
+
 open_display() {
   local sub="${1:-status}"
   case "${sub}" in
@@ -176,11 +223,14 @@ open_display() {
     apply)
       apply_display "${2:-}" "${3:-}"
       ;;
+    scale)
+      apply_scale "${2:-1}" "${3:-}"
+      ;;
     1920x1080|1920x1080@60|1280x720|1280x720@60|preferred)
       apply_display "${sub}" "${2:-}"
       ;;
     *)
-      echo "usage: coda-settings display [status|print|apply MODE [OUTPUT]]" >&2
+      echo "usage: coda-settings display [status|print|apply MODE [OUTPUT]|scale N]" >&2
       exit 2
       ;;
   esac
@@ -200,7 +250,8 @@ show_about() {
   fi
   echo
   echo "Network: systemd-networkd + iwd (impala). No NetworkManager."
-  echo "Shell: Hyprland + AGS. Settings: Super+, or coda-settings"
+  echo "Shell: Hyprland + AGS. Login: greetd → coda-hyprland → start-hyprland"
+  echo "Settings: Super+, or coda-settings"
 }
 
 open_about() {
@@ -210,6 +261,365 @@ open_about() {
     return
   fi
   term bash -lc 'coda-settings about print; echo; read -r -p "Enter to close "'
+}
+
+show_hypr() {
+  local v
+  v="$(hypr_int animations:enabled || true)"
+  echo "animations=${v:-?}"
+  v="$(hypr_int general:gaps_in || true)"
+  echo "gaps_in=${v:-?}"
+  v="$(hypr_int general:gaps_out || true)"
+  echo "gaps_out=${v:-?}"
+  v="$(hypr_int general:border_size || true)"
+  echo "border_size=${v:-?}"
+  v="$(hypr_int decoration:rounding || true)"
+  echo "rounding=${v:-?}"
+  v="$(hypr_int decoration:blur:enabled || true)"
+  echo "blur=${v:-?}"
+  v="$(hypr_int general:resize_on_border || true)"
+  echo "resize_on_border=${v:-?}"
+}
+
+adjust_hypr_int() {
+  local key="$1"
+  local delta="$2"
+  local min="${3:-0}"
+  local cur next
+  cur="$(hypr_int "${key}" || true)"
+  if [[ ! "${cur}" =~ ^[0-9]+$ ]]; then
+    cur=0
+  fi
+  next=$((cur + delta))
+  if [[ "${next}" -lt "${min}" ]]; then
+    next="${min}"
+  fi
+  hypr_set "${key}" "${next}"
+}
+
+open_hypr() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"")
+      show_hypr
+      ;;
+    set)
+      hypr_set "${2:-}" "${3:-}"
+      ;;
+    animations)
+      case "${2:-toggle}" in
+        on|true|1) hypr_set animations:enabled true ;;
+        off|false|0) hypr_set animations:enabled false ;;
+        toggle)
+          if [[ "$(hypr_int animations:enabled || echo 0)" == 1 ]]; then
+            hypr_set animations:enabled false
+          else
+            hypr_set animations:enabled true
+          fi
+          ;;
+        *)
+          echo "usage: coda-settings hypr animations on|off|toggle" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    gaps-in)
+      adjust_hypr_int general:gaps_in "${2:-0}" 0
+      ;;
+    gaps-out)
+      adjust_hypr_int general:gaps_out "${2:-0}" 0
+      ;;
+    border)
+      adjust_hypr_int general:border_size "${2:-0}" 1
+      ;;
+    *)
+      echo "usage: coda-settings hypr [print|animations on|off|gaps-in N|gaps-out N|border N|set KEY VAL]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_workspace() {
+  local mode
+  mode="$(coda-hypr-ws mode 2>/dev/null || echo unknown)"
+  echo "mode=${mode}"
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl -j workspaces 2>/dev/null | python3 -c '
+import json,sys
+try:
+    ws=json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+regs=[w for w in ws if not str(w.get("name","")).startswith("special")]
+print("workspaces=%d" % len(regs))
+for w in sorted(regs, key=lambda x: int(x.get("id") or 0)):
+    print("  id=%s name=%s windows=%s" % (w.get("id"), w.get("name"), w.get("windows")))
+' || hyprctl workspaces
+  fi
+}
+
+open_workspace() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_workspace ;;
+    add) coda-hypr-ws add ;;
+    remove) coda-hypr-ws remove ;;
+    toggle-stack|stack) coda-hypr-ws toggle-stack ;;
+    mode) coda-hypr-ws mode ;;
+    *)
+      echo "usage: coda-settings workspace [print|add|remove|toggle-stack]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_wallpaper() {
+  echo "wallpaper=${CODA_WALL:-${WALL_DEFAULT}}"
+  echo "Live wallpaper is the Plasma Horos still. coda-wallpaper tries hyprpaper,"
+  echo "then swaybg. Do not overwrite default.png with gen-wallpaper.py."
+}
+
+reset_wallpaper() {
+  killall swaybg hyprpaper coda-hyprpaper 2>/dev/null || true
+  if command -v coda-wallpaper >/dev/null 2>&1; then
+    coda-wallpaper >/dev/null 2>&1 &
+    return 0
+  fi
+  echo "coda-settings: coda-wallpaper is not installed." >&2
+  exit 1
+}
+
+open_wallpaper() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_wallpaper ;;
+    reset|restore) reset_wallpaper ;;
+    open|browse)
+      open_files /usr/share/backgrounds/codalinux
+      ;;
+    *)
+      echo "usage: coda-settings wallpaper [print|reset|open]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+open_lock() {
+  if command -v coda-hyprlock >/dev/null 2>&1; then
+    exec coda-hyprlock
+  fi
+  echo "coda-settings: coda-hyprlock is not installed." >&2
+  exit 1
+}
+
+show_region() {
+  echo "CodaLinux regional defaults (Bozeman, Montana — not prompted at install)"
+  echo "timezone=America/Denver"
+  echo "locale=en_US.UTF-8"
+  echo "keymap=us"
+  if [[ -L /etc/localtime ]]; then
+    echo "localtime=$(readlink -f /etc/localtime)"
+  fi
+  if [[ -r /etc/locale.conf ]]; then
+    cat /etc/locale.conf
+  fi
+  if command -v localectl >/dev/null 2>&1; then
+    echo
+    localectl status 2>/dev/null || true
+  fi
+  echo
+  echo "Installer and live setup keep these fixed. This page does not change them."
+}
+
+open_region() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_region ;;
+    status)
+      term bash -lc 'coda-settings region print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings region [print|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_users() {
+  echo "user=${USER:-$(id -un 2>/dev/null || echo unknown)}"
+  id 2>/dev/null || true
+  echo
+  echo "Live ISO autologins user live (empty password) via greetd + coda-live-setup."
+  echo "No Plasma Users KCM. Adding users is a system-admin task (useradd), not here."
+}
+
+open_users() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_users ;;
+    status)
+      term bash -lc 'coda-settings users print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings users [print|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_power() {
+  if command -v brightnessctl >/dev/null 2>&1; then
+    echo "brightness=$(brightnessctl -m 2>/dev/null || brightnessctl g 2>/dev/null || echo '?')"
+  else
+    echo "brightness=unavailable (no brightnessctl)"
+  fi
+  if command -v upower >/dev/null 2>&1; then
+    local dev
+    while IFS= read -r dev; do
+      case "${dev}" in
+        *battery*|*DisplayDevice*)
+          upower -i "${dev}" 2>/dev/null | awk '
+            /native-path|vendor|model|state|percentage|time to|online/{print}
+          '
+          echo
+          ;;
+      esac
+    done < <(upower -e 2>/dev/null || true)
+  fi
+  echo "No power-profiles-daemon / TLP / Plasma Power KCM."
+  echo "Brightness keys call brightnessctl. Live hypridle does not DPMS-off."
+}
+
+open_power() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_power ;;
+    brightness)
+      if ! command -v brightnessctl >/dev/null 2>&1; then
+        echo "coda-settings: brightnessctl is not installed." >&2
+        exit 1
+      fi
+      case "${2:-}" in
+        up|+) brightnessctl -e4 -n2 set 5%+ ;;
+        down|-) brightnessctl -e4 -n2 set 5%- ;;
+        *)
+          echo "usage: coda-settings power brightness up|down" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+    status)
+      term bash -lc 'coda-settings power print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings power [print|brightness up|down|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_storage() {
+  echo "Removable storage: udisks + Thunar (thunar-volman). No Plasma Device Notifier."
+  echo
+  lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT 2>/dev/null || lsblk || true
+}
+
+open_storage() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_storage ;;
+    open) open_files /run/media ;;
+    status)
+      term bash -lc 'coda-settings storage print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings storage [print|open|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+open_notify() {
+  local sub="${1:-test}"
+  case "${sub}" in
+    test)
+      if command -v notify-send >/dev/null 2>&1; then
+        notify-send "CodaLinux Settings" "Notification test from the Settings hub."
+        return 0
+      fi
+      echo "coda-settings: notify-send is not installed." >&2
+      exit 1
+      ;;
+    *)
+      echo "usage: coda-settings notify test" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_apps() {
+  echo "Default applications (xdg-mime). Change associations in Thunar or with xdg-mime."
+  echo
+  xdg-mime query default inode/directory 2>/dev/null | awk '{print "directory="$0}' || true
+  xdg-mime query default text/html 2>/dev/null | awk '{print "html="$0}' || true
+  xdg-mime query default x-scheme-handler/https 2>/dev/null | awk '{print "https="$0}' || true
+  xdg-mime query default application/pdf 2>/dev/null | awk '{print "pdf="$0}' || true
+}
+
+open_apps() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_apps ;;
+    files) open_files "${HOME:-/home/live}" ;;
+    status)
+      term bash -lc 'coda-settings apps print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings apps [print|files|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_startup() {
+  echo "Login: greetd → /usr/local/bin/coda-hyprland → start-hyprland"
+  echo "Not SDDM. No Plasma session restore / Autostart KCM."
+  echo
+  echo "Hyprland hyprland.start launches:"
+  echo "  pipewire, xdg-desktop-portal-hyprland, polkit agent,"
+  echo "  coda-wallpaper, coda-ags, hypridle, blueman-applet, cliphist"
+  echo
+  echo "Idle lock is off (hyprlock dies under VM pixman)."
+  echo "Edit ~/.config/hypr/hyprland.lua for session startup."
+}
+
+open_startup() {
+  local sub="${1:-print}"
+  case "${sub}" in
+    print|"") show_startup ;;
+    status)
+      term bash -lc 'coda-settings startup print; echo; read -r -p "Enter to close "'
+      ;;
+    *)
+      echo "usage: coda-settings startup [print|status]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_unavailable() {
+  cat <<'EOF'
+KDE Plasma modules with no CodaLinux v1 equivalent (not faked):
+  Global Theme, Plasma Style, Colors KCM, KWin Scripts, Activities
+  SDDM login theme, Plasma session restore, Autostart .desktop KCM
+  KDE Wallet, Online Accounts, User Feedback
+  NetworkManager / plasma-nm / proxy KCM
+  Night Color / KWin compositor
+  power-profiles-daemon / TLP
+  Orca / KMag (not on the live image)
+
+Use Hyprland + AGS + official Arch tools from this Settings hub instead.
+EOF
 }
 
 pick() {
@@ -223,26 +633,28 @@ pick() {
       "Coda Settings" \
       "1) Display" \
       "2) Network / Wi-Fi" \
-      "3) Network status" \
-      "4) Bluetooth" \
-      "5) Audio" \
-      "6) Webcam" \
-      "7) Appearance" \
-      "8) Mouse & keyboard" \
-      "9) About"
-    read -r -p "Choice [1-9]: " n
+      "3) Bluetooth" \
+      "4) Audio" \
+      "5) Appearance" \
+      "6) Shortcuts" \
+      "7) About"
+    read -r -p "Choice [1-7]: " n
     case "${n}" in
       1) exec coda-settings display ;;
       2) exec coda-settings wifi ;;
-      3) exec coda-settings netstatus ;;
-      4) exec coda-settings bluetooth ;;
-      5) exec coda-settings audio ;;
-      6) exec coda-settings webcam ;;
-      7) exec coda-settings appearance ;;
-      8) exec coda-settings input ;;
-      9) exec coda-settings about ;;
+      3) exec coda-settings bluetooth ;;
+      4) exec coda-settings audio ;;
+      5) exec coda-settings appearance ;;
+      6) exec coda-settings input ;;
+      7) exec coda-settings about ;;
     esac
   '
+}
+
+usage() {
+  echo "usage: coda-settings [menu|display|wifi|netstatus|bluetooth|audio|webcam|" >&2
+  echo "       appearance|input|about|hypr|workspace|wallpaper|lock|region|users|" >&2
+  echo "       power|storage|notify|apps|startup|unavailable]" >&2
 }
 
 cmd="${1:-menu}"
@@ -254,11 +666,24 @@ case "${cmd}" in
   audio|sound) open_audio ;;
   webcam|camera) open_webcam ;;
   appearance|look) open_appearance ;;
-  input|keyboard|mouse) open_input ;;
+  input|keyboard|mouse|shortcuts) open_input ;;
   display|monitors|resolution) open_display "${2:-status}" "${3:-}" "${4:-}" ;;
   about|system) open_about "${2:-}" ;;
+  hypr|compositor) open_hypr "${2:-print}" "${3:-}" "${4:-}" ;;
+  workspace|desktops) open_workspace "${2:-print}" ;;
+  wallpaper) open_wallpaper "${2:-print}" ;;
+  lock|hyprlock) open_lock ;;
+  region|locale|timezone) open_region "${2:-print}" ;;
+  users|user) open_users "${2:-print}" ;;
+  power|battery) open_power "${2:-print}" "${3:-}" ;;
+  storage|disks) open_storage "${2:-print}" ;;
+  notify|notifications) open_notify "${2:-test}" ;;
+  apps|applications|defaults) open_apps "${2:-print}" ;;
+  startup|session) open_startup "${2:-print}" ;;
+  unavailable|skip|kde) show_unavailable ;;
+  files) open_files "${2:-}" ;;
   *)
-    echo "usage: coda-settings [menu|display|wifi|netstatus|bluetooth|audio|webcam|appearance|input|about]" >&2
+    usage
     exit 2
     ;;
 esac

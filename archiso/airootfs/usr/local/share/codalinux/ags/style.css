@@ -113,21 +113,30 @@ window.NotificationPopups {
 .control-content.settings-hub {
   margin: 0;
   padding: 0;
-  min-width: 860px;
-  min-height: 520px;
+  min-width: 920px;
+  min-height: 580px;
 }
 
-.settings-nav {
-  min-width: 196px;
-  padding: 16px 12px;
+.settings-nav-scroll {
+  min-width: 228px;
+  min-height: 560px;
   background: rgba(0, 0, 0, 0.18);
   border-radius: 14px 0 0 14px;
 }
 
+.settings-nav {
+  min-width: 214px;
+  padding: 16px 12px 20px 12px;
+}
+
+.settings-page-scroll {
+  min-width: 620px;
+  min-height: 560px;
+}
+
 .settings-page {
-  min-width: 560px;
-  min-height: 480px;
-  padding: 18px 20px;
+  min-width: 600px;
+  padding: 18px 20px 24px 20px;
 }
 
 .control-content label.page-title {
@@ -168,6 +177,18 @@ window.NotificationPopups {
 
 .control-content button.launch-row {
   padding: 10px 12px;
+}
+
+.control-content .skip-row {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.control-content label.skip-title {
+  font-size: 12px;
+  color: #9aa8b0;
 }
 
 .launcher-title,
