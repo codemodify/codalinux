@@ -5,7 +5,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 ## 1. Live ISO (`archiso/` + `scripts/build-iso.sh`)
 
 - [x] Profile includes mkinitcpio-archiso hooks, pacman-init, UEFI systemd-boot entries, greetd/iwd/networkd enables, os-release overlay, `coda-install`.
-- [x] `scripts/build-iso.sh` runs native `mkarchiso` or a privileged `archlinux` container.
+- [x] `scripts/build-iso.sh` prefers native/rootless `mkarchiso`; Docker/Podman only if already usable without sudo (no sudo fallbacks).
 - [x] First `mkarchiso` completed (ISO 9660, label `CODA_202609`). Boot on OVMF/hardware still unverified.
 - [ ] Run `mkarchiso` and boot the image on UEFI hardware or firmware (OVMF).
 - [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
