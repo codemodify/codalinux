@@ -49,4 +49,6 @@ Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-mana
 
 Official Arch packages only, listed in [`packages/ags-build-deps.txt`](../../packages/ags-build-deps.txt) (includes `glib2-devel` for `glib-mkenums` used by Astal WirePlumber). That list is **not** composed into the live ISO (keeps meson/npm/go off the image). `vendor-ags.sh` installs them on the Arch ISO builder, then compiles.
 
+Unprivileged ISO builds cannot write `/usr/local`. The vendor script installs each Astal library into a writable staging sysroot (`$CACHE/stage`) with `--prefix=/usr/local` (so typelibs keep live soname paths), rewrites only the staging `.pc` `prefix=` lines, and wraps `valac` with `--vapidir`/`--girdir` so the next library can resolve `astal-io-0.1`. DESTDIR `/usr/local` `.pc` files stay `prefix=/usr/local`.
+
 Do not add `aylurs-gtk-shell`, `libastal*`, an AUR helper, or a `[codalinux]` repo.
