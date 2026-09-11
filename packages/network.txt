@@ -1,0 +1,4 @@
+# systemd-networkd + iwd. Do not add NetworkManager or a firewall.
+
+iwd
+systemd-resolvconf

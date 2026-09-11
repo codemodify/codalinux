@@ -1,0 +1,14 @@
+# greetd stub. Replace agreety with a branded greeter later.
+# TODO: live autologin — uncomment [initial_session] once the Hyprland
+# session is verified on the ISO.
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "agreety --cmd /usr/bin/Hyprland"
+user = "greeter"
+
+# [initial_session]
+# command = "Hyprland"
+# user = "root"

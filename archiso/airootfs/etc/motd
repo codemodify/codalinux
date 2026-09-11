@@ -1,0 +1,8 @@
+CodaLinux live image (scaffold)
+
+  Network:  systemd-networkd + iwd   (iwctl)
+  Session:  greetd → Hyprland (Wayland + XWayland)
+  Install:  archinstall --config <repo>/install/user_configuration.json
+
+Locked decisions: see /usr/local/share/codalinux or the git tree DESIGN.md.
+Support: https://github.com/codemodify/codalinux/issues

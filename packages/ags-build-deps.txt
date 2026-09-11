@@ -1,0 +1,19 @@
+# Official-repo dependencies for building AGS/Astal from desktop/ags/.
+# Not composed into the default ISO. AGS itself is not an official package —
+# do not add aylurs-gtk-shell or libastal* here.
+
+meson
+ninja
+npm
+go
+gobject-introspection
+gjs
+gtk3
+gtk4
+gtk-layer-shell
+gtk4-layer-shell
+vala
+blueprint-compiler
+dart-sass
+typescript
+esbuild

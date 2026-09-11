@@ -1,0 +1,20 @@
+# Open hardware stack — Mesa, PipeWire, BlueZ.
+# NVIDIA proprietary packages live in nvidia.txt (not default).
+
+mesa
+mesa-utils
+vulkan-icd-loader
+vulkan-intel
+vulkan-radeon
+vulkan-nouveau
+libva-mesa-driver
+intel-media-driver
+
+pipewire
+pipewire-audio
+pipewire-pulse
+pipewire-alsa
+wireplumber
+
+bluez
+bluez-utils
