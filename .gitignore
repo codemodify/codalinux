@@ -1,6 +1,8 @@
 # archiso build trees
 /work/
+/work-rebuild/
 /out/
+/out-rebuild/
 *.iso
 *.img
 
