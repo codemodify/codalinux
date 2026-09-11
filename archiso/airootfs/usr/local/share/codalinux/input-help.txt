@@ -11,7 +11,7 @@ Modifier: Super (Windows key)
   Super+V          Clipboard history (AGS)
   Super+E          Files (Thunar)
   Super+F          Firefox
-  Super+L          Lock
+  Super+L          Lock (coda-hyprlock)
   Super+Q          Close window
   Super+1..0       Workspaces
   Super+N / Super+=  New empty workspace
@@ -20,6 +20,12 @@ Modifier: Super (Windows key)
   Super+Tab        Next window
   Titlebar (float) close / maximize / minimize (hyprbars)
   Volume / media   wpctl + playerctl
+
+If the lockscreen app dies (VirtualBox / pixman) Hyprland shows
+“Oopsie daisy… lockscreen app died”. Recover with:
+  hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'
+  killall -9 hyprlock
+The live image does not lock on idle, so this should not appear by itself.
 
 Touchpad (laptops):
   natural scroll   on
