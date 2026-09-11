@@ -83,11 +83,11 @@ run_mkarchiso() {
 run_in_arch_container() {
   local engine="$1"
   local -a cmd
-  cmd=(
-    "${engine}" run --rm --privileged
-    --name coda-iso-build
-    -e CODA_ISO_INNER=1
-    -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-}"
+  cmd=("${engine}" run --rm --privileged --name coda-iso-build -e CODA_ISO_INNER=1)
+  if [[ -n "${SOURCE_DATE_EPOCH:-}" ]]; then
+    cmd+=(-e "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}")
+  fi
+  cmd+=(
     -v "${root}:${root}"
     -w "${root}"
     docker.io/library/archlinux:latest
