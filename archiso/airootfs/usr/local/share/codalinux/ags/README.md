@@ -2,7 +2,7 @@
 
 CodaLinux's unified desktop shell will be an [AGS](https://aylur.github.io/ags/) app on [Astal](https://aylur.github.io/astal/).
 
-**This directory is not a working UI.** It exists so the layout is agreed before anyone writes widgets.
+**This directory is not a working UI.** The live ISO ships an official-repo interim shell (waybar + fuzzel + mako + Coda Settings) so the desktop is usable now. This tree stays the future AGS/Astal layout.
 
 ## Packaging constraint
 
@@ -23,7 +23,7 @@ src/notifications/     notification daemon UI
 src/launcher/          app launcher / control center
 ```
 
-Wire `hl.exec_cmd` on `hyprland.start` in `../hypr/hyprland.lua` when the process actually starts.
+When AGS actually starts, add `hl.exec_cmd` on `hyprland.start` in `../hypr/hyprland.lua` and stop autostarting waybar/mako/fuzzel as the primary shell.
 
 ## Next
 

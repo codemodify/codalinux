@@ -16,6 +16,8 @@ pipewire-pulse
 pipewire-alsa
 pipewire-jack
 wireplumber
+pipewire-v4l2
+gst-plugin-pipewire
 
 bluez
 bluez-utils

@@ -50,13 +50,17 @@ pipewire
 pipewire-audio
 pipewire-pulse
 pipewire-alsa
+pipewire-jack
 wireplumber
+pipewire-v4l2
+gst-plugin-pipewire
 bluez
 bluez-utils
 
 # --- packages/network.txt ---
 iwd
 systemd-resolvconf
+iptables
 
 # --- packages/desktop.txt ---
 hyprland
@@ -81,6 +85,19 @@ ttf-liberation
 ttf-dejavu
 noto-fonts
 noto-fonts-emoji
+otf-font-awesome
+adwaita-icon-theme
+waybar
+fuzzel
+mako
+nwg-look
+wl-clipboard
+cliphist
+playerctl
+brightnessctl
+libnotify
+blueman
+bluetui
 
 # --- packages/apps.txt ---
 foot
@@ -95,4 +112,8 @@ mpv
 imv
 zathura
 zathura-pdf-mupdf
+tesseract-data-eng
+pavucontrol
+impala
+snapshot
 

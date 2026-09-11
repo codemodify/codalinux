@@ -29,3 +29,19 @@ ttf-liberation
 ttf-dejavu
 noto-fonts
 noto-fonts-emoji
+otf-font-awesome
+adwaita-icon-theme
+
+# Interim official-repo shell (AGS/Astal remains the long-term UI; not in extra)
+waybar
+fuzzel
+mako
+nwg-look
+wl-clipboard
+cliphist
+playerctl
+brightnessctl
+libnotify
+# blueman uses libnm only; NetworkManager remains optional and is not enabled.
+blueman
+bluetui

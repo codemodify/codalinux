@@ -15,7 +15,7 @@ Locked behavior this profile must enforce
   Do not install or enable NetworkManager.
 * Firewall: do not enable firewalld/ufw.
 * Branding: install branding/os-release via the pacman hook.
-* Desktop: copy desktop/hypr/* (hyprland.lua + companion .conf) to ~/.config/hypr.
+* Desktop: copy desktop/hypr/* plus waybar/fuzzel/mako configs to ~/.config.
 * NVIDIA: call scripts/hooks/nvidia.sh only after detection exists.
 * AGS: do not pacman -S AUR names; optionally copy desktop/ags/ for a
   later source build.
