@@ -152,6 +152,20 @@ prepare_overlay() {
   install -m 0755 "${root}/scripts/coda-sync-desktop-from-host.sh" \
     "${overlay}/usr/local/bin/coda-sync-desktop-from-host"
 
+  # mkarchiso file_permissions is the squashfs source of truth; keep
+  # airootfs +x anyway and fail the build if a wrapper is not executable.
+  chmod 0755 "${overlay}/usr/local/bin/coda-"* || true
+  local wrap
+  for wrap in coda-hyprpaper coda-wallpaper coda-ags coda-hyprland \
+              coda-hyprlock coda-hypr-ws coda-install coda-settings \
+              coda-sync-desktop-from-host; do
+    if [[ ! -x "${overlay}/usr/local/bin/${wrap}" ]]; then
+      echo "build-iso: ${overlay}/usr/local/bin/${wrap} is not executable" >&2
+      exit 1
+    fi
+  done
+  "${root}/scripts/check-wrapper-modes.sh"
+
   mkdir -p "${work}" "${out}"
 }
 

@@ -12,6 +12,7 @@
 | --- | --- |
 | `compose-package-lists.sh` | Build `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `user_configuration.json` (needs `python3`) |
 | `check-package-lists.sh` | Reject forbidden / unofficial names |
+| `check-wrapper-modes.sh` | Assert coda-* wrappers are +x and listed in archiso `file_permissions` |
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo**; vendors AGS |
 | `vendor-ags.sh` | Compile pinned AGS/Astal into airootfs `/usr/local` (works unprivileged via a staging sysroot) |
 | `vendor-hyprbars.sh` | Compile pinned hyprbars against official `hyprland` headers into `/usr/local/lib/hyprland` |

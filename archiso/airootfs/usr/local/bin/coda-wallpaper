@@ -11,8 +11,12 @@ LOG_FILES=()
 
 collect_logs() {
   mkdir -p /tmp
-  if touch /tmp/hyprpaper.log 2>/dev/null; then
+  touch /tmp/hyprpaper.log /tmp/coda-wallpaper.log 2>/dev/null || true
+  if [[ -f /tmp/hyprpaper.log ]]; then
     LOG_FILES+=(/tmp/hyprpaper.log)
+  fi
+  if [[ -f /tmp/coda-wallpaper.log ]]; then
+    LOG_FILES+=(/tmp/coda-wallpaper.log)
   fi
   local p
   for p in /var/log/hyprpaper.log /var/log/coda-wallpaper.log \
@@ -64,16 +68,18 @@ killall swaybg 2>/dev/null || true
 sleep 0.2
 
 hp_pid=""
-if command -v coda-hyprpaper >/dev/null 2>&1; then
-  coda-hyprpaper &
+hp="$(command -v coda-hyprpaper 2>/dev/null || true)"
+if [[ -n "${hp}" && -x "${hp}" ]]; then
+  "${hp}" &
   hp_pid=$!
-  wlog "coda-wallpaper: started coda-hyprpaper pid=${hp_pid}"
-elif command -v hyprpaper >/dev/null 2>&1; then
+  wlog "coda-wallpaper: started coda-hyprpaper pid=${hp_pid} (${hp})"
+elif command -v hyprpaper >/dev/null 2>&1 && [[ -x "$(command -v hyprpaper)" ]]; then
   hyprpaper -c /etc/xdg/hypr/hyprpaper.conf --verbose >>/tmp/hyprpaper.log 2>&1 &
   hp_pid=$!
-  wlog "coda-wallpaper: started hyprpaper pid=${hp_pid} (no coda-hyprpaper)"
+  wlog "coda-wallpaper: started hyprpaper pid=${hp_pid} (wrapper missing or not +x)"
 else
-  wlog "coda-wallpaper: hyprpaper not installed"
+  wlog "coda-wallpaper: hyprpaper not viable (missing or not executable); swaybg next"
+  wait_s=0
 fi
 
 i=0
