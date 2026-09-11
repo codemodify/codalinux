@@ -86,7 +86,7 @@ fi
 if [[ -n "${scripts_src}" ]]; then
   install -d /usr/local/bin
   local_bin=""
-  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws; do
+  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws coda-ags; do
     if [[ -f "${scripts_src}/${local_bin}" ]]; then
       install -m 0755 "${scripts_src}/${local_bin}" "/usr/local/bin/${local_bin}"
       log "wrapper → /usr/local/bin/${local_bin}"
@@ -94,30 +94,100 @@ if [[ -n "${scripts_src}" ]]; then
   done
 fi
 
+desktop_user() {
+  if id live >/dev/null 2>&1; then
+    printf '%s' live
+    return 0
+  fi
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != root ]]; then
+    printf '%s' "${SUDO_USER}"
+    return 0
+  fi
+  printf '%s' live
+}
+
+as_desktop() {
+  local user="$1"
+  shift
+  local home uid runtime wayland sig sock inst
+  home="$(getent passwd "${user}" | cut -d: -f6 || true)"
+  home="${home:-/home/${user}}"
+  [[ -d "${home}" ]] || home=/tmp
+  uid="$(id -u "${user}")"
+  runtime="${XDG_RUNTIME_DIR:-/run/user/${uid}}"
+  if [[ ! -d "${runtime}" ]]; then
+    runtime="/run/user/${uid}"
+  fi
+  wayland="${WAYLAND_DISPLAY:-}"
+  if [[ -z "${wayland}" && -d "${runtime}" ]]; then
+    for sock in "${runtime}"/wayland-*; do
+      [[ -e "${sock}" ]] || continue
+      [[ "${sock}" == *.lock ]] && continue
+      wayland="$(basename "${sock}")"
+      break
+    done
+  fi
+  wayland="${wayland:-wayland-1}"
+  sig="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+  if [[ -z "${sig}" ]]; then
+    for inst in "${runtime}/hypr"/* /tmp/hypr/*; do
+      [[ -d "${inst}" ]] || continue
+      sig="$(basename "${inst}")"
+      break
+    done
+  fi
+  local -a cmd=(
+    sudo -u "${user}" -- env
+    "HOME=${home}"
+    "USER=${user}"
+    "LOGNAME=${user}"
+    "XDG_RUNTIME_DIR=${runtime}"
+    "WAYLAND_DISPLAY=${wayland}"
+    "XDG_SESSION_TYPE=wayland"
+    "XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-Hyprland}"
+  )
+  if [[ -n "${sig}" ]]; then
+    cmd+=("HYPRLAND_INSTANCE_SIGNATURE=${sig}")
+  fi
+  cmd+=(bash -lc)
+  local quoted=""
+  local arg
+  for arg in "$@"; do
+    quoted+="$(printf '%q ' "${arg}")"
+  done
+  "${cmd[@]}" "cd \"\$HOME\" 2>/dev/null || cd /tmp; ${quoted}"
+}
+
 restart_session_tools() {
-  if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  local user
+  user="$(desktop_user)"
+  if ! id "${user}" >/dev/null 2>&1; then
+    log "no desktop user ${user}; skip session restart"
     return 1
   fi
-  killall swaybg hyprpaper coda-hyprpaper coda-wallpaper 2>/dev/null || true
+  as_desktop "${user}" killall swaybg hyprpaper coda-hyprpaper coda-wallpaper \
+    >/dev/null 2>&1 || true
   if command -v coda-wallpaper >/dev/null 2>&1; then
-    coda-wallpaper >/dev/null 2>&1 &
+    as_desktop "${user}" coda-wallpaper >/dev/null 2>&1 &
   elif command -v coda-hyprpaper >/dev/null 2>&1; then
-    coda-hyprpaper >/dev/null 2>&1 &
+    as_desktop "${user}" coda-hyprpaper >/dev/null 2>&1 &
   fi
   if command -v coda-ags >/dev/null 2>&1; then
-    coda-ags quit >/dev/null 2>&1 || true
-    coda-ags >/dev/null 2>&1 &
+    as_desktop "${user}" coda-ags quit >/dev/null 2>&1 || true
+    as_desktop "${user}" coda-ags >/dev/null 2>&1 &
   fi
-  hyprctl reload >/dev/null 2>&1 || true
+  as_desktop "${user}" hyprctl reload >/dev/null 2>&1 || true
+  log "restarted session tools as ${user} (never as root from /root)"
   return 0
 }
 
 if restart_session_tools; then
-  log "restarted coda-wallpaper / coda-ags and hyprctl reload"
+  :
 else
   cat <<'EOF'
 Copied. Restart from a Hyprland terminal (user live):
 
+  cd ~
   killall swaybg hyprpaper; coda-wallpaper
   coda-ags quit; coda-ags &
   hyprctl reload

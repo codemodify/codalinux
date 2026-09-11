@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Start or talk to the vendored CodaLinux AGS/Astal shell (instance "coda").
+# ags/bun stats the process cwd (`stat .`). Never inherit an unreadable
+# directory (e.g. root on tty2 with cwd /root).
 set -euo pipefail
 
 export GI_TYPELIB_PATH="/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:${GI_TYPELIB_PATH}}"
@@ -9,6 +11,19 @@ export XDG_DATA_DIRS="/usr/local/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/sh
 ags="${CODA_AGS_BIN:-/usr/local/bin/ags}"
 appdir="${CODA_AGS_APP:-/usr/local/share/codalinux/ags}"
 instance="${CODA_AGS_INSTANCE:-coda}"
+
+if [[ -z "${HOME:-}" || ! -d "${HOME}" ]]; then
+  HOME="$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f6 || true)"
+  HOME="${HOME:-/tmp}"
+  export HOME
+fi
+
+for dir in "${HOME}" /tmp "${appdir}" /; do
+  if [[ -n "${dir}" && -d "${dir}" && -r "${dir}" && -x "${dir}" ]]; then
+    cd "${dir}"
+    break
+  fi
+done
 
 if [[ ! -x "${ags}" ]]; then
   echo "coda-ags: vendored AGS binary not found at ${ags}" >&2
