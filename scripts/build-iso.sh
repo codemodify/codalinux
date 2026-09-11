@@ -73,8 +73,17 @@ prepare_overlay() {
   mkdir -p "${work}" "${out}"
 }
 
+# A leftover db.lck from a killed mkarchiso run makes pacstrap fail.
+clean_build_dirs() {
+  if [[ -d "${work}" ]]; then
+    rm -rf "${work}" 2>/dev/null || sudo rm -rf "${work}"
+  fi
+  mkdir -p "${work}" "${out}"
+}
+
 run_mkarchiso() {
   prepare_overlay
+  clean_build_dirs
   log "Running mkarchiso -v -w ${work} -o ${out} ${profile}"
   mkarchiso -v -w "${work}" -o "${out}" "${profile}"
   log "ISO output:"
