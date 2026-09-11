@@ -179,11 +179,20 @@ Live ISO service symlinks live under `archiso/airootfs/etc/systemd/system/`. Ins
 | Item | v1 scaffold default | Overridable |
 | --- | --- | --- |
 | Hostname | `coda` | Installer |
-| Locale | `en_US.UTF-8` | Installer |
-| Console keymap | `us` | Installer |
-| Timezone | `UTC` until the installer sets one | Installer |
-| Live session | greetd starts Hyprland on tty1 as root; tty2 is a root rescue console | Installer |
+| Locale | `en_US.UTF-8` (Bozeman / US) | **Not asked** — fixed |
+| Console keymap | `us` | **Not asked** — fixed |
+| Timezone | `America/Denver` (Bozeman, Montana) | **Not asked** — fixed |
+| Live session | greetd autologins user `live` into `/usr/local/bin/coda-hyprland` on tty1; tty2 is a root rescue console | Live ISO |
 | Installed users | Created by archinstall credentials file | Yes |
+
+Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk layout may stay interactive.
+
+Live GUI notes:
+
+- Do **not** overlay a minimal `/etc/passwd` or `/etc/shadow` — that wipes package accounts (`greeter`, systemd users). The `live` user is created with `systemd-sysusers` and `coda-live-setup.sh`.
+- Root on tty1 was fragile: Hyprland exited in ~1s and greetd fell back to agreety (PAM `SERVICE_ERR` / `pam_securetty`). Autologin is the `live` user via a wrapper.
+- `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, and logs to `/var/log/coda-hyprland.log`.
+- greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 

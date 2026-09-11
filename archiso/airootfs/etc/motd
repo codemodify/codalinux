@@ -1,10 +1,13 @@
 CodaLinux live image
 
-  Graphical session: greetd starts Hyprland on tty1 (Wayland + XWayland)
-  Rescue console:    tty2 autologin (root, empty password)
+  Graphical session: Hyprland autologin as user `live` on tty1
+                     (VirtualBox VMSVGA uses a software-render wrapper)
+  If the GUI fails:  /var/log/coda-hyprland.log
+  Rescue console:    tty2 autologin (root)
   Network:           systemd-networkd + iwd    (iwctl)
+  Locale defaults:   America/Denver, en_US.UTF-8, us  (Bozeman, Montana)
   Install:           coda-install
-                     (archinstall + CodaLinux defaults; disk layout is interactive)
+                     disk layout is interactive; region/timezone/locale/keymap are not asked
 
 Locked stack: systemd-boot, ext4, official Arch repos only, no NetworkManager.
-Decisions: DESIGN.md in the git tree. Support: https://github.com/codemodify/codalinux/issues
+Support: https://github.com/codemodify/codalinux/issues

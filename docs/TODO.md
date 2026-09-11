@@ -10,6 +10,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [ ] Run `mkarchiso` and boot the image on UEFI hardware or firmware (OVMF).
 - [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
 - [ ] Verify the os-release pacman hook wins over the `filesystem` package.
+- [x] Live autologin: user `live` via `coda-hyprland` (VM software-render path + `/var/log/coda-hyprland.log`). Verify on VirtualBox EFI/VMSVGA.
 - [ ] Confirm greetd + Hyprland + PipeWire actually start on the live image (tty2 is the rescue console).
 - [ ] Accessibility / speech boot entry (optional; not in v1).
 - [ ] Keep the ISO official-repos-only; no `[codalinux]` repo, no AUR helper.

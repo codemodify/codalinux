@@ -1,13 +1,14 @@
-# Live ISO: greetd owns tty1 and starts Hyprland for a tryable session.
-# tty2 autologins to a root console if the graphical session fails.
+# Live ISO: autologin the dedicated `live` user into Hyprland.
+# Both sessions use the wrapper so a crash retries the GUI (no agreety).
+# Root on tty1 was fragile (Hyprland exits immediately; PAM session ~1s).
 
 [terminal]
 vt = 1
 
 [default_session]
-command = "agreety --cmd /usr/bin/Hyprland"
-user = "greeter"
+command = "/usr/local/bin/coda-hyprland"
+user = "live"
 
 [initial_session]
-command = "Hyprland"
-user = "root"
+command = "/usr/local/bin/coda-hyprland"
+user = "live"

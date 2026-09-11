@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Live-ISO helper: run archinstall with CodaLinux defaults.
-# Disk layout is still chosen in the TUI / a local config override.
+# Live-ISO installer entry: Bozeman/Montana locale defaults are fixed.
+# Only disk layout (and credentials archinstall still requires) are interactive.
 set -euo pipefail
 
 config="${CODA_ARCHINSTALL_CONFIG:-/usr/share/codalinux/install/user_configuration.json}"
+helper="${CODA_INSTALL_HELPER:-/usr/local/lib/codalinux/coda-install-config.py}"
 
 if ! command -v archinstall >/dev/null 2>&1; then
   echo "archinstall is not installed. On the live ISO it should be." >&2
@@ -11,11 +12,20 @@ if ! command -v archinstall >/dev/null 2>&1; then
 fi
 
 if [[ ! -f "${config}" ]]; then
-  echo "Missing ${config}. Copy install/user_configuration.json onto the machine." >&2
+  echo "Missing ${config}." >&2
   exit 1
 fi
 
-echo "Starting archinstall with ${config}"
-echo "CodaLinux defaults: systemd-boot, ext4, PipeWire, official Arch repos only."
-echo "Fill in the disk layout. greetd + systemd-networkd + iwd still need the custom profile (install/profiles/codalinux.py)."
+echo "CodaLinux install defaults (not asked):"
+echo "  timezone  America/Denver   (Bozeman, Montana)"
+echo "  locale    en_US.UTF-8"
+echo "  keymap    us"
+echo "  bootloader systemd-boot    root fs ext4    repos official Arch only"
+echo
+
+if [[ -f "${helper}" ]]; then
+  exec python3 "${helper}" "${config}" "$@"
+fi
+
+echo "Helper missing; launching archinstall with preseeded config."
 exec archinstall --config "${config}" "$@"

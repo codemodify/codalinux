@@ -118,5 +118,5 @@
   "script": "guided",
   "silent": false,
   "swap": true,
-  "timezone": "UTC"
+  "timezone": "America/Denver"
 }

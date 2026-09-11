@@ -1,5 +1,6 @@
 # Enable CodaLinux defaults; do not enable NetworkManager or a firewall.
 enable greetd.service
+enable coda-live-setup.service
 enable systemd-networkd.service
 enable systemd-resolved.service
 enable iwd.service

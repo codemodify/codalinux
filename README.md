@@ -62,7 +62,7 @@ The checker rejects known policy violations (AUR helpers, Calamares, NetworkMana
 
 On Arch this runs `mkarchiso`. On other hosts it uses a privileged `archlinux` Docker/Podman container when available. Output: `out/codalinux-<date>-x86_64.iso`.
 
-The profile is intended to be buildable (mkinitcpio-archiso, pacman-init, UEFI systemd-boot, greetd → Hyprland, archinstall via `coda-install`). Hardware verification is still a follow-up — see [docs/TODO.md](docs/TODO.md).
+The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` wrapper, VirtualBox software-render path). Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
 
 A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an artifact when it succeeds.
 
@@ -71,10 +71,10 @@ A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an 
 From a CodaLinux (or Arch) live environment, once the profile is wired up:
 
 ```bash
-archinstall --config /path/to/codalinux/install/user_configuration.json
+coda-install
 ```
 
-The JSON encodes CodaLinux defaults (systemd-boot, ext4, PipeWire, official-repo package set). Disk layout is machine-specific and must be filled in. greetd + systemd-networkd + iwd are **not** first-class archinstall options today; [`install/`](install/README.md) describes the custom profile and post-install hooks still to be written.
+That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). greetd + systemd-networkd + iwd still need the custom profile for a full installed desktop; see [`install/`](install/README.md).
 
 ## What this repo does not contain
 
