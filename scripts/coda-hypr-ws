@@ -1,0 +1,400 @@
+#!/usr/bin/env python3
+"""Hyprland workspace / stack / task helpers for the CodaLinux AGS shell.
+
+Hyprland 0.55+ speaks Lua dispatchers. This helper is the shared implementation
+for AGS buttons and Super+N / Super+- / Super+T binds. It uses ``hyprctl -j``
+(no jq) and official python3 only.
+
+Commands:
+  add              switch to the next empty workspace (emptyn)
+  switch ID        focus an existing workspace
+  remove           leave the current workspace when it has no windows
+  toggle-stack     tile ↔ tabbed stack (Hyprland window groups) on this workspace
+  mode             print ``tile`` or ``stack``
+  focus ADDRESS    focus a window (restore from special:minimized if needed)
+  minimize ADDRESS hide a window on special:minimized
+  toggle ADDRESS   focus, or minimize when it is already focused
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from typing import Any
+
+
+MINIMIZED_WS = "special:minimized"
+HYPRCTL = os.environ.get("CODA_HYPRCTL", "hyprctl")
+
+
+def hypr_json(query: str) -> Any:
+    out = subprocess.check_output([HYPRCTL, "-j", query], text=True)
+    return json.loads(out)
+
+
+def hypr_run(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([HYPRCTL, *args], text=True, capture_output=True)
+
+
+def dispatch_ok(result: subprocess.CompletedProcess[str]) -> bool:
+    if result.returncode != 0:
+        return False
+    text = f"{result.stdout} {result.stderr}".lower()
+    return "invalid" not in text and "error" not in text
+
+
+def dispatch(lua_expr: str, legacy: list[str] | None = None) -> None:
+    """Send a Lua dispatcher, then fall back to a pre-0.55 keyword if needed."""
+    result = hypr_run(["dispatch", lua_expr])
+    if dispatch_ok(result):
+        return
+    if legacy:
+        result = hypr_run(["dispatch", *legacy])
+        if dispatch_ok(result):
+            return
+    detail = (result.stderr or result.stdout or "").strip()
+    raise RuntimeError(detail or f"hyprctl dispatch failed: {lua_expr}")
+
+
+def win_sel(address: str) -> str:
+    addr = (address or "").strip()
+    if addr.startswith("address:"):
+        addr = addr[len("address:") :]
+    if not addr.startswith("0x"):
+        addr = f"0x{addr}"
+    return f"address:{addr}"
+
+
+def norm_addr(address: str) -> str:
+    addr = (address or "").strip().lower()
+    if addr.startswith("address:"):
+        addr = addr[len("address:") :]
+    if not addr.startswith("0x"):
+        addr = f"0x{addr}"
+    return addr
+
+
+def is_special_ws(ws: dict[str, Any] | None) -> bool:
+    if not ws:
+        return True
+    name = str(ws.get("name") or "")
+    try:
+        wid = int(ws.get("id") or 0)
+    except (TypeError, ValueError):
+        wid = 0
+    return wid < 0 or name.startswith("special")
+
+
+def grouped_value(client: dict[str, Any]) -> bool:
+    grouped = client.get("grouped")
+    if not grouped:
+        return False
+    if grouped == 0:
+        return False
+    if isinstance(grouped, list) and len(grouped) == 0:
+        return False
+    return True
+
+
+def workspace_mode(clients: list[dict[str, Any]], workspace_id: int) -> str:
+    for client in clients:
+        ws = client.get("workspace") or {}
+        try:
+            cid = int(ws.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if cid == workspace_id and grouped_value(client):
+            return "stack"
+    return "tile"
+
+
+def clients_on_workspace(
+    clients: list[dict[str, Any]], workspace_id: int
+) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for client in clients:
+        ws = client.get("workspace") or {}
+        try:
+            cid = int(ws.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if cid == workspace_id:
+            found.append(client)
+    return found
+
+
+def pick_remove_workspace(
+    active_id: int, workspaces: list[dict[str, Any]], client_count: int
+) -> int | None:
+    """Choose a regular workspace to land on after dropping an empty one."""
+    if client_count > 0:
+        return None
+    others: list[int] = []
+    for ws in workspaces:
+        if is_special_ws(ws):
+            continue
+        try:
+            wid = int(ws.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if wid > 0 and wid != active_id:
+            others.append(wid)
+    if not others:
+        return None
+    lower = [wid for wid in others if wid < active_id]
+    if lower:
+        return max(lower)
+    return min(others)
+
+
+def find_client(clients: list[dict[str, Any]], address: str) -> dict[str, Any] | None:
+    want = norm_addr(address)
+    for client in clients:
+        if norm_addr(str(client.get("address") or "")) == want:
+            return client
+    return None
+
+
+def regular_workspace_id(active: dict[str, Any], workspaces: list[dict[str, Any]]) -> int:
+    if not is_special_ws(active):
+        try:
+            return int(active.get("id") or 1)
+        except (TypeError, ValueError):
+            return 1
+    for ws in sorted(workspaces, key=lambda item: int(item.get("id") or 0)):
+        if not is_special_ws(ws):
+            try:
+                return int(ws.get("id") or 1)
+            except (TypeError, ValueError):
+                continue
+    return 1
+
+
+def cmd_add() -> None:
+    dispatch(
+        'hl.dsp.focus({ workspace = "emptyn" })',
+        legacy=["workspace", "emptyn"],
+    )
+
+
+def cmd_switch(ident: str) -> None:
+    target = (ident or "").strip()
+    if not target:
+        raise SystemExit(2)
+    if target.isdigit():
+        dispatch(
+            f"hl.dsp.focus({{ workspace = {target} }})",
+            legacy=["workspace", target],
+        )
+        return
+    dispatch(
+        f'hl.dsp.focus({{ workspace = "{target}" }})',
+        legacy=["workspace", target],
+    )
+
+
+def cmd_remove() -> None:
+    active = hypr_json("activeworkspace")
+    clients = hypr_json("clients")
+    workspaces = hypr_json("workspaces")
+    active_id = int(active.get("id") or 0)
+    count = len(clients_on_workspace(clients, active_id))
+    dest = pick_remove_workspace(active_id, workspaces, count)
+    if dest is None:
+        if count > 0:
+            print("coda-hypr-ws: current workspace is not empty", file=sys.stderr)
+        else:
+            print("coda-hypr-ws: no other workspace to switch to", file=sys.stderr)
+        raise SystemExit(1)
+    dispatch(
+        f"hl.dsp.focus({{ workspace = {dest} }})",
+        legacy=["workspace", str(dest)],
+    )
+
+
+def cmd_mode() -> None:
+    active = hypr_json("activeworkspace")
+    clients = hypr_json("clients")
+    print(workspace_mode(clients, int(active.get("id") or 0)))
+
+
+def _ungroup_workspace(clients: list[dict[str, Any]]) -> None:
+    for client in clients:
+        if not grouped_value(client):
+            continue
+        sel = win_sel(str(client.get("address") or ""))
+        try:
+            dispatch(
+                f'hl.dsp.window.move({{ out_of_group = true, window = "{sel}" }})',
+                legacy=["moveoutofgroup"],
+            )
+        except RuntimeError:
+            dispatch(
+                f'hl.dsp.group.toggle({{ window = "{sel}" }})',
+                legacy=["togglegroup"],
+            )
+
+
+def _group_workspace(clients: list[dict[str, Any]]) -> None:
+    if not clients:
+        return
+    first = win_sel(str(clients[0].get("address") or ""))
+    dispatch(
+        f'hl.dsp.focus({{ window = "{first}" }})',
+        legacy=["focuswindow", first],
+    )
+    dispatch(
+        f'hl.dsp.group.toggle({{ window = "{first}" }})',
+        legacy=["togglegroup"],
+    )
+    for client in clients[1:]:
+        sel = win_sel(str(client.get("address") or ""))
+        for direction in ("l", "r", "u", "d"):
+            try:
+                dispatch(
+                    f'hl.dsp.window.move({{ window = "{sel}", into_group = "{direction}" }})',
+                    legacy=["moveintogroup", direction],
+                )
+                break
+            except RuntimeError:
+                continue
+
+
+def cmd_toggle_stack() -> None:
+    active = hypr_json("activeworkspace")
+    if is_special_ws(active):
+        print("coda-hypr-ws: not on a regular workspace", file=sys.stderr)
+        raise SystemExit(1)
+    active_id = int(active.get("id") or 0)
+    clients = clients_on_workspace(hypr_json("clients"), active_id)
+    if workspace_mode(clients, active_id) == "stack":
+        _ungroup_workspace(clients)
+    else:
+        _group_workspace(clients)
+
+
+def cmd_focus(address: str) -> None:
+    clients = hypr_json("clients")
+    client = find_client(clients, address)
+    if client is None:
+        print(f"coda-hypr-ws: no window {address}", file=sys.stderr)
+        raise SystemExit(1)
+    sel = win_sel(address)
+    if is_special_ws(client.get("workspace")):
+        dest = regular_workspace_id(hypr_json("activeworkspace"), hypr_json("workspaces"))
+        dispatch(
+            f'hl.dsp.window.move({{ workspace = {dest}, follow = true, window = "{sel}" }})',
+            legacy=["movetoworkspace", str(dest) + "," + sel],
+        )
+        return
+    dispatch(
+        f'hl.dsp.focus({{ window = "{sel}" }})',
+        legacy=["focuswindow", sel],
+    )
+
+
+def cmd_minimize(address: str) -> None:
+    sel = win_sel(address)
+    dispatch(
+        f'hl.dsp.window.move({{ workspace = "{MINIMIZED_WS}", window = "{sel}" }})',
+        legacy=["movetoworkspacesilent", f"{MINIMIZED_WS},{sel}"],
+    )
+
+
+def cmd_toggle(address: str) -> None:
+    focused = hypr_json("activewindow")
+    if focused and norm_addr(str(focused.get("address") or "")) == norm_addr(address):
+        cmd_minimize(address)
+        return
+    cmd_focus(address)
+
+
+def self_test() -> None:
+    assert win_sel("0xabc") == "address:0xabc"
+    assert win_sel("abc") == "address:0xabc"
+    assert win_sel("address:0xABC") == "address:0xABC"
+    assert norm_addr("ADDRESS:ABC") == "0xabc"
+    assert is_special_ws({"id": -98, "name": "special:minimized"})
+    assert is_special_ws({"id": 1, "name": "special:scratch"})
+    assert not is_special_ws({"id": 2, "name": "2"})
+    assert grouped_value({"grouped": ["0x1", "0x2"]})
+    assert grouped_value({"grouped": 1})
+    assert not grouped_value({"grouped": 0})
+    assert not grouped_value({"grouped": []})
+    assert not grouped_value({})
+    clients = [
+        {"workspace": {"id": 2}, "grouped": 0},
+        {"workspace": {"id": 2}, "grouped": ["0x1"]},
+    ]
+    assert workspace_mode(clients, 2) == "stack"
+    assert workspace_mode(clients, 1) == "tile"
+    workspaces = [
+        {"id": 1, "name": "1"},
+        {"id": 3, "name": "3"},
+        {"id": -98, "name": "special:minimized"},
+    ]
+    assert pick_remove_workspace(3, workspaces, 1) is None
+    assert pick_remove_workspace(3, workspaces, 0) == 1
+    assert pick_remove_workspace(1, workspaces, 0) == 3
+    assert pick_remove_workspace(1, [{"id": 1, "name": "1"}], 0) is None
+    print("ok")
+
+
+def usage() -> None:
+    print(
+        "usage: coda-hypr-ws "
+        "[add|switch ID|remove|toggle-stack|mode|focus ADDR|minimize ADDR|toggle ADDR]",
+        file=sys.stderr,
+    )
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in {"-h", "--help"}:
+        usage()
+        return 2
+    cmd = argv[0]
+    try:
+        if cmd == "--self-test":
+            self_test()
+            return 0
+        if cmd == "add":
+            cmd_add()
+        elif cmd in {"switch", "workspace"}:
+            if len(argv) < 2:
+                usage()
+                return 2
+            cmd_switch(argv[1])
+        elif cmd == "remove":
+            cmd_remove()
+        elif cmd in {"toggle-stack", "stack", "toggle_stack"}:
+            cmd_toggle_stack()
+        elif cmd == "mode":
+            cmd_mode()
+        elif cmd == "focus":
+            if len(argv) < 2:
+                usage()
+                return 2
+            cmd_focus(argv[1])
+        elif cmd == "minimize":
+            if len(argv) < 2:
+                usage()
+                return 2
+            cmd_minimize(argv[1])
+        elif cmd == "toggle":
+            if len(argv) < 2:
+                usage()
+                return 2
+            cmd_toggle(argv[1])
+        else:
+            usage()
+            return 2
+    except (OSError, subprocess.CalledProcessError, RuntimeError, json.JSONDecodeError) as exc:
+        print(f"coda-hypr-ws: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

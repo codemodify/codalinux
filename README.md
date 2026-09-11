@@ -71,7 +71,7 @@ On Arch this runs `mkarchiso` as the current user when possible (archiso 89+ can
 - Optional host sudoers may allow **only** `/usr/bin/mkarchiso` and `/usr/bin/docker`. Do **not** grant passwordless root (`ALL=(ALL) NOPASSWD: ALL`).
 - Provider packages are pinned in `packages/` (`iptables`, `pipewire-jack`, `tesseract-data-eng`) so pacstrap does not ask.
 
-The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` → `start-hyprland`, VirtualBox software-render path) with the vendored **AGS** shell (top bar, launcher via `Super+Space`, notifications, control center via `Super+,`) and official settings apps for Wi-Fi (iwd / impala), Bluetooth, audio, webcam, and appearance. Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
+The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` → `start-hyprland`, VirtualBox software-render path) with the vendored **AGS** shell (top bar with workspaces and a running-app taskbar, launcher via `Super+Space`, notifications, control center via `Super+,`) and official settings apps for Wi-Fi (iwd / impala), Bluetooth, audio, webcam, and appearance. Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
 
 A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an artifact when it succeeds.
 

@@ -36,6 +36,38 @@ window.Bar button.ws.focused {
   font-weight: 700;
 }
 
+window.Bar button.ws-action {
+  min-width: 22px;
+  padding: 4px 7px;
+  color: #7fb4c8;
+}
+
+window.Bar button.stack-toggle.stack {
+  background: rgba(61, 214, 245, 0.22);
+  font-weight: 700;
+}
+
+window.Bar .taskbar {
+  min-width: 80px;
+}
+
+window.Bar button.task {
+  padding: 3px 8px;
+}
+
+window.Bar button.task.focused {
+  background: rgba(61, 214, 245, 0.28);
+  font-weight: 600;
+}
+
+window.Bar button.task.minimized {
+  opacity: 0.55;
+}
+
+window.Bar label.task-title {
+  font-size: 12px;
+}
+
 window.Launcher,
 window.ControlCenter,
 window.Clipboard,

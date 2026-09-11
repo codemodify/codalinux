@@ -12,6 +12,7 @@ on:
       - "scripts/vendor-ags.sh"
       - "scripts/compose-package-lists.sh"
       - "scripts/coda-ags"
+      - "scripts/coda-hypr-ws"
       - "branding/**"
       - "desktop/**"
       - "sessions/**"

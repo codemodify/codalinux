@@ -28,7 +28,7 @@ Vendored Astal libraries (official-repo build deps only):
 
 ```
 app.tsx                 AGS entry (`ags run` looks for app.ts/tsx)
-Bar.tsx                 top bar / toolbar
+Bar.tsx                 top bar (workspaces +/−, tile/stack, running-app taskbar)
 Launcher.tsx            application launcher
 Notification*.tsx       notification popups (Astal notifd)
 ControlCenter.tsx       settings surface
@@ -42,6 +42,8 @@ style.css               shell theme
 - App sources: `/usr/local/share/codalinux/ags`.
 - Wrapper: `/usr/local/bin/coda-ags` sets `GI_TYPELIB_PATH` / `LD_LIBRARY_PATH` and runs `ags run` (instance name `coda`).
 - Hyprland starts `coda-ags` on `hyprland.start`. Super+Space / Super+D toggles the launcher; Super+, toggles the control center.
+- The bar lists running Hyprland clients (grouped by app class). Click focuses and switches workspace; click again on the focused single window minimizes it to `special:minimized`. Multi-window groups cycle on click.
+- Workspace `+` / `−` and the Tile/Stack control call `/usr/local/bin/coda-hypr-ws` (same helper as Super+N / Super+− / Super+T). Stacking is Hyprland window groups plus a groupbar, not a plugin layout.
 
 Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-manager` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`, plus the input-help text.
 
