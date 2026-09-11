@@ -13,6 +13,8 @@ bootmodes=('uefi.systemd-boot')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
 airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86,arm64' '-b' '1M' '-Xdict-size' '1M')
+# mkarchiso applies only these modes. Unlisted airootfs files become 644
+# (coda-hyprpaper shipped non-executable once; wallpaper never started).
 file_permissions=(
   ["/root"]="0:0:750"
   ["/root/.bash_profile"]="0:0:644"
@@ -26,5 +28,8 @@ file_permissions=(
   ["/usr/local/bin/coda-ags"]="0:0:755"
   ["/usr/local/bin/coda-hypr-ws"]="0:0:755"
   ["/usr/local/bin/coda-hyprlock"]="0:0:755"
+  ["/usr/local/bin/coda-hyprpaper"]="0:0:755"
+  ["/usr/local/bin/coda-wallpaper"]="0:0:755"
+  ["/usr/local/bin/coda-sync-desktop-from-host"]="0:0:755"
   ["/usr/local/bin/ags"]="0:0:755"
 )

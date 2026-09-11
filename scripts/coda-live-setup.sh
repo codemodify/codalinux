@@ -23,6 +23,8 @@ if ! id -u live >/dev/null 2>&1; then
 fi
 
 # Empty-password autologin for the live session only.
+# video/render help DRM clients; hyprpaper still GBM-crashes on this VM
+# path — wallpaper uses swaybg fallback (coda-wallpaper), not groups alone.
 passwd -d live >/dev/null
 usermod -aG wheel,video,audio,input,render,storage,lp,optical,users live 2>/dev/null \
   || usermod -aG wheel,video,audio,input,users live || true

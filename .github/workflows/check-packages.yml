@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Reject unofficial / forbidden package names
         run: ./scripts/check-package-lists.sh
+      - name: Wrapper executable bits and profiledef 755
+        run: ./scripts/check-wrapper-modes.sh
       - name: Recompose lists (must be committed)
         run: |
           ./scripts/compose-package-lists.sh

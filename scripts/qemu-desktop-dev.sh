@@ -507,8 +507,8 @@ Guest 9p shares (copy configs / drop logs; do not rebuild the ISO)
   # After the next ISO rebuild this is also: coda-sync-desktop-from-host
 
   # Or copy by hand, then restart from a Hyprland terminal:
-  cp ${guest_mount}/scripts/coda-wallpaper /usr/local/bin/coda-wallpaper
-  cp ${guest_mount}/scripts/coda-hyprpaper /usr/local/bin/coda-hyprpaper
+  install -m 0755 ${guest_mount}/scripts/coda-wallpaper /usr/local/bin/coda-wallpaper
+  install -m 0755 ${guest_mount}/scripts/coda-hyprpaper /usr/local/bin/coda-hyprpaper
   cp ${guest_mount}/desktop/hypr/hyprpaper.conf /etc/xdg/hypr/
   cp ${guest_mount}/desktop/hypr/hyprpaper.conf /home/live/.config/hypr/
   cp ${guest_mount}/desktop/hypr/hyprland.lua /etc/xdg/hypr/
