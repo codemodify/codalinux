@@ -62,7 +62,13 @@ The checker rejects known policy violations (AUR helpers, Calamares, NetworkMana
 
 On Arch this runs `mkarchiso` as the current user when possible (archiso 89+ can unshare). Otherwise it uses a privileged `archlinux` container **only if Docker/Podman already works without sudo**. The script never calls `sudo` and never answers pacman provider prompts. Output: `out/codalinux-<date>-x86_64.iso`.
 
-Automated live-ISO boot testing uses QEMU/KVM + OVMF (`./scripts/qemu-boot-test.sh`), not VirtualBox. VirtualBox remains valid for manual VMSVGA checks.
+Iteration phases:
+
+- **Desktop UX trial/error** (hypr / AGS / wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + 9p share of the host tree; no ISO rebuild.
+- **ISO smoke**: `./scripts/qemu-boot-test.sh` (QEMU/KVM + OVMF, serial + QMP screenshots).
+- **Package, vendor, or squashfs changes**: `./scripts/build-iso.sh`.
+
+VirtualBox remains valid for manual VMSVGA checks. It is not the automated path.
 
 ### Unattended local builds (abox)
 

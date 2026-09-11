@@ -46,6 +46,8 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 
+- [ ] Confirm virtio-9p modules on the live image (`find /usr/lib/modules/$(uname -r) -name '*9p*'`). Add them only if that find is empty. Desktop UX iteration is `scripts/qemu-desktop-dev.sh`; ISO smoke is `scripts/qemu-boot-test.sh`; package/vendor/squashfs still needs `scripts/build-iso.sh`.
+
 - [ ] Branded greetd greeter (theme hooks are placeholders).
 - [x] Default hyprpaper / hyprlock still is Plasma Horos at `branding/wallpapers/default.png`. Full theme assets still later.
 - [ ] XLibre session packaging decision (see [DESIGN.md](../DESIGN.md#xlibre-session-path)); still no Coda repo.

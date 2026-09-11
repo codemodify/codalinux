@@ -147,6 +147,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-hyprlock"
   install -m 0755 "${root}/scripts/coda-hyprpaper" \
     "${overlay}/usr/local/bin/coda-hyprpaper"
+  install -m 0755 "${root}/scripts/coda-sync-desktop-from-host.sh" \
+    "${overlay}/usr/local/bin/coda-sync-desktop-from-host"
 
   mkdir -p "${work}" "${out}"
 }
