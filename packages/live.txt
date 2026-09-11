@@ -30,3 +30,4 @@ sof-firmware
 cryptsetup
 lvm2
 qemu-guest-agent
+virtualbox-guest-utils

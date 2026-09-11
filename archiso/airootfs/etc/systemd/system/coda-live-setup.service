@@ -1,0 +1,14 @@
+[Unit]
+Description=CodaLinux live user, locale, and timezone
+DefaultDependencies=no
+After=local-fs.target systemd-sysusers.service systemd-tmpfiles-setup.service
+Before=greetd.service display-manager.service
+Wants=systemd-sysusers.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/codalinux/coda-live-setup.sh
+
+[Install]
+WantedBy=multi-user.target

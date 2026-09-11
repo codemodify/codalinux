@@ -31,9 +31,17 @@ prepare_overlay() {
   install -d "${overlay}/etc/pacman.d/hooks"
   install -m 0644 "${root}/branding/hooks/codalinux-os-release.hook" \
     "${overlay}/etc/pacman.d/hooks/codalinux-os-release.hook"
+  install -m 0644 "${root}/branding/hooks/codalinux-locale.hook" \
+    "${overlay}/etc/pacman.d/hooks/codalinux-locale.hook"
   install -d "${overlay}/usr/local/lib/codalinux"
   install -m 0755 "${root}/branding/hooks/apply-os-release.sh" \
     "${overlay}/usr/local/lib/codalinux/apply-os-release.sh"
+  install -m 0755 "${root}/branding/hooks/apply-locale.sh" \
+    "${overlay}/usr/local/lib/codalinux/apply-locale.sh"
+  install -m 0755 "${root}/scripts/coda-live-setup.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-live-setup.sh"
+  install -m 0755 "${root}/scripts/coda-install-config.py" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-config.py"
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"
@@ -69,6 +77,8 @@ prepare_overlay() {
   install -d "${overlay}/usr/local/bin"
   install -m 0755 "${root}/scripts/coda-install" \
     "${overlay}/usr/local/bin/coda-install"
+  install -m 0755 "${root}/scripts/coda-hyprland" \
+    "${overlay}/usr/local/bin/coda-hyprland"
 
   mkdir -p "${work}" "${out}"
 }

@@ -10,7 +10,7 @@ CodaLinux installs with **archinstall**, not Calamares. This directory is a stub
 | `packages.txt` | Generated package list (no live-only tools) — source for the JSON array |
 | `profiles/codalinux.py` | Custom profile hooks — **not wired yet** |
 
-Disk layout is machine-specific and left empty on purpose. Generate a layout on target hardware with `archinstall --dry-run` and merge the CodaLinux fields.
+Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk layout is the interactive part (`coda-install` can pick a disk and generate an ext4 default layout, or fall back to archinstall's disk menu).
 
 Credentials (`user_credentials.json`) must never be committed.
 
