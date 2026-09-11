@@ -26,6 +26,12 @@ emit "${root}/archiso/packages.x86_64" \
 emit "${root}/install/packages.txt" \
   base.txt hardware.txt network.txt desktop.txt apps.txt
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 not found; wrote text lists only (JSON packages array unchanged)" >&2
+  echo "Wrote archiso/packages.x86_64 and install/packages.txt"
+  exit 0
+fi
+
 python3 - "${root}/install/packages.txt" "${root}/install/user_configuration.json" <<'PY'
 import json
 import sys
