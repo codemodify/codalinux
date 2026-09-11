@@ -11,6 +11,7 @@
 
 hyprland
 lua54
+make
 meson
 ninja
 gcc
