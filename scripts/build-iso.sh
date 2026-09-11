@@ -162,6 +162,8 @@ run_mkarchiso() {
   prepare_overlay
   log "Vendoring AGS/Astal into airootfs /usr/local (official-repo build deps only)"
   "${root}/scripts/vendor-ags.sh" "${profile}/airootfs"
+  log "Vendoring hyprbars into airootfs /usr/local/lib/hyprland (official-repo build deps only)"
+  "${root}/scripts/vendor-hyprbars.sh" "${profile}/airootfs"
   clean_build_dirs
   log "Running mkarchiso -v -w ${work} -o ${out} ${profile}"
   # mkarchiso drives pacstrap; lists pin providers so pacman stays noninteractive.

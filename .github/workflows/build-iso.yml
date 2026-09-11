@@ -10,6 +10,7 @@ on:
       - "packages/**"
       - "scripts/build-iso.sh"
       - "scripts/vendor-ags.sh"
+      - "scripts/vendor-hyprbars.sh"
       - "scripts/compose-package-lists.sh"
       - "scripts/coda-ags"
       - "scripts/coda-hypr-ws"
