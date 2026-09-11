@@ -47,6 +47,6 @@ Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-mana
 
 ## Build deps
 
-Official Arch packages only, listed in [`packages/ags-build-deps.txt`](../../packages/ags-build-deps.txt). That list is **not** composed into the live ISO (keeps meson/npm/go off the image). `vendor-ags.sh` installs them on the Arch ISO builder, then compiles.
+Official Arch packages only, listed in [`packages/ags-build-deps.txt`](../../packages/ags-build-deps.txt) (includes `glib2-devel` for `glib-mkenums` used by Astal WirePlumber). That list is **not** composed into the live ISO (keeps meson/npm/go off the image). `vendor-ags.sh` installs them on the Arch ISO builder, then compiles.
 
 Do not add `aylurs-gtk-shell`, `libastal*`, an AUR helper, or a `[codalinux]` repo.
