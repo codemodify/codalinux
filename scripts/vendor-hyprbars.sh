@@ -129,8 +129,12 @@ build_and_install() {
   assert_header_layout
   local extra
   extra="$(lua_cflags)"
+  # Do not pass CXXFLAGS= on the make command line: that replaces the
+  # plugin Makefile's -std=c++2b. Append lua include dirs to INCLUDES.
+  local includes
+  includes="$(pkg-config --cflags pixman-1 libdrm hyprland libinput libudev wayland-server xkbcommon) ${extra}"
   log "building hyprbars ${HYPRBARS_COMMIT} against ${hypr_ver} hyprland.pc (${HYPRLAND_WINDOW_HPP})"
-  make -C "${src}" -j "${JOBS}" all CXXFLAGS="-O2 ${extra}"
+  make -C "${src}" -j "${JOBS}" all INCLUDES="${includes}"
   local so=""
   if [[ -f "${src}/hyprbars.so" ]]; then
     so="${src}/hyprbars.so"
