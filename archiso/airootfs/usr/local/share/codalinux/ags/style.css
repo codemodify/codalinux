@@ -110,6 +110,58 @@ window.NotificationPopups {
   min-width: 460px;
 }
 
+.control-content.settings-hub {
+  margin: 0;
+  padding: 0;
+  min-width: 860px;
+  min-height: 520px;
+}
+
+.settings-nav {
+  min-width: 196px;
+  padding: 16px 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 14px 0 0 14px;
+}
+
+.settings-page {
+  min-width: 560px;
+  min-height: 480px;
+  padding: 18px 20px;
+}
+
+.control-content label.page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e8eef2;
+}
+
+.control-content button.nav-item {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.control-content button.nav-item.active {
+  background: rgba(127, 180, 200, 0.28);
+  font-weight: 700;
+}
+
+.control-content .display-info {
+  font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #c5d0d6;
+}
+
+.control-content button.launch-row {
+  padding: 10px 12px;
+}
+
 .launcher-title,
 .control-title {
   font-size: 18px;

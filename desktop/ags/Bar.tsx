@@ -517,7 +517,7 @@ export default function Bar({ gdkmonitor }: { gdkmonitor: Gdk.Monitor }) {
           <Battery />
           <button
             class="settings"
-            tooltipText="Control center"
+            tooltipText="Settings"
             onClicked={() => toggle("control-center")}
           >
             <image iconName="preferences-system-symbolic" pixelSize={16} />

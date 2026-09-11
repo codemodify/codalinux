@@ -38,5 +38,5 @@ To change compositor input, edit:
 GTK fonts, icons, and cursors:
   Super+,  →  Appearance  (nwg-look)
 
-Wi-Fi uses iwd (impala). Bluetooth, audio, webcam, and appearance
-are official apps opened from the AGS control center.
+Wi-Fi uses iwd (impala). Display, Bluetooth, audio, webcam, and
+appearance are opened from Settings (AGS control center / Super+,).

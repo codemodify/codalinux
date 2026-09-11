@@ -4,6 +4,9 @@
 # remove those docs. Serial + QMP screenshots replace VBoxManage inject
 # / screenshotpng for Horos wallpaper and idle-lock smoke tests.
 #
+# virtio-vga without xres/yres comes up at 640x480. Both QEMU helpers
+# pin 1920x1080 so the live desktop (and screenshots) are usable.
+#
 # Arch host packages (abox):
 #   pacman -S --needed qemu-system-x86 edk2-ovmf
 #   # optional GTK window:
@@ -40,6 +43,7 @@ Usage: qemu-boot-test.sh [options] [ISO]
 Boot the CodaLinux UEFI live ISO with QEMU/KVM + OVMF. Default is
 headless: serial log, QMP socket, screenshot(s) after the desktop
 should have settled. Ctrl-C stops QEMU and leaves artifacts.
+Guest GPU is virtio-vga at 1920x1080 (bare virtio-vga is 640x480).
 
 ISO is the first non-option argument, or $CODA_ISO, or the newest
 out/codalinux-*.iso under the repo root.
@@ -384,7 +388,7 @@ cmd=(
   "${fw_args[@]}"
   -cdrom "${iso}"
   -boot order=d,menu=on
-  -device virtio-vga
+  -device virtio-vga,xres=1920,yres=1080
   "${display_args[@]}"
   -device virtio-net-pci,netdev=n0
   -netdev user,id=n0

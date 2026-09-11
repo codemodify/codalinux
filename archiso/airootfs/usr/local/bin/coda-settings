@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Coda Settings — official-repo tools opened from the AGS control center.
-# Network stays systemd-networkd + iwd (impala). No NetworkManager.
+# Coda Settings — System Settings hub helpers for the AGS control center.
+# Official-repo tools only. Network stays systemd-networkd + iwd (impala).
+# Display uses hyprctl; wlr-randr if present. No NetworkManager / Plasma.
 set -euo pipefail
 
 term() {
@@ -75,6 +76,118 @@ open_input() {
   term bash -lc 'cat /usr/local/share/codalinux/input-help.txt; echo; read -r -p "Enter to close. Appearance/cursors: nwg-look. "'
 }
 
+focused_monitor() {
+  hyprctl monitors 2>/dev/null | awk '
+    /^Monitor / { name=$2 }
+    /focused: yes/ { print name; exit }
+  '
+}
+
+show_display() {
+  echo "CodaLinux display (Hyprland — hyprctl; optional wlr-randr)"
+  echo "QEMU guests need virtio-vga,xres=1920,yres=1080 or the device stays 640x480."
+  echo
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl monitors || true
+  else
+    echo "hyprctl is not available."
+  fi
+  echo
+  if command -v wlr-randr >/dev/null 2>&1; then
+    echo "=== wlr-randr ==="
+    wlr-randr || true
+    echo
+  fi
+  echo "Apply: coda-settings display apply 1920x1080"
+  echo "       coda-settings display apply 1280x720"
+  echo "       coda-settings display apply preferred [OUTPUT]"
+}
+
+apply_display() {
+  local mode="${1:-}"
+  local output="${2:-}"
+  if [[ -z "${mode}" ]]; then
+    echo "coda-settings: display apply needs a mode (1920x1080, 1280x720, preferred)" >&2
+    exit 2
+  fi
+  if [[ -z "${output}" ]]; then
+    output="$(focused_monitor || true)"
+  fi
+  if [[ -z "${output}" ]]; then
+    echo "coda-settings: no focused monitor (is Hyprland running?)" >&2
+    exit 1
+  fi
+
+  if [[ "${mode}" != preferred ]] && command -v wlr-randr >/dev/null 2>&1; then
+    if wlr-randr --output "${output}" --mode "${mode}"; then
+      return 0
+    fi
+  fi
+
+  local spec
+  case "${mode}" in
+    preferred)
+      spec="${output},preferred,auto,1"
+      ;;
+    *[0-9]x[0-9]*)
+      spec="${output},${mode}@60,auto,1"
+      ;;
+    *)
+      echo "coda-settings: unknown mode ${mode}" >&2
+      exit 2
+      ;;
+  esac
+  hyprctl keyword monitor "${spec}"
+}
+
+open_display() {
+  local sub="${1:-status}"
+  case "${sub}" in
+    status|"")
+      term bash -lc 'coda-settings display print; echo; read -r -p "Enter to close "'
+      ;;
+    print)
+      show_display
+      ;;
+    apply)
+      apply_display "${2:-}" "${3:-}"
+      ;;
+    1920x1080|1280x720|preferred)
+      apply_display "${sub}" "${2:-}"
+      ;;
+    *)
+      echo "usage: coda-settings display [status|print|apply MODE [OUTPUT]]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+show_about() {
+  echo "CodaLinux"
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo "${PRETTY_NAME:-CodaLinux}"
+  fi
+  echo
+  uname -srm
+  if command -v hostnamectl >/dev/null 2>&1; then
+    hostnamectl 2>/dev/null || true
+  fi
+  echo
+  echo "Network: systemd-networkd + iwd (impala). No NetworkManager."
+  echo "Shell: Hyprland + AGS. Settings: Super+, or coda-settings"
+}
+
+open_about() {
+  local sub="${1:-}"
+  if [[ "${sub}" == print ]]; then
+    show_about
+    return
+  fi
+  term bash -lc 'coda-settings about print; echo; read -r -p "Enter to close "'
+}
+
 pick() {
   if command -v coda-ags >/dev/null 2>&1; then
     if coda-ags toggle control-center >/dev/null 2>&1; then
@@ -84,22 +197,26 @@ pick() {
   term bash -lc '
     printf "%s\n" \
       "Coda Settings" \
-      "1) Network / Wi-Fi" \
-      "2) Network status" \
-      "3) Bluetooth" \
-      "4) Audio" \
-      "5) Webcam" \
-      "6) Appearance" \
-      "7) Mouse & keyboard"
-    read -r -p "Choice [1-7]: " n
+      "1) Display" \
+      "2) Network / Wi-Fi" \
+      "3) Network status" \
+      "4) Bluetooth" \
+      "5) Audio" \
+      "6) Webcam" \
+      "7) Appearance" \
+      "8) Mouse & keyboard" \
+      "9) About"
+    read -r -p "Choice [1-9]: " n
     case "${n}" in
-      1) exec coda-settings wifi ;;
-      2) exec coda-settings netstatus ;;
-      3) exec coda-settings bluetooth ;;
-      4) exec coda-settings audio ;;
-      5) exec coda-settings webcam ;;
-      6) exec coda-settings appearance ;;
-      7) exec coda-settings input ;;
+      1) exec coda-settings display ;;
+      2) exec coda-settings wifi ;;
+      3) exec coda-settings netstatus ;;
+      4) exec coda-settings bluetooth ;;
+      5) exec coda-settings audio ;;
+      6) exec coda-settings webcam ;;
+      7) exec coda-settings appearance ;;
+      8) exec coda-settings input ;;
+      9) exec coda-settings about ;;
     esac
   '
 }
@@ -114,8 +231,10 @@ case "${cmd}" in
   webcam|camera) open_webcam ;;
   appearance|look) open_appearance ;;
   input|keyboard|mouse) open_input ;;
+  display|monitors|resolution) open_display "${2:-status}" "${3:-}" "${4:-}" ;;
+  about|system) open_about "${2:-}" ;;
   *)
-    echo "usage: coda-settings [menu|wifi|netstatus|bluetooth|audio|webcam|appearance|input]" >&2
+    echo "usage: coda-settings [menu|display|wifi|netstatus|bluetooth|audio|webcam|appearance|input|about]" >&2
     exit 2
     ;;
 esac
