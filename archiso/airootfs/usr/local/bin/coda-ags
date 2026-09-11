@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Start or talk to the vendored CodaLinux AGS/Astal shell (instance "coda").
+set -euo pipefail
+
+export GI_TYPELIB_PATH="/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:${GI_TYPELIB_PATH}}"
+export LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export XDG_DATA_DIRS="/usr/local/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+ags="${CODA_AGS_BIN:-/usr/local/bin/ags}"
+appdir="${CODA_AGS_APP:-/usr/local/share/codalinux/ags}"
+instance="${CODA_AGS_INSTANCE:-coda}"
+
+if [[ ! -x "${ags}" ]]; then
+  echo "coda-ags: vendored AGS binary not found at ${ags}" >&2
+  exit 1
+fi
+
+cmd="${1:-run}"
+if [[ "${cmd}" == run ]]; then
+  shift || true
+  exec "${ags}" run "${appdir}" "$@"
+fi
+
+exec "${ags}" "${cmd}" "${@:2}" -i "${instance}"

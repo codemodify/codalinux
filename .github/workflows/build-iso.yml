@@ -9,9 +9,11 @@ on:
       - "archiso/**"
       - "packages/**"
       - "scripts/build-iso.sh"
+      - "scripts/vendor-ags.sh"
       - "scripts/compose-package-lists.sh"
+      - "scripts/coda-ags"
       - "branding/**"
-      - "desktop/hypr/**"
+      - "desktop/**"
       - "sessions/**"
       - "install/**"
 

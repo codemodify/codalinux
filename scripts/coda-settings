@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Coda Settings — official-repo tools for the live/interim desktop.
+# Coda Settings — official-repo tools opened from the AGS control center.
 # Network stays systemd-networkd + iwd (impala). No NetworkManager.
 set -euo pipefail
 
@@ -52,28 +52,32 @@ open_input() {
 }
 
 pick() {
-  local choice
-  choice="$(
-    printf '%s\n' \
-      "Network / Wi-Fi" \
-      "Network status" \
-      "Bluetooth" \
-      "Audio" \
-      "Webcam" \
-      "Appearance" \
-      "Mouse & keyboard" \
-      | fuzzel --dmenu --prompt="Coda Settings> " --lines=8
-  )" || exit 0
-  case "${choice}" in
-    "Network / Wi-Fi") open_wifi ;;
-    "Network status") open_netstatus ;;
-    "Bluetooth") open_bluetooth ;;
-    "Audio") open_audio ;;
-    "Webcam") open_webcam ;;
-    "Appearance") open_appearance ;;
-    "Mouse & keyboard") open_input ;;
-    *) exit 0 ;;
-  esac
+  if command -v coda-ags >/dev/null 2>&1; then
+    if coda-ags toggle control-center >/dev/null 2>&1; then
+      exit 0
+    fi
+  fi
+  term bash -lc '
+    printf "%s\n" \
+      "Coda Settings" \
+      "1) Network / Wi-Fi" \
+      "2) Network status" \
+      "3) Bluetooth" \
+      "4) Audio" \
+      "5) Webcam" \
+      "6) Appearance" \
+      "7) Mouse & keyboard"
+    read -r -p "Choice [1-7]: " n
+    case "${n}" in
+      1) exec coda-settings wifi ;;
+      2) exec coda-settings netstatus ;;
+      3) exec coda-settings bluetooth ;;
+      4) exec coda-settings audio ;;
+      5) exec coda-settings webcam ;;
+      6) exec coda-settings appearance ;;
+      7) exec coda-settings input ;;
+    esac
+  '
 }
 
 cmd="${1:-menu}"

@@ -5,9 +5,10 @@ Keyboard layout: us (Bozeman / US default — not prompted at install)
 Modifier: Super (Windows key)
 
   Super+Return     Terminal (foot)
-  Super+Space      App launcher (fuzzel)
-  Super+D          App launcher (fuzzel)
-  Super+,          Coda Settings
+  Super+Space      App launcher (AGS)
+  Super+D          App launcher (AGS)
+  Super+,          Control center (AGS settings)
+  Super+V          Clipboard history (AGS)
   Super+E          Files (Thunar)
   Super+F          Firefox
   Super+L          Lock
@@ -24,3 +25,6 @@ To change compositor input, edit:
 
 GTK fonts, icons, and cursors:
   Super+,  →  Appearance  (nwg-look)
+
+Wi-Fi uses iwd (impala). Bluetooth, audio, webcam, and appearance
+are official apps opened from the AGS control center.

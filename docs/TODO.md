@@ -11,8 +11,8 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
 - [ ] Verify the os-release pacman hook wins over the `filesystem` package.
 - [x] Live autologin: user `live` via `coda-hyprland` (VM software-render path + `/var/log/coda-hyprland.log`). Verify on VirtualBox EFI/VMSVGA.
-- [x] Interim official-repo shell on the live ISO: waybar, fuzzel, mako, hyprpaper, Coda Settings (impala / blueman / pavucontrol / snapshot / nwg-look).
-- [ ] Confirm greetd + Hyprland + PipeWire + waybar actually start on the live image (tty2 is the rescue console).
+- [x] Vendored AGS/Astal shell on the live ISO (bar, launcher, notifications, control center) plus official settings apps (impala / blueman / pavucontrol / snapshot / nwg-look). Waybar interim rejected.
+- [ ] Confirm greetd + Hyprland + PipeWire + AGS actually start on the live image (tty2 is the rescue console).
 - [ ] Accessibility / speech boot entry (optional; not in v1).
 - [ ] Keep the ISO official-repos-only; no `[codalinux]` repo, no AUR helper.
 - [ ] Periodic rebuild pipeline (manual first; CI only if an Arch builder exists).
@@ -36,11 +36,11 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 3. AGS / Astal shell (`desktop/ags/`)
 
-- [ ] Choose AGS v2/Astal toolkit versions and lock them in `desktop/ags/README.md`.
-- [ ] Implement the unified shell (bar, notifications, launcher/control center) against the placeholder tree.
-- [ ] Build from this source using official-repo deps in `packages/ags-build-deps.txt` (meson/npm/go/GTK). Do not add an AUR helper to the default path.
-- [ ] Decide ISO integration: vendor a build into `/usr/local` at image-build time, or post-install compile.
-- [ ] Start AGS from `desktop/hypr/hyprland.lua` (`hl.on("hyprland.start", …)`) once it replaces the interim waybar shell.
+- [x] Pin AGS 3.1.2 + Astal commits in `desktop/ags/README.md` and `scripts/vendor-ags.sh`.
+- [x] Implement the unified shell (bar, notifications, launcher, control center).
+- [x] Vendor from source at ISO build time with official-repo deps in `packages/ags-build-deps.txt`. No AUR helper, no Coda repo.
+- [x] Start AGS from `desktop/hypr/hyprland.lua` via `coda-ags` (Waybar is not a fallback).
+- [ ] Confirm the vendored shell on a real live boot (VirtualBox / OVMF).
 
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 

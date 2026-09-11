@@ -77,6 +77,12 @@ xorg-xwayland
 greetd
 gtk3
 gtk4
+gtk4-layer-shell
+gjs
+gobject-introspection
+json-glib
+gdk-pixbuf2
+upower
 qt5-wayland
 qt6-wayland
 polkit
@@ -87,9 +93,6 @@ noto-fonts
 noto-fonts-emoji
 otf-font-awesome
 adwaita-icon-theme
-waybar
-fuzzel
-mako
 nwg-look
 wl-clipboard
 cliphist

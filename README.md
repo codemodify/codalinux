@@ -17,7 +17,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Network | systemd-networkd + iwd (not NetworkManager; no firewall by default) |
 | Display | Wayland + XWayland default; XLibre (X11) session path supported later |
 | Display manager | greetd (placeholder greeter) |
-| Desktop | Hyprland + interim waybar/fuzzel/mako (AGS/Astal is the long-term shell) |
+| Desktop | Hyprland + AGS/Astal (vendored into `/usr/local`; no Waybar interim) |
 | Delivery | archiso live ISO + archinstall (not Calamares) |
 | Support | GitHub issues |
 
@@ -71,7 +71,7 @@ On Arch this runs `mkarchiso` as the current user when possible (archiso 89+ can
 - Optional host sudoers may allow **only** `/usr/bin/mkarchiso` and `/usr/bin/docker`. Do **not** grant passwordless root (`ALL=(ALL) NOPASSWD: ALL`).
 - Provider packages are pinned in `packages/` (`iptables`, `pipewire-jack`, `tesseract-data-eng`) so pacstrap does not ask.
 
-The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` → `start-hyprland`, VirtualBox software-render path) with a waybar panel, wallpaper, fuzzel launcher (`Super+Space`), mako notifications, and **Coda Settings** (`Super+,`) for Wi-Fi, Bluetooth, audio, webcam, and appearance. Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
+The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` → `start-hyprland`, VirtualBox software-render path) with the vendored **AGS** shell (top bar, launcher via `Super+Space`, notifications, control center via `Super+,`) and official settings apps for Wi-Fi (iwd / impala), Bluetooth, audio, webcam, and appearance. Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
 
 A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an artifact when it succeeds.
 
@@ -89,7 +89,6 @@ That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (
 
 - A second package repository or binary package pipeline
 - A default AUR helper
-- A production AGS/Astal UI
 - Working NVIDIA auto-detection (hook + package list only)
 - Plymouth (explicitly deferred)
 - Calamares

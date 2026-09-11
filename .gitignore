@@ -27,3 +27,14 @@ __pycache__/
 
 # Local ISO copies (do not commit)
 /artifacts/
+
+# AGS/Astal source cache and DESTDIR leftovers from vendor-ags.sh
+/.cache/
+archiso/airootfs/usr/local/bin/ags
+archiso/airootfs/usr/local/bin/astal
+archiso/airootfs/usr/local/lib/
+archiso/airootfs/usr/local/include/
+archiso/airootfs/usr/local/share/ags/
+archiso/airootfs/usr/local/share/gir-1.0/
+archiso/airootfs/usr/local/share/glib-2.0/
+archiso/airootfs/etc/ld.so.conf.d/codalinux-usr-local.conf

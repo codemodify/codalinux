@@ -69,7 +69,7 @@ archinstall's guided installer historically defaults toward NetworkManager for d
 | Alternate session | XLibre (X11) path — packaging unresolved; not default |
 | Display manager | greetd |
 | Greeter UI | Stub / custom placeholder (`agreety` until a branded greeter exists) |
-| Shell | **Long-term:** AGS/Astal (in-tree stubs). **Interim live ISO:** official-repo waybar + fuzzel + mako + Coda Settings |
+| Shell | **AGS/Astal** (vendored from source into `/usr/local` at ISO image-build time). Waybar / fuzzel / mako are **not** the default shell. |
 | Companions | hyprlock, hypridle, hyprpaper |
 | Portals | `xdg-desktop-portal-hyprland` + `xdg-desktop-portal-gtk` as needed |
 | Branding | Light: `/etc/os-release` as CodaLinux, theme/wallpaper placeholders, greetd theming hooks |
@@ -85,7 +85,7 @@ Official-repo packages only:
 - Video: `mpv`
 - Images: `imv`
 - Documents: `zathura` + `zathura-pdf-mupdf`
-- Settings tools (interim): `impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`
+- Settings tools (opened from the AGS control center): `impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`
 
 ### Delivery
 
@@ -115,11 +115,13 @@ Two locked product pieces are **not** in official Arch repositories today. v1 st
 v1 approach:
 
 1. Keep the shell **source tree** in [`desktop/ags/`](desktop/ags/README.md).
-2. Install official-repo **build/runtime GTK dependencies** from [`packages/ags-build-deps.txt`](packages/ags-build-deps.txt) on systems that will compile the shell.
-3. Decide later (not in this scaffold) whether the ISO vendors a prebuilt tree under `/usr/local` or documents a post-install source build.
-4. Do not add `yay -S aylurs-gtk-shell` to any default path.
+2. At ISO image-build time, [`scripts/vendor-ags.sh`](scripts/vendor-ags.sh) fetches the pinned AGS/Astal commits and compiles them with official-repo toolchains from [`packages/ags-build-deps.txt`](packages/ags-build-deps.txt), installing into airootfs `/usr/local`.
+3. Runtime packages on the live image are official only (`gjs`, `gtk4`, `gtk4-layer-shell`, …). Do not ship meson/npm/go on the ISO by default.
+4. Do not add `yay -S aylurs-gtk-shell`, a Coda pacman repo, or a default AUR helper.
 
-Until that ships, the live session is usable with official `extra` tools only: **waybar** (panel), **fuzzel** (launcher), **mako** (notifications), **hyprpaper** (wallpaper), and **coda-settings** (Wi-Fi via `impala` / iwd, Bluetooth via `blueman` or `bluetui`, audio via `pavucontrol`, webcam via `snapshot`, appearance via `nwg-look`). `blueman` depends on `libnm`; it does **not** install or enable NetworkManager.
+Pinned commits and the vendored Astal library set are documented in [`desktop/ags/README.md`](desktop/ags/README.md). **Astal Network is not used** (it wraps NetworkManager / `nmcli`). Wi-Fi is iwd via `impala`. A Waybar + fuzzel + mako interim was explicitly rejected.
+
+Official settings apps remain available and are opened from the AGS control center: `impala` (Wi-Fi / iwd), `blueman` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`. `blueman` depends on `libnm`; it does **not** install or enable NetworkManager.
 
 ### XLibre session path
 
@@ -154,7 +156,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 - Lists are plain text, one official package per line. `#` comments and blank lines are ignored.
 - [`scripts/compose-package-lists.sh`](scripts/compose-package-lists.sh) concatenates the default sets into `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `install/user_configuration.json`.
 - `packages/nvidia.txt` and `packages/optional-cups.txt` are **not** in the default compose.
-- `packages/ags-build-deps.txt` is **not** in the live ISO default set (keeps the image smaller until the shell is built).
+- `packages/ags-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-ags.sh` on the Arch ISO builder).
 - `archiso/packages.x86_64` also includes archiso-mandatory packages (`mkinitcpio`, `mkinitcpio-archiso`) from `packages/live.txt`.
 - Unattended builds pin pacman providers in the default lists (`iptables`, `pipewire-jack`, `tesseract-data-eng`). `iptables` is a provider pin only — it does not enable a firewall.
 
@@ -207,7 +209,7 @@ Live GUI notes:
 - `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, logs to `/var/log/coda-hyprland.log`, and execs `start-hyprland` (not the bare `Hyprland` binary).
 - greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
 - Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
-- Interim shell autostarts waybar, mako, hyprpaper, the polkit agent, and blueman-applet. Super+Space / Super+D opens fuzzel; Super+, opens Coda Settings.
+- The vendored AGS shell autostarts as `coda-ags` (bar, launcher, notifications, control center). hyprpaper, the polkit agent, and blueman-applet still start. Super+Space / Super+D toggles the AGS launcher; Super+, toggles the control center.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 
@@ -228,7 +230,7 @@ Do not add `bios.syslinux.*`.
 | --- | --- |
 | `sessions/wayland/codalinux-hyprland.desktop` | `/usr/share/wayland-sessions/` |
 | `desktop/hypr/*` (`hyprland.lua` + companion `.conf`) | `/etc/skel/.config/hypr/` and `/etc/xdg/hypr/` |
-| `desktop/waybar`, `desktop/fuzzel`, `desktop/mako` | `/etc/xdg/` and `/etc/skel/.config/` |
+| `desktop/ags/` | `/usr/local/share/codalinux/ags/` (UI sources; AGS binary is vendored to `/usr/local`) |
 | `desktop/applications/*.desktop` | `/usr/share/applications/` |
 | `branding/os-release` | `/usr/lib/os-release` via hook |
 | `branding/wallpapers/default.png` | `/usr/share/backgrounds/codalinux/` |
@@ -237,7 +239,6 @@ Do not add `bios.syslinux.*`.
 
 ## Explicit non-goals (v1 scaffold)
 
-- Implementing the AGS/Astal UI
 - A production-quality ISO in CI
 - NVIDIA GPU auto-detection beyond documented hooks
 - A Coda binary package repository

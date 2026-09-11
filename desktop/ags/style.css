@@ -1,0 +1,141 @@
+window.Bar {
+  background: transparent;
+  color: #e8eef2;
+  font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
+  font-size: 13px;
+}
+
+.bar-inner {
+  background: rgba(18, 24, 28, 0.92);
+  border: 1px solid rgba(127, 180, 200, 0.28);
+  border-radius: 10px;
+  margin: 6px 10px 0 10px;
+  padding: 4px 8px;
+  min-height: 34px;
+}
+
+window.Bar button {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: #e8eef2;
+}
+
+window.Bar button:hover {
+  background: rgba(127, 180, 200, 0.18);
+}
+
+window.Bar button.brand {
+  font-weight: 700;
+  color: #7fb4c8;
+}
+
+window.Bar button.ws.focused {
+  background: rgba(127, 180, 200, 0.32);
+  font-weight: 700;
+}
+
+window.Launcher,
+window.ControlCenter,
+window.Clipboard,
+window.NotificationPopups {
+  background: transparent;
+}
+
+.launcher-content,
+.clipboard-content,
+.control-content {
+  background: rgba(18, 24, 28, 0.96);
+  color: #e8eef2;
+  border: 1px solid rgba(127, 180, 200, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  min-width: 420px;
+}
+
+.control-content {
+  margin: 52px 18px 0 0;
+  min-width: 460px;
+}
+
+.launcher-title,
+.control-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #7fb4c8;
+}
+
+.control-sub {
+  font-size: 12px;
+  color: #9aa8b0;
+}
+
+entry {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eef2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(127, 180, 200, 0.2);
+}
+
+button.app,
+.tiles button.tile,
+.control-content button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  color: #e8eef2;
+}
+
+button.app:hover,
+.tiles button.tile:hover,
+.control-content button:hover {
+  background: rgba(127, 180, 200, 0.16);
+}
+
+.tiles button.tile {
+  min-width: 128px;
+  min-height: 92px;
+}
+
+label.hint {
+  color: #7f8b93;
+  font-size: 11px;
+}
+
+.volume-row slider {
+  min-width: 180px;
+}
+
+.Notification {
+  background: rgba(18, 24, 28, 0.96);
+  color: #e8eef2;
+  border-radius: 12px;
+  border: 1px solid rgba(127, 180, 200, 0.25);
+  margin: 8px 14px 0 0;
+  padding: 8px 10px;
+}
+
+.Notification.critical {
+  border-color: rgba(220, 80, 80, 0.55);
+}
+
+.Notification .header {
+  color: #9aa8b0;
+}
+
+.Notification .summary {
+  font-weight: 700;
+}
+
+.Notification .body {
+  color: #c5d0d6;
+}
+
+.Notification button.close {
+  padding: 2px;
+  min-width: 0;
+  min-height: 0;
+}

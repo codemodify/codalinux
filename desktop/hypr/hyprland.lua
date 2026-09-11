@@ -1,12 +1,13 @@
 -- CodaLinux Hyprland session (Lua / Hyprland 0.55+).
--- Interim shell is waybar + fuzzel + mako. AGS/Astal is the future path.
+-- Unified shell is vendored AGS/Astal (coda-ags). Waybar is not used.
 -- Docs: https://wiki.hypr.land/Configuring/Start/
 
 local terminal = "foot"
 local fileManager = "thunar"
 local browser = "firefox"
-local launcher = "fuzzel"
-local settings = "coda-settings"
+local launcher = "coda-ags toggle launcher"
+local settings = "coda-ags toggle control-center"
+local clipboard = "coda-ags toggle clipboard"
 local mainMod = "SUPER"
 
 hl.monitor({
@@ -20,6 +21,9 @@ hl.env("XCURSOR_SIZE", "24")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
+hl.env("GI_TYPELIB_PATH", "/usr/local/lib/girepository-1.0")
+hl.env("LD_LIBRARY_PATH", "/usr/local/lib")
+hl.env("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
 -- VirtualBox VMSVGA / software-render fallbacks (coda-hyprland also sets these).
 hl.env("WLR_NO_HARDWARE_CURSORS", "1")
 hl.env("WLR_RENDERER_ALLOW_SOFTWARE", "1")
@@ -29,13 +33,11 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("systemctl --user start pipewire pipewire-pulse wireplumber")
     hl.exec_cmd("/usr/lib/xdg-desktop-portal-hyprland")
     hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
-    hl.exec_cmd("mako")
     hl.exec_cmd("hyprpaper")
-    hl.exec_cmd("waybar")
+    hl.exec_cmd("coda-ags")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("blueman-applet")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
-    -- AGS/Astal is not in official repos. Do not autostart it here.
 end)
 
 hl.config({
@@ -85,7 +87,7 @@ hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(launcher))
 hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd(launcher))
 hl.bind(mainMod .. " + comma", hl.dsp.exec_cmd(settings))
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("bash -lc 'cliphist list | fuzzel --dmenu --prompt=\"Clipboard> \" | cliphist decode | wl-copy'"))
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd(clipboard))
 
 for i = 1, 10 do
     local key = i % 10

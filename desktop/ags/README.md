@@ -1,30 +1,52 @@
-# AGS / Astal shell (placeholder)
+# AGS / Astal shell (v1)
 
-CodaLinux's unified desktop shell will be an [AGS](https://aylur.github.io/ags/) app on [Astal](https://aylur.github.io/astal/).
+CodaLinux's unified desktop shell is an [AGS](https://aylur.github.io/ags/) 3 app on [Astal](https://aylur.github.io/astal/). It is the default live-session bar, launcher, notification daemon, and control center. Waybar / fuzzel / mako were rejected as an interim shell and are not on the default path.
 
-**This directory is not a working UI.** The live ISO ships an official-repo interim shell (waybar + fuzzel + mako + Coda Settings) so the desktop is usable now. This tree stays the future AGS/Astal layout.
+## Pinned upstream (vendor at ISO image-build time)
 
-## Packaging constraint
+AGS and libastal are **not** in official Arch repositories. v1 still forbids a Coda pacman repo and a default AUR helper. The live ISO therefore **compiles from source** during `scripts/build-iso.sh` and installs into `/usr/local` (non-pacman prefix).
 
-`aylurs-gtk-shell` and `libastal*` are **not** in official Arch repositories. v1 forbids a Coda pacman repo and a default AUR helper ([DESIGN.md](../../DESIGN.md#ags--astal)).
+| Project | Version | Git commit | Source archive |
+| --- | --- | --- | --- |
+| [AGS](https://github.com/Aylur/ags) | 3.1.2 | `bbee2f18939f1ec7ff720e717cf305e73635628f` (2026-04-08) | `https://github.com/Aylur/ags/archive/<commit>.tar.gz` |
+| [Astal](https://github.com/Aylur/astal) | tree at pin | `ae8dc0acc66932171ec70d347a8cab9310ce74e4` (2026-09-07) | `https://github.com/Aylur/astal/archive/<commit>.tar.gz` |
 
-Until a later change decides otherwise:
+Pins live in [`scripts/vendor-ags.sh`](../../scripts/vendor-ags.sh). Bump both the table and that script together.
 
-1. Keep shell source in this tree.
-2. Build with official-repo toolchains listed in [`packages/ags-build-deps.txt`](../../packages/ags-build-deps.txt).
-3. Do not add `yay -S aylurs-gtk-shell` to the ISO or installer.
+Vendored Astal libraries (official-repo build deps only):
 
-## Intended layout
+- `lib/astal/io`, `lib/astal/gtk4`
+- `lib/apps`, `lib/hyprland`, `lib/notifd` (`-Dcli=false`; the CLI needs in-tree `quarrel`)
+- `lib/bluetooth`, `lib/wireplumber`, `lib/battery`
+
+**Not vendored:**
+
+- `lib/network` — wraps NetworkManager / `nmcli`. CodaLinux is systemd-networkd + iwd; Wi-Fi UI is `impala`.
+- `lib/tray` — needs AUR `appmenu-glib-translator`.
+
+## Layout
 
 ```
-src/app.ts             entry (stub)
-src/bar/               status bar
-src/notifications/     notification daemon UI
-src/launcher/          app launcher / control center
+app.tsx                 AGS entry (`ags run` looks for app.ts/tsx)
+Bar.tsx                 top bar / toolbar
+Launcher.tsx            application launcher
+Notification*.tsx       notification popups (Astal notifd)
+ControlCenter.tsx       settings surface
+Clipboard.tsx           cliphist picker
+style.css               shell theme
 ```
 
-When AGS actually starts, add `hl.exec_cmd` on `hyprland.start` in `../hypr/hyprland.lua` and stop autostarting waybar/mako/fuzzel as the primary shell.
+## Runtime on the live image
 
-## Next
+- Binary: `/usr/local/bin/ags` plus Astal shared libraries / typelibs under `/usr/local`.
+- App sources: `/usr/local/share/codalinux/ags`.
+- Wrapper: `/usr/local/bin/coda-ags` sets `GI_TYPELIB_PATH` / `LD_LIBRARY_PATH` and runs `ags run` (instance name `coda`).
+- Hyprland starts `coda-ags` on `hyprland.start`. Super+Space / Super+D toggles the launcher; Super+, toggles the control center.
 
-See [docs/TODO.md](../../docs/TODO.md) §3.
+Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-manager` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`, plus the input-help text.
+
+## Build deps
+
+Official Arch packages only, listed in [`packages/ags-build-deps.txt`](../../packages/ags-build-deps.txt). That list is **not** composed into the live ISO (keeps meson/npm/go off the image). `vendor-ags.sh` installs them on the Arch ISO builder, then compiles.
+
+Do not add `aylurs-gtk-shell`, `libastal*`, an AUR helper, or a `[codalinux]` repo.
