@@ -4,6 +4,8 @@
 #
 # hyprland is required for matching headers / hyprland.pc so the .so
 # ABI matches the compositor pacstrapped onto the image.
+# vendor-hyprbars.sh pins hyprland-plugins to the official hyprpm
+# commit for Hyprland 0.56.2 (7644cecdb947060682891a0db2a0cdc5c0b9e704).
 
 hyprland
 meson
