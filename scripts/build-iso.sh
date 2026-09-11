@@ -101,21 +101,11 @@ prepare_overlay() {
   # Live root session uses the same Hyprland configs.
   install_hypr_configs "${overlay}/root/.config/hypr"
 
-  install_xdg_app() {
-    local name="$1"
-    local dest_xdg="${overlay}/etc/xdg/${name}"
-    local dest_skel="${overlay}/etc/skel/.config/${name}"
-    install -d "${dest_xdg}" "${dest_skel}"
-    local src
-    for src in "${root}/desktop/${name}/"*; do
-      [[ -f "${src}" ]] || continue
-      install -m 0644 "${src}" "${dest_xdg}/"
-      install -m 0644 "${src}" "${dest_skel}/"
-    done
-  }
-  install_xdg_app waybar
-  install_xdg_app fuzzel
-  install_xdg_app mako
+  # Drop leftover interim-shell configs (Waybar was rejected).
+  rm -rf \
+    "${overlay}/etc/xdg/waybar" "${overlay}/etc/skel/.config/waybar" \
+    "${overlay}/etc/xdg/fuzzel" "${overlay}/etc/skel/.config/fuzzel" \
+    "${overlay}/etc/xdg/mako" "${overlay}/etc/skel/.config/mako"
 
   install -d "${overlay}/usr/share/backgrounds/codalinux"
   if [[ -f "${root}/branding/wallpapers/default.png" ]]; then
@@ -128,6 +118,8 @@ prepare_overlay() {
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/desktop/share/input-help.txt" \
     "${overlay}/usr/local/share/codalinux/input-help.txt"
+  install -d "${overlay}/usr/local/share/codalinux/ags"
+  rm -rf "${overlay}/usr/local/share/codalinux/ags"
   install -d "${overlay}/usr/local/share/codalinux/ags"
   cp -a "${root}/desktop/ags/." "${overlay}/usr/local/share/codalinux/ags/"
 
@@ -145,6 +137,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-hyprland"
   install -m 0755 "${root}/scripts/coda-settings" \
     "${overlay}/usr/local/bin/coda-settings"
+  install -m 0755 "${root}/scripts/coda-ags" \
+    "${overlay}/usr/local/bin/coda-ags"
 
   mkdir -p "${work}" "${out}"
 }
@@ -163,6 +157,8 @@ clean_build_dirs() {
 
 run_mkarchiso() {
   prepare_overlay
+  log "Vendoring AGS/Astal into airootfs /usr/local (official-repo build deps only)"
+  "${root}/scripts/vendor-ags.sh" "${profile}/airootfs"
   clean_build_dirs
   log "Running mkarchiso -v -w ${work} -o ${out} ${profile}"
   # mkarchiso drives pacstrap; lists pin providers so pacman stays noninteractive.
@@ -187,6 +183,7 @@ run_in_arch_container() {
       pacman-key --populate archlinux
       pacman -Sy --noconfirm archlinux-keyring
       pacman -Syu --noconfirm archiso python
+      # vendor-ags.sh installs the rest of packages/ags-build-deps.txt
       exec ./scripts/build-iso.sh $(printf '%q' "${work}") $(printf '%q' "${out}")
     "
   )

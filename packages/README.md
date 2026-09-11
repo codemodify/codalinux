@@ -16,10 +16,10 @@ Compose default sets into ISO and installer consumers:
 | `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo |
 | `hardware.txt` | yes | Mesa, PipeWire, BlueZ |
 | `network.txt` | yes | iwd + resolved-related tools (not NetworkManager) |
-| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, interim waybar/fuzzel/mako |
-| `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura |
+| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime (gjs/gtk4-layer-shell) |
+| `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura, settings apps |
 | `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools |
-| `ags-build-deps.txt` | no | Official-repo deps to *build* AGS/Astal from `desktop/ags/` |
+| `ags-build-deps.txt` | no | Official-repo deps to *compile* AGS/Astal at ISO build time |
 | `nvidia.txt` | no | Proprietary NVIDIA path (hook later) |
 | `optional-cups.txt` | no | Printing stack, not base |
 
@@ -30,5 +30,7 @@ Compose default sets into ISO and installer consumers:
 - No AUR helpers, Calamares, NetworkManager, firewalld/ufw, or Plymouth.
 - No Coda-specific package names — this repo does not publish a pacman repo.
 - Pin pacman providers so unattended builds never prompt: `iptables`, `pipewire-jack`, `tesseract-data-eng`.
+
+AGS/Astal themselves are vendored from source into `/usr/local` by `scripts/vendor-ags.sh` (not listed here).
 
 `scripts/check-package-lists.sh` greps for the known-forbidden names above and requires the provider pins.

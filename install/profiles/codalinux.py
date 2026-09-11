@@ -15,10 +15,10 @@ Locked behavior this profile must enforce
   Do not install or enable NetworkManager.
 * Firewall: do not enable firewalld/ufw.
 * Branding: install branding/os-release via the pacman hook.
-* Desktop: copy desktop/hypr/* plus waybar/fuzzel/mako configs to ~/.config.
+* Desktop: copy desktop/hypr/* and start the vendored AGS shell (coda-ags).
 * NVIDIA: call scripts/hooks/nvidia.sh only after detection exists.
-* AGS: do not pacman -S AUR names; optionally copy desktop/ags/ for a
-  later source build.
+* AGS: do not pacman -S AUR names; vendor from source into /usr/local
+  (see scripts/vendor-ags.sh). Do not ship Waybar as a fallback.
 """
 
 from __future__ import annotations

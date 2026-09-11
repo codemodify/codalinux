@@ -39,9 +39,6 @@ copy_xdg_config() {
   fi
 }
 copy_xdg_config hypr
-copy_xdg_config waybar
-copy_xdg_config fuzzel
-copy_xdg_config mako
 # Hyprland 0.56+ warns on legacy hyprland.conf; 0.57 removes it.
 rm -f /home/live/.config/hypr/hyprland.conf
 chown -R live:live /home/live
