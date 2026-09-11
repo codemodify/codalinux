@@ -1,0 +1,47 @@
+name: Build live ISO
+
+# Best-effort privileged Arch container build. Artifacts expire with Actions
+# retention. Do not treat a red X here as a product blocker.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "archiso/**"
+      - "packages/**"
+      - "scripts/build-iso.sh"
+      - "scripts/compose-package-lists.sh"
+      - "branding/**"
+      - "desktop/hypr/**"
+      - "sessions/**"
+      - "install/**"
+
+concurrency:
+  group: iso-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install archiso
+        run: |
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm archiso
+      - name: Build ISO
+        env:
+          CODA_ISO_INNER: "1"
+        run: ./scripts/build-iso.sh "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/out"
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: codalinux-live-iso
+          path: out/*.iso
+          if-no-files-found: error
+          retention-days: 14

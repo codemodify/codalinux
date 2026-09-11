@@ -100,6 +100,7 @@ zathura-pdf-mupdf
 mkinitcpio-archiso
 arch-install-scripts
 archinstall
+efibootmgr
 pacman-contrib
 reflector
 edk2-shell
@@ -117,4 +118,10 @@ bind
 lsof
 strace
 terminus-font
+iw
+wireless-regdb
+sof-firmware
+cryptsetup
+lvm2
+qemu-guest-agent
 
