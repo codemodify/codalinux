@@ -6,7 +6,7 @@
 | `check-package-lists.sh` | Reject forbidden / unofficial names |
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo** |
 | `coda-install` | Live helper: Bozeman locale defaults; disk is the only prompt |
-| `coda-hyprland` | greetd session wrapper (VM-safe env + `/var/log/coda-hyprland.log`) |
+| `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |
 

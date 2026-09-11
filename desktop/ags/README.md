@@ -23,7 +23,7 @@ src/notifications/     notification daemon UI
 src/launcher/          app launcher / control center
 ```
 
-Wire `exec-once` in `../hypr/hyprland.conf` when the process actually starts.
+Wire `hl.exec_cmd` on `hyprland.start` in `../hypr/hyprland.lua` when the process actually starts.
 
 ## Next
 

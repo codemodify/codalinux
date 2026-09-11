@@ -39,7 +39,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 - [ ] Implement the unified shell (bar, notifications, launcher/control center) against the placeholder tree.
 - [ ] Build from this source using official-repo deps in `packages/ags-build-deps.txt` (meson/npm/go/GTK). Do not add an AUR helper to the default path.
 - [ ] Decide ISO integration: vendor a build into `/usr/local` at image-build time, or post-install compile.
-- [ ] `exec-once` the shell from `desktop/hypr/hyprland.conf` once it starts.
+- [ ] Start the shell from `desktop/hypr/hyprland.lua` (`hl.on("hyprland.start", …)`) once it starts.
 
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 

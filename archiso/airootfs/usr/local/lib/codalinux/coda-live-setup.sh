@@ -29,9 +29,13 @@ usermod -aG wheel,video,audio,input,render,storage,lp,optical,users live 2>/dev/
 
 install -d -o live -g live -m 0755 /home/live
 install -d -o live -g live -m 0700 /home/live/.config/hypr
-if compgen -G /etc/xdg/hypr/*.conf >/dev/null; then
-  install -o live -g live -m 0644 /etc/xdg/hypr/*.conf /home/live/.config/hypr/
+shopt -s nullglob
+hypr_src=(/etc/xdg/hypr/*.conf /etc/xdg/hypr/*.lua)
+if ((${#hypr_src[@]})); then
+  install -o live -g live -m 0644 "${hypr_src[@]}" /home/live/.config/hypr/
 fi
+# Hyprland 0.56+ warns on legacy hyprland.conf; 0.57 removes it.
+rm -f /home/live/.config/hypr/hyprland.conf
 chown -R live:live /home/live
 
 printf 'live ALL=(ALL:ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/live

@@ -1,6 +1,7 @@
 # Live ISO: autologin the dedicated `live` user into Hyprland.
-# Both sessions use the wrapper so a crash retries the GUI (no agreety).
-# Root on tty1 was fragile (Hyprland exits immediately; PAM session ~1s).
+# Both sessions run coda-hyprland, which sets VirtualBox-safe env and
+# execs start-hyprland (not the bare Hyprland binary). A crash retries
+# the GUI (no agreety). Root on tty1 was fragile (PAM session ~1s).
 
 [terminal]
 vt = 1

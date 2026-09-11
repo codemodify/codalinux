@@ -201,8 +201,9 @@ Live GUI notes:
 
 - Do **not** overlay a minimal `/etc/passwd` or `/etc/shadow` — that wipes package accounts (`greeter`, systemd users). The `live` user is created with `systemd-sysusers` and `coda-live-setup.sh`.
 - Root on tty1 was fragile: Hyprland exited in ~1s and greetd fell back to agreety (PAM `SERVICE_ERR` / `pam_securetty`). Autologin is the `live` user via a wrapper.
-- `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, and logs to `/var/log/coda-hyprland.log`.
+- `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, logs to `/var/log/coda-hyprland.log`, and execs `start-hyprland` (not the bare `Hyprland` binary).
 - greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
+- Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 
@@ -222,7 +223,7 @@ Do not add `bios.syslinux.*`.
 | File | Destination on the image |
 | --- | --- |
 | `sessions/wayland/codalinux-hyprland.desktop` | `/usr/share/wayland-sessions/` |
-| `desktop/hypr/*.conf` | `/etc/skel/.config/hypr/` (and `/etc/xdg/hypr/` later if we ship system defaults) |
+| `desktop/hypr/*` (`hyprland.lua` + companion `.conf`) | `/etc/skel/.config/hypr/` and `/etc/xdg/hypr/` |
 | `branding/os-release` | `/usr/lib/os-release` via hook |
 | `branding/wallpapers/` | `/usr/share/backgrounds/codalinux/` (when assets exist) |
 
