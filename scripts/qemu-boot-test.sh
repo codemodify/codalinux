@@ -63,8 +63,8 @@ Options:
   --dry-run                  Print the QEMU command; do not start it
 
 Artifacts (created at run time):
-  serial.log     OVMF / guest serial (guest needs console=ttyS0 for
-                 kernel logs; firmware output is still useful)
+  serial.log     guest serial (kernel logs need console=ttyS0)
+  ovmf-debug.log OVMF debugcon (port 0x402)
   qmp.sock       QMP unix socket
   qmp.sh         Helper: ./qmp.sh screendump [file.png]
   qemu.pid       QEMU pid
@@ -228,31 +228,47 @@ qmp_cmd() {
   python3 - "$sock" "$payload" <<'PY'
 import json, socket, sys
 
-def read_msg(sock):
-    dec = json.JSONDecoder()
-    buf = ""
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            raise SystemExit("qmp: connection closed")
-        buf += chunk.decode()
-        buf = buf.lstrip()
-        try:
-            obj, idx = dec.raw_decode(buf)
-        except json.JSONDecodeError:
-            continue
-        return obj
+class Qmp:
+    def __init__(self, path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(30)
+        self.sock.connect(path)
+        self.buf = ""
+        self.read_reply()  # greeting
+        self.send('{"execute":"qmp_capabilities"}')
+        cap = self.read_reply()
+        if "error" in cap:
+            raise SystemExit(cap["error"].get("desc", str(cap)))
 
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.settimeout(8)
-sock.connect(sys.argv[1])
-read_msg(sock)
-sock.sendall(b'{"execute":"qmp_capabilities"}\n')
-cap = read_msg(sock)
-if "error" in cap:
-    raise SystemExit(cap["error"].get("desc", str(cap)))
-sock.sendall(sys.argv[2].encode() + b"\n")
-reply = read_msg(sock)
+    def send(self, payload):
+        self.sock.sendall(payload.encode() + b"\r\n")
+
+    def read_msg(self):
+        dec = json.JSONDecoder()
+        while True:
+            text = self.buf.lstrip()
+            if text:
+                try:
+                    obj, idx = dec.raw_decode(text)
+                    self.buf = text[idx:]
+                    return obj
+                except json.JSONDecodeError:
+                    pass
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise SystemExit("qmp: connection closed")
+            self.buf += chunk.decode()
+
+    def read_reply(self):
+        while True:
+            obj = self.read_msg()
+            if "event" in obj:
+                continue
+            return obj
+
+q = Qmp(sys.argv[1])
+q.send(sys.argv[2])
+reply = q.read_reply()
 print(json.dumps(reply))
 if "error" in reply:
     raise SystemExit(reply["error"].get("desc", str(reply)))
@@ -261,13 +277,22 @@ PY
 
 screendump() {
   local dest="$1"
-  local reply
-  reply="$(qmp_cmd "${qmp_sock}" "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"${dest}\",\"format\":\"png\"}}")" || {
-    log "png screendump failed, trying ppm"
-    dest="${dest%.png}.ppm"
-    qmp_cmd "${qmp_sock}" "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"${dest}\"}}" >/dev/null
-  }
-  log "screenshot ${dest}"
+  local attempt
+  for attempt in 1 2 3; do
+    if qmp_cmd "${qmp_sock}" "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"${dest}\",\"format\":\"png\"}}" >/dev/null; then
+      log "screenshot ${dest}"
+      return 0
+    fi
+    log "QMP screendump attempt ${attempt} failed; retrying"
+    sleep 2
+  done
+  dest="${dest%.png}.ppm"
+  if qmp_cmd "${qmp_sock}" "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"${dest}\"}}" >/dev/null; then
+    log "screenshot ${dest}"
+    return 0
+  fi
+  log "warning: screendump failed (QEMU not answering QMP). serial/ovmf logs still saved."
+  return 1
 }
 
 qemu_alive() {
@@ -277,12 +302,19 @@ qemu_alive() {
 cleanup() {
   [[ "${cleaned}" -eq 1 ]] && return 0
   cleaned=1
+  if [[ -z "${qemu_pid}" && -f "${pid_file:-}" ]]; then
+    qemu_pid="$(<"${pid_file}")" || true
+  fi
   if qemu_alive; then
     if [[ -S "${qmp_sock:-}" ]]; then
       qmp_cmd "${qmp_sock}" '{"execute":"quit"}' >/dev/null 2>&1 || true
     fi
     if qemu_alive; then
       kill -TERM "${qemu_pid}" 2>/dev/null || true
+      sleep 0.3
+    fi
+    if qemu_alive; then
+      kill -KILL "${qemu_pid}" 2>/dev/null || true
     fi
     wait "${qemu_pid}" 2>/dev/null || true
   fi
@@ -359,6 +391,8 @@ cmd=(
   -device qemu-xhci
   -device usb-tablet
   -serial "file:${serial_log}"
+  -debugcon "file:${out_dir}/ovmf-debug.log"
+  -global isa-debugcon.iobase=0x402
   -qmp "unix:${qmp_sock},server,nowait"
   -monitor "unix:${mon_sock},server,nowait"
   -pidfile "${pid_file}"
@@ -376,59 +410,54 @@ set -euo pipefail
 sock=$(printf '%q' "${qmp_sock}")
 if [[ \${1:-} == screendump ]]; then
   dest=\${2:-${out_dir}/shot-manual.png}
-  python3 - "\$sock" "\$dest" <<'PY'
-import json, socket, sys
-def read_msg(sock):
-    dec = json.JSONDecoder()
-    buf = ""
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            raise SystemExit("qmp closed")
-        buf += chunk.decode()
-        buf = buf.lstrip()
-        try:
-            obj, idx = dec.raw_decode(buf)
-        except json.JSONDecodeError:
-            continue
-        return obj
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.settimeout(8)
-s.connect(sys.argv[1])
-read_msg(s)
-s.sendall(b'{"execute":"qmp_capabilities"}\\n')
-read_msg(s)
-fn = sys.argv[2]
-s.sendall(('{"execute":"screendump","arguments":{"filename":%s,"format":"png"}}\\n' % json.dumps(fn)).encode())
-print(json.dumps(read_msg(s)))
-PY
-  exit 0
+  payload=\$(python3 -c 'import json,sys; print(json.dumps({"execute":"screendump","arguments":{"filename":sys.argv[1],"format":"png"}}))' "\$dest")
+else
+  payload=\${1:-'{"execute":"query-status"}'}
 fi
-payload=\${1:-'{"execute":"query-status"}'}
 python3 - "\$sock" "\$payload" <<'PY'
 import json, socket, sys
-def read_msg(sock):
-    dec = json.JSONDecoder()
-    buf = ""
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            raise SystemExit("qmp closed")
-        buf += chunk.decode()
-        buf = buf.lstrip()
-        try:
-            obj, idx = dec.raw_decode(buf)
-        except json.JSONDecodeError:
-            continue
-        return obj
-s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-s.settimeout(8)
-s.connect(sys.argv[1])
-read_msg(s)
-s.sendall(b'{"execute":"qmp_capabilities"}\\n')
-read_msg(s)
-s.sendall(sys.argv[2].encode() + b"\\n")
-print(json.dumps(read_msg(s)))
+
+class Qmp:
+    def __init__(self, path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(30)
+        self.sock.connect(path)
+        self.buf = ""
+        self.read_reply()
+        self.send('{"execute":"qmp_capabilities"}')
+        cap = self.read_reply()
+        if "error" in cap:
+            raise SystemExit(cap["error"].get("desc", str(cap)))
+
+    def send(self, payload):
+        self.sock.sendall(payload.encode() + b"\\r\\n")
+
+    def read_msg(self):
+        dec = json.JSONDecoder()
+        while True:
+            text = self.buf.lstrip()
+            if text:
+                try:
+                    obj, idx = dec.raw_decode(text)
+                    self.buf = text[idx:]
+                    return obj
+                except json.JSONDecodeError:
+                    pass
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise SystemExit("qmp closed")
+            self.buf += chunk.decode()
+
+    def read_reply(self):
+        while True:
+            obj = self.read_msg()
+            if "event" in obj:
+                continue
+            return obj
+
+q = Qmp(sys.argv[1])
+q.send(sys.argv[2])
+print(json.dumps(q.read_reply()))
 PY
 EOF
 chmod +x "${out_dir}/qmp.sh"
@@ -475,7 +504,7 @@ take_shot() {
     qemu_alive || die "QEMU died before QMP; see ${serial_log}"
   done
   [[ -S "${qmp_sock}" ]] || die "QMP socket missing: ${qmp_sock}"
-  screendump "${dest}"
+  screendump "${dest}" || true
 }
 
 while qemu_alive; do
