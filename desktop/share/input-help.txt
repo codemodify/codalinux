@@ -7,7 +7,7 @@ Modifier: Super (Windows key)
   Super+Return     Terminal (foot)
   Super+Space      App launcher (AGS)
   Super+D          App launcher (AGS)
-  Super+,          Control center (AGS settings)
+  Super+,          Settings (AGS System Settings hub)
   Super+V          Clipboard history (AGS)
   Super+E          Files (Thunar)
   Super+F          Firefox

@@ -45,11 +45,11 @@ style.css               shell theme
 - The bar lists each Hyprland window on the **active workspace** (not grouped by class). Click focuses; click again on the focused window minimizes it to `special:minimized`. Right-click: Close, or New instance (`.desktop` Exec via AstalApps, else `hyprctl dispatch exec` of the class).
 - Workspace `+` / `−` and the Tile/Stack control call `/usr/local/bin/coda-hypr-ws` (same helper as Super+N / Super+− / Super+T). **Stack** is floating/overlapping windows on the current workspace (hyprfloat-style float mode via `hyprctl` / Lua dispatchers). Tabbed Hyprland window groups are not used. New windows on a stacked workspace are floated by `coda-hypr-ws apply-new` from `hyprland.lua`.
 - Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize is `/usr/local/bin/coda-hypr-ws minimize` → `special:minimized` (same restore path as the taskbar). Scroll the titlebar to shade / unshade (`coda-hypr-ws shade`). Tiled windows hide the bar.
-- The Settings hub (window name `control-center`) is a System Settings-style sidebar: Overview, Display, Sound, Network, Bluetooth, Appearance, Input, About. Lock still runs `coda-hyprlock`. Live hypridle does not lock on idle.
+- The Settings hub (window name `control-center`) mirrors Plasma System Settings categories that this stack can support: **Appearance**, **Workspace**, **Personalization**, **Network**, **Hardware**, **System Administration**. Last-selected module stays selected when the window is reopened. Lock still runs `coda-hyprlock`. Live hypridle does not lock on idle.
 
-Display uses `hyprctl` (optional `wlr-randr`). Session default is `1920x1080@60` because QEMU virtio `preferred` picks `640x480@119.99`. Network stays systemd-networkd + iwd; Wi-Fi UI is `impala`. Other pages launch official apps: `pavucontrol`, `blueman-manager`, `nwg-look`, `snapshot`, plus input-help / about.
+Implemented modules use Hyprland / AGS / official Arch tools (`hyprctl`, `coda-hypr-ws`, `coda-settings`, `impala`, `pavucontrol`, `blueman`, `nwg-look`, `thunar`, `brightnessctl`). Plasma-only KCMs (Global Theme, Plasma Style, KWin Scripts, SDDM, Activities, Wallet, Online Accounts, Feedback, Night Color, NetworkManager) are listed as skipped, not faked.
 
-Sidebar groups Hardware / Personalization / System like a System Settings hub. The last category stays selected when the window is reopened.
+Display uses `hyprctl` (optional `wlr-randr`). Session default is `1920x1080@60` because QEMU virtio `preferred` picks `640x480@119.99`. Network stays systemd-networkd + iwd.
 
 ## Build deps
 
