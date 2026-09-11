@@ -95,7 +95,7 @@ run_in_arch_container() {
       pacman-key --init
       pacman-key --populate archlinux
       pacman -Sy --noconfirm archlinux-keyring
-      pacman -Syu --noconfirm archiso
+      pacman -Syu --noconfirm archiso python
       exec ./scripts/build-iso.sh $(printf '%q' "${work}") $(printf '%q' "${out}")
     "
   )
