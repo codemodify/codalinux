@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """Hyprland workspace / stack / task helpers for the CodaLinux AGS shell.
 
-Hyprland 0.55+ speaks Lua dispatchers. This helper is the shared implementation
-for AGS buttons and Super+N / Super+- / Super+T binds. It uses ``hyprctl -j``
-(no jq) and official python3 only.
+Stacking is floating/overlapping windows (hyprfloat-style float mode), not
+Hyprland tabbed window groups. hyprfloat itself is a Lua helper that still
+speaks pre-0.55 dispatchers and pulls AUR grim-hyprland for overview; v1
+keeps official packages only and implements the same workspace-wide
+tile ↔ float toggle with ``hyprctl`` + Lua dispatchers.
 
 Commands:
   add              switch to the next empty workspace (emptyn)
   switch ID        focus an existing workspace
   remove           leave the current workspace when it has no windows
-  toggle-stack     tile ↔ tabbed stack (Hyprland window groups) on this workspace
+  toggle-stack     tile ↔ floating/overlapping on this workspace
   mode             print ``tile`` or ``stack``
+  apply-new        float a newly opened window when the workspace is stacked
   focus ADDRESS    focus a window (restore from special:minimized if needed)
   minimize ADDRESS hide a window on special:minimized
   toggle ADDRESS   focus, or minimize when it is already focused
@@ -22,11 +25,18 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 
 MINIMIZED_WS = "special:minimized"
 HYPRCTL = os.environ.get("CODA_HYPRCTL", "hyprctl")
+STATE_PATH = Path(
+    os.environ.get(
+        "CODA_HYPR_WS_STATE",
+        str(Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "coda-hypr-ws.json"),
+    )
+)
 
 
 def hypr_json(query: str) -> Any:
@@ -87,27 +97,8 @@ def is_special_ws(ws: dict[str, Any] | None) -> bool:
     return wid < 0 or name.startswith("special")
 
 
-def grouped_value(client: dict[str, Any]) -> bool:
-    grouped = client.get("grouped")
-    if not grouped:
-        return False
-    if grouped == 0:
-        return False
-    if isinstance(grouped, list) and len(grouped) == 0:
-        return False
-    return True
-
-
-def workspace_mode(clients: list[dict[str, Any]], workspace_id: int) -> str:
-    for client in clients:
-        ws = client.get("workspace") or {}
-        try:
-            cid = int(ws.get("id") or 0)
-        except (TypeError, ValueError):
-            continue
-        if cid == workspace_id and grouped_value(client):
-            return "stack"
-    return "tile"
+def is_floating(client: dict[str, Any]) -> bool:
+    return bool(client.get("floating"))
 
 
 def clients_on_workspace(
@@ -123,6 +114,47 @@ def clients_on_workspace(
         if cid == workspace_id:
             found.append(client)
     return found
+
+
+def load_state() -> dict[str, Any]:
+    try:
+        data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"modes": {}}
+    if not isinstance(data, dict):
+        return {"modes": {}}
+    modes = data.get("modes")
+    if not isinstance(modes, dict):
+        data["modes"] = {}
+    return data
+
+
+def save_mode(workspace_id: int, mode: str) -> None:
+    state = load_state()
+    state.setdefault("modes", {})[str(workspace_id)] = mode
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(json.dumps(state), encoding="utf-8")
+
+
+def persisted_mode(workspace_id: int) -> str | None:
+    mode = load_state().get("modes", {}).get(str(workspace_id))
+    if mode in {"stack", "tile"}:
+        return mode
+    return None
+
+
+def workspace_mode(
+    clients: list[dict[str, Any]],
+    workspace_id: int,
+    persisted: str | None = None,
+) -> str:
+    if persisted in {"stack", "tile"}:
+        return persisted
+    on_ws = clients_on_workspace(clients, workspace_id)
+    if not on_ws:
+        return "tile"
+    floating = sum(1 for client in on_ws if is_floating(client))
+    return "stack" if floating * 2 > len(on_ws) else "tile"
 
 
 def pick_remove_workspace(
@@ -172,6 +204,106 @@ def regular_workspace_id(active: dict[str, Any], workspaces: list[dict[str, Any]
     return 1
 
 
+def work_area(monitor: dict[str, Any]) -> tuple[int, int, int, int]:
+    x = int(monitor.get("x") or 0)
+    y = int(monitor.get("y") or 0)
+    width = int(monitor.get("width") or 1920)
+    height = int(monitor.get("height") or 1080)
+    reserved = monitor.get("reserved") or [0, 0, 0, 0]
+    if isinstance(reserved, list) and len(reserved) >= 4:
+        left, top, right, bottom = (int(reserved[i] or 0) for i in range(4))
+        x += left
+        y += top
+        width -= left + right
+        height -= top + bottom
+    y += 10
+    height -= 20
+    return x, y, max(width, 320), max(height, 240)
+
+
+def cascade_rects(
+    count: int, x: int, y: int, width: int, height: int
+) -> list[tuple[int, int, int, int]]:
+    if count <= 0:
+        return []
+    win_w = max(int(width * 0.72), 320)
+    win_h = max(int(height * 0.72), 240)
+    win_w = min(win_w, width)
+    win_h = min(win_h, height)
+    step = 36
+    max_dx = max(0, width - win_w)
+    max_dy = max(0, height - win_h)
+    rects: list[tuple[int, int, int, int]] = []
+    for i in range(count):
+        rects.append((x + min(i * step, max_dx), y + min(i * step, max_dy), win_w, win_h))
+    return rects
+
+
+def monitor_for_workspace(active: dict[str, Any]) -> dict[str, Any]:
+    mon_id = active.get("monitorID", active.get("monitor"))
+    try:
+        monitors = hypr_json("monitors")
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        return {}
+    if isinstance(mon_id, str):
+        for mon in monitors:
+            if mon.get("name") == mon_id:
+                return mon
+    try:
+        mid = int(mon_id)
+    except (TypeError, ValueError):
+        mid = None
+    if mid is not None:
+        for mon in monitors:
+            if int(mon.get("id") or -1) == mid:
+                return mon
+    focused = next((mon for mon in monitors if mon.get("focused")), None)
+    return focused or (monitors[0] if monitors else {})
+
+
+def set_window_float(address: str, floating: bool) -> None:
+    sel = win_sel(address)
+    action = "set" if floating else "unset"
+    dispatch(
+        f'hl.dsp.focus({{ window = "{sel}" }})',
+        legacy=["focuswindow", sel],
+    )
+    dispatch(
+        f'hl.dsp.window.float({{ action = "{action}", window = "{sel}" }})',
+        legacy=["setfloating" if floating else "settiled", sel],
+    )
+
+
+def place_window(address: str, x: int, y: int, width: int, height: int) -> None:
+    sel = win_sel(address)
+    dispatch(
+        f'hl.dsp.focus({{ window = "{sel}" }})',
+        legacy=["focuswindow", sel],
+    )
+    try:
+        dispatch(
+            f"hl.dsp.window.resize({{ x = {width}, y = {height}, relative = false }})",
+            legacy=["resizeactive", "exact", str(width), str(height)],
+        )
+    except RuntimeError:
+        pass
+    try:
+        dispatch(
+            f"hl.dsp.window.move({{ x = {x}, y = {y}, relative = false }})",
+            legacy=["moveactive", "exact", str(x), str(y)],
+        )
+    except RuntimeError:
+        pass
+
+
+def apply_workspace_float_rule(workspace_id: int, enable: bool) -> None:
+    """Best-effort hyprlang keyword; 0.55 Lua sessions may ignore it."""
+    if enable:
+        hypr_run(["keyword", "windowrule", f"float, workspace:{workspace_id}"])
+    else:
+        hypr_run(["keyword", "windowrule", f"unset, workspace:{workspace_id}"])
+
+
 def cmd_add() -> None:
     dispatch(
         'hl.dsp.focus({ workspace = "emptyn" })',
@@ -216,63 +348,71 @@ def cmd_remove() -> None:
 
 def cmd_mode() -> None:
     active = hypr_json("activeworkspace")
-    clients = hypr_json("clients")
-    print(workspace_mode(clients, int(active.get("id") or 0)))
+    wid = int(active.get("id") or 0)
+    print(workspace_mode(hypr_json("clients"), wid, persisted_mode(wid)))
 
 
-def _ungroup_workspace(clients: list[dict[str, Any]]) -> None:
-    for client in clients:
-        if not grouped_value(client):
+def _stack_workspace(clients: list[dict[str, Any]], active: dict[str, Any]) -> None:
+    area = work_area(monitor_for_workspace(active))
+    rects = cascade_rects(len(clients), *area)
+    for client, rect in zip(clients, rects):
+        addr = str(client.get("address") or "")
+        if not addr:
             continue
-        sel = win_sel(str(client.get("address") or ""))
-        try:
-            dispatch(
-                f'hl.dsp.window.move({{ out_of_group = true, window = "{sel}" }})',
-                legacy=["moveoutofgroup"],
-            )
-        except RuntimeError:
-            dispatch(
-                f'hl.dsp.group.toggle({{ window = "{sel}" }})',
-                legacy=["togglegroup"],
-            )
+        if not is_floating(client):
+            set_window_float(addr, True)
+        place_window(addr, *rect)
 
 
-def _group_workspace(clients: list[dict[str, Any]]) -> None:
-    if not clients:
-        return
-    first = win_sel(str(clients[0].get("address") or ""))
-    dispatch(
-        f'hl.dsp.focus({{ window = "{first}" }})',
-        legacy=["focuswindow", first],
-    )
-    dispatch(
-        f'hl.dsp.group.toggle({{ window = "{first}" }})',
-        legacy=["togglegroup"],
-    )
-    for client in clients[1:]:
-        sel = win_sel(str(client.get("address") or ""))
-        for direction in ("l", "r", "u", "d"):
-            try:
-                dispatch(
-                    f'hl.dsp.window.move({{ window = "{sel}", into_group = "{direction}" }})',
-                    legacy=["moveintogroup", direction],
-                )
-                break
-            except RuntimeError:
-                continue
+def _tile_workspace(clients: list[dict[str, Any]]) -> None:
+    for client in clients:
+        if not is_floating(client):
+            continue
+        addr = str(client.get("address") or "")
+        if addr:
+            set_window_float(addr, False)
 
 
-def cmd_toggle_stack() -> None:
+def cmd_toggle_stack(force: str | None = None) -> None:
     active = hypr_json("activeworkspace")
     if is_special_ws(active):
         print("coda-hypr-ws: not on a regular workspace", file=sys.stderr)
         raise SystemExit(1)
     active_id = int(active.get("id") or 0)
     clients = clients_on_workspace(hypr_json("clients"), active_id)
-    if workspace_mode(clients, active_id) == "stack":
-        _ungroup_workspace(clients)
+    current = workspace_mode(clients, active_id, persisted_mode(active_id))
+    if force in {"stack", "on"}:
+        want = "stack"
+    elif force in {"tile", "off"}:
+        want = "tile"
     else:
-        _group_workspace(clients)
+        want = "tile" if current == "stack" else "stack"
+    if want == "stack":
+        _stack_workspace(clients, active)
+        apply_workspace_float_rule(active_id, True)
+    else:
+        _tile_workspace(clients)
+        apply_workspace_float_rule(active_id, False)
+    save_mode(active_id, want)
+
+
+def cmd_apply_new() -> None:
+    active = hypr_json("activeworkspace")
+    if is_special_ws(active):
+        return
+    active_id = int(active.get("id") or 0)
+    if workspace_mode(hypr_json("clients"), active_id, persisted_mode(active_id)) != "stack":
+        return
+    clients = clients_on_workspace(hypr_json("clients"), active_id)
+    area = work_area(monitor_for_workspace(active))
+    rects = cascade_rects(len(clients), *area)
+    for client, rect in zip(clients, rects):
+        addr = str(client.get("address") or "")
+        if not addr:
+            continue
+        if not is_floating(client):
+            set_window_float(addr, True)
+        place_window(addr, *rect)
 
 
 def cmd_focus(address: str) -> None:
@@ -319,17 +459,16 @@ def self_test() -> None:
     assert is_special_ws({"id": -98, "name": "special:minimized"})
     assert is_special_ws({"id": 1, "name": "special:scratch"})
     assert not is_special_ws({"id": 2, "name": "2"})
-    assert grouped_value({"grouped": ["0x1", "0x2"]})
-    assert grouped_value({"grouped": 1})
-    assert not grouped_value({"grouped": 0})
-    assert not grouped_value({"grouped": []})
-    assert not grouped_value({})
+    assert is_floating({"floating": True})
+    assert not is_floating({"floating": False})
     clients = [
-        {"workspace": {"id": 2}, "grouped": 0},
-        {"workspace": {"id": 2}, "grouped": ["0x1"]},
+        {"workspace": {"id": 2}, "floating": False},
+        {"workspace": {"id": 2}, "floating": True},
+        {"workspace": {"id": 2}, "floating": True},
     ]
     assert workspace_mode(clients, 2) == "stack"
-    assert workspace_mode(clients, 1) == "tile"
+    assert workspace_mode(clients, 2, "tile") == "tile"
+    assert workspace_mode([{"workspace": {"id": 2}, "floating": False}], 2) == "tile"
     workspaces = [
         {"id": 1, "name": "1"},
         {"id": 3, "name": "3"},
@@ -339,13 +478,18 @@ def self_test() -> None:
     assert pick_remove_workspace(3, workspaces, 0) == 1
     assert pick_remove_workspace(1, workspaces, 0) == 3
     assert pick_remove_workspace(1, [{"id": 1, "name": "1"}], 0) is None
+    rects = cascade_rects(3, 0, 0, 1000, 800)
+    assert len(rects) == 3
+    assert rects[0][0] == 0 and rects[1][0] == 36
+    assert rects[0][2] < 1000
     print("ok")
 
 
 def usage() -> None:
     print(
         "usage: coda-hypr-ws "
-        "[add|switch ID|remove|toggle-stack|mode|focus ADDR|minimize ADDR|toggle ADDR]",
+        "[add|switch ID|remove|toggle-stack [on|off]|mode|apply-new|"
+        "focus ADDR|minimize ADDR|toggle ADDR]",
         file=sys.stderr,
     )
 
@@ -368,10 +512,13 @@ def main(argv: list[str]) -> int:
             cmd_switch(argv[1])
         elif cmd == "remove":
             cmd_remove()
-        elif cmd in {"toggle-stack", "stack", "toggle_stack"}:
-            cmd_toggle_stack()
+        elif cmd in {"toggle-stack", "stack", "toggle_stack", "togglefloat"}:
+            force = argv[1] if len(argv) > 1 else None
+            cmd_toggle_stack(force)
         elif cmd == "mode":
             cmd_mode()
+        elif cmd == "apply-new":
+            cmd_apply_new()
         elif cmd == "focus":
             if len(argv) < 2:
                 usage()

@@ -209,7 +209,8 @@ Live GUI notes:
 - `coda-hyprland` sets `XDG_RUNTIME_DIR`, enables software rendering on VMs (`WLR_RENDERER=pixman`, `WLR_NO_HARDWARE_CURSORS=1`, `LIBGL_ALWAYS_SOFTWARE=1`) for VirtualBox VMSVGA, logs to `/var/log/coda-hyprland.log`, and execs `start-hyprland` (not the bare `Hyprland` binary).
 - greetd `initial_session` and `default_session` both run the wrapper so a crash retries Hyprland instead of agreety.
 - Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
-- The vendored AGS shell autostarts as `coda-ags` (bar with workspaces, running-app taskbar, and tile/stack toggle; launcher; notifications; control center). hyprpaper, the polkit agent, and blueman-applet still start. Super+Space / Super+D toggles the AGS launcher; Super+, toggles the control center; Super+N / Super+= add a workspace; Super+- removes an empty one; Super+T toggles tiling ↔ stacking (Hyprland window groups).
+- The vendored AGS shell autostarts as `coda-ags` (bar with workspaces, running-app taskbar, and tile/stack toggle; launcher; notifications; control center). hyprpaper, the polkit agent, and blueman-applet still start. Super+Space / Super+D toggles the AGS launcher; Super+, toggles the control center; Super+N / Super+= add a workspace; Super+- removes an empty one; Super+T toggles tiling ↔ overlapping float (hyprfloat-style workspace float mode implemented in `coda-hypr-ws`, not tabbed groups and not a hyprpm plugin).
+- Live wallpaper is `branding/wallpapers/default.png` via hyprpaper (`/usr/share/backgrounds/codalinux/default.png`). Generate with `scripts/gen-wallpaper.py` if the still is missing.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 

@@ -16,8 +16,8 @@ Modifier: Super (Windows key)
   Super+1..0       Workspaces
   Super+N / Super+=  New empty workspace
   Super+-          Remove empty workspace
-  Super+T          Tile ↔ stack on this workspace
-  Super+Tab        Next window in a stack
+  Super+T          Tile ↔ stack (overlapping float) on this workspace
+  Super+Tab        Next window
   Volume / media   wpctl + playerctl
 
 Touchpad (laptops):

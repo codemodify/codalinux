@@ -103,6 +103,25 @@ window.NotificationPopups {
   color: #9aa8b0;
 }
 
+.control-content label.section {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7fb4c8;
+  margin-top: 4px;
+}
+
+.control-content .status-row {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.tiles button.tile label.tile-hint {
+  font-size: 11px;
+  color: #8b99a1;
+}
+
 entry {
   background: rgba(255, 255, 255, 0.06);
   color: #e8eef2;

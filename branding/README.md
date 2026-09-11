@@ -8,7 +8,7 @@ Light v1 branding: identify the OS as CodaLinux without a full theme product.
 | `issue`, `issue.net` | `/etc/issue`, `/etc/issue.net` |
 | `hooks/codalinux-os-release.hook` | `/etc/pacman.d/hooks/` |
 | `hooks/apply-os-release.sh` | `/usr/local/lib/codalinux/` |
-| `wallpapers/` | `/usr/share/backgrounds/codalinux/` (empty until assets exist) |
+| `wallpapers/default.png` | `/usr/share/backgrounds/codalinux/default.png` (hyprpaper + hyprlock) |
 | `themes/` | greetd / GTK / Hyprland token placeholders |
 
 Plymouth is deferred — do not add splash themes here.

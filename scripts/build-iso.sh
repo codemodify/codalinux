@@ -108,10 +108,11 @@ prepare_overlay() {
     "${overlay}/etc/xdg/mako" "${overlay}/etc/skel/.config/mako"
 
   install -d "${overlay}/usr/share/backgrounds/codalinux"
-  if [[ -f "${root}/branding/wallpapers/default.png" ]]; then
-    install -m 0644 "${root}/branding/wallpapers/default.png" \
-      "${overlay}/usr/share/backgrounds/codalinux/default.png"
+  if [[ ! -f "${root}/branding/wallpapers/default.png" ]]; then
+    python3 "${root}/scripts/gen-wallpaper.py"
   fi
+  install -m 0644 "${root}/branding/wallpapers/default.png" \
+    "${overlay}/usr/share/backgrounds/codalinux/default.png"
   install -d "${overlay}/usr/share/applications"
   install -m 0644 "${root}/desktop/applications/"*.desktop \
     "${overlay}/usr/share/applications/"
