@@ -19,9 +19,13 @@ local settings = "coda-ags toggle control-center"
 local clipboard = "coda-ags toggle clipboard"
 local mainMod = "SUPER"
 
+-- QEMU virtio EDID lists 640x480@119.99 first. Hyprland "preferred" picks
+-- that even when 1920x1080 is present and QEMU was started with
+-- -device virtio-vga,xres=1920,yres=1080. Pin 1080p@60; Settings → Display
+-- can apply another mode.
 hl.monitor({
     output   = "",
-    mode     = "preferred",
+    mode     = "1920x1080@60",
     position = "auto",
     scale    = 1,
 })

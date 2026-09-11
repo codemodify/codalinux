@@ -5,7 +5,9 @@
 # / screenshotpng for Horos wallpaper and idle-lock smoke tests.
 #
 # virtio-vga without xres/yres comes up at 640x480. Both QEMU helpers
-# pin 1920x1080 so the live desktop (and screenshots) are usable.
+# pin 1920x1080 so that mode is in the EDID. Hyprland still must not use
+# mode = "preferred" — virtio lists 640x480@119.99 first. Session config
+# pins 1920x1080@60 in desktop/hypr/hyprland.lua.
 #
 # Arch host packages (abox):
 #   pacman -S --needed qemu-system-x86 edk2-ovmf
@@ -44,6 +46,7 @@ Boot the CodaLinux UEFI live ISO with QEMU/KVM + OVMF. Default is
 headless: serial log, QMP socket, screenshot(s) after the desktop
 should have settled. Ctrl-C stops QEMU and leaves artifacts.
 Guest GPU is virtio-vga at 1920x1080 (bare virtio-vga is 640x480).
+Hyprland must pin 1920x1080@60; preferred picks virtio 640x480@119.99.
 
 ISO is the first non-option argument, or $CODA_ISO, or the newest
 out/codalinux-*.iso under the repo root.

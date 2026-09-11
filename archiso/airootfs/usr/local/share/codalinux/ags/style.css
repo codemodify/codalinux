@@ -136,6 +136,14 @@ window.NotificationPopups {
   color: #e8eef2;
 }
 
+.settings-nav label.nav-group {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7fb4c8;
+  margin-top: 10px;
+  margin-bottom: 2px;
+}
+
 .control-content button.nav-item {
   background: transparent;
   border: none;

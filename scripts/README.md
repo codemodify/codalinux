@@ -2,7 +2,7 @@
 
 ## Iteration phases
 
-- **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later. virtio-vga is 1920x1080 (bare `-device virtio-vga` is 640x480).
+- **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later. virtio-vga is 1920x1080; Hyprland pins `1920x1080@60` (`preferred` on virtio EDID is 640x480@120).
 - **ISO smoke** (boot, greetd, first paint): `./scripts/qemu-boot-test.sh` (same 1920x1080 virtio-vga default)
 - **Package / vendor / squashfs changes**: `./scripts/build-iso.sh`
 
