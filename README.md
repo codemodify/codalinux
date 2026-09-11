@@ -56,13 +56,13 @@ The checker rejects known policy violations (AUR helpers, Calamares, NetworkMana
 
 ### Build a live ISO (not production-ready)
 
-ISO generation requires an **Arch Linux** build host with `archiso` installed. The helper documents the intended invocation and fails clearly elsewhere:
-
 ```bash
 ./scripts/build-iso.sh
 ```
 
-Expected later output: `out/codalinux-<date>-x86_64.iso`. The current profile is a stub — boot entries, airootfs branding, and package composition are in place; a complete releng-equivalent image is a follow-up (see [docs/TODO.md](docs/TODO.md)).
+On Arch this runs `mkarchiso`. On other hosts it uses a privileged `archlinux` Docker/Podman container when available. Output: `out/codalinux-<date>-x86_64.iso`.
+
+The profile is intended to be buildable (mkinitcpio-archiso, pacman-init, UEFI systemd-boot, greetd → Hyprland, archinstall via `coda-install`). A first successful image and a hardware boot are still follow-ups — see [docs/TODO.md](docs/TODO.md).
 
 ### Install with archinstall
 
