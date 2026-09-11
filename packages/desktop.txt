@@ -1,0 +1,31 @@
+# Hyprland session, greetd, companions, portals.
+# AGS/Astal binaries are not in official repos — see packages/ags-build-deps.txt
+# and desktop/ags/. Do not list aylurs-gtk-shell here.
+
+hyprland
+hyprlock
+hypridle
+hyprpaper
+hyprcursor
+xdg-desktop-portal
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+xdg-user-dirs
+xdg-utils
+xorg-xwayland
+
+greetd
+
+# Toolkit / session plumbing used by portals, Thunar, and the future AGS shell
+gtk3
+gtk4
+qt5-wayland
+qt6-wayland
+polkit
+polkit-gnome
+
+# Fonts so the first session is readable
+ttf-liberation
+ttf-dejavu
+noto-fonts
+noto-fonts-emoji

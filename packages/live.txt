@@ -1,0 +1,24 @@
+# Live ISO extras. mkinitcpio + mkinitcpio-archiso are mandatory for archiso.
+# https://github.com/archlinux/archiso/blob/master/docs/README.profile.rst
+
+mkinitcpio
+mkinitcpio-archiso
+arch-install-scripts
+archinstall
+pacman-contrib
+reflector
+edk2-shell
+memtest86+
+squashfs-tools
+pv
+rsync
+wget
+curl
+openssh
+smartmontools
+hdparm
+nvme-cli
+bind
+lsof
+strace
+terminus-font

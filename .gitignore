@@ -1,0 +1,18 @@
+# archiso build trees
+/work/
+/out/
+*.iso
+*.img
+
+# local installer secrets — never commit
+install/user_credentials.json
+install/*credentials*.json
+
+# editor / OS
+.DS_Store
+*~
+*.swp
+
+# python leftovers if someone runs archinstall profile fragments
+__pycache__/
+*.pyc

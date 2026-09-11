@@ -1,0 +1,28 @@
+name: Bug or hardware report
+description: Something broken on CodaLinux (or the live ISO)
+title: "[bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Support for CodaLinux is GitHub issues only (see DESIGN.md).
+        This is a rolling Arch derivative — include `pacman -Q` highlights
+        when relevant.
+  - type: textarea
+    id: expected
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: input
+    id: iso
+    attributes:
+      label: ISO or install source
+      placeholder: live ISO date, archinstall config, or "existing Arch"
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware notes
+      description: GPU (especially NVIDIA), UEFI vendor, wireless chipset.
