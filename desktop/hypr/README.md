@@ -4,7 +4,7 @@ Lua compositor config is `hyprland.lua` (Hyprland 0.55+). Companions still use h
 
 ## Stack = overlapping float
 
-Super+T and the AGS Tile/Stack control run `coda-hypr-ws toggle-stack`. That floats every window on the current workspace and cascades them. It is **not** Hyprland tabbed groups.
+Super+T and the AGS Tile/Stack control run `coda-hypr-ws toggle-stack`. That floats every window on the current workspace and cascades them. It is **not** Hyprland tabbed groups. Floating windows are resizable: grab borders/corners (`resize_on_border`), Super+RMB, or Alt+RMB.
 
 ## Floating titlebars (hyprbars)
 

@@ -68,6 +68,25 @@ window.Bar label.task-title {
   font-size: 12px;
 }
 
+.task-menu {
+  background: rgba(18, 24, 28, 0.96);
+  border: 1px solid rgba(127, 180, 200, 0.3);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.task-menu button.task-menu-item {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #e8eef2;
+}
+
+.task-menu button.task-menu-item:hover {
+  background: rgba(127, 180, 200, 0.18);
+}
+
 window.Launcher,
 window.ControlCenter,
 window.Clipboard,

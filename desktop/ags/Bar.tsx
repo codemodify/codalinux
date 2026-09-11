@@ -12,14 +12,17 @@ import AstalHyprland from "gi://AstalHyprland"
 import AstalWp from "gi://AstalWp"
 
 type HyprClient = AstalHyprland.Client
-type TaskGroup = {
+type TaskItem = {
   key: string
-  clients: HyprClient[]
+  client: HyprClient
   icon: string
   title: string
   focused: boolean
   minimized: boolean
 }
+
+/** Last regular workspace id per client, so minimized windows stay on that workspace's bar. */
+const lastRegularWs = new Map<string, number>()
 
 function launch(tool: string) {
   execAsync(["coda-settings", tool]).catch(console.error)
@@ -91,62 +94,183 @@ function prettyClass(cls: string) {
   return leaf.charAt(0).toUpperCase() + leaf.slice(1)
 }
 
-function groupTasks(
+function rememberRegularWorkspace(client: HyprClient) {
+  const ws = client.workspace
+  const addr = clientAddr(client)
+  if (!addr || !ws) return
+  if (ws.id > 0 && !isSpecialWorkspace(ws)) {
+    lastRegularWs.set(addr, ws.id)
+  }
+}
+
+function pruneWorkspaceMemory(clients: HyprClient[]) {
+  const live = new Set(clients.map(clientAddr).filter(Boolean))
+  for (const addr of lastRegularWs.keys()) {
+    if (!live.has(addr)) lastRegularWs.delete(addr)
+  }
+}
+
+function belongsToFocusedWorkspace(
+  client: HyprClient,
+  focusedWs: AstalHyprland.Workspace | null,
+) {
+  if (!focusedWs || focusedWs.id <= 0) {
+    return !isSpecialWorkspace(client.workspace) || isMinimized(client)
+  }
+  if (client.workspace?.id === focusedWs.id) return true
+  if (isMinimized(client) && lastRegularWs.get(clientAddr(client)) === focusedWs.id) {
+    return true
+  }
+  return false
+}
+
+function listTasks(
   clients: HyprClient[],
   focused: HyprClient | null,
+  focusedWs: AstalHyprland.Workspace | null,
   apps: AstalApps.Apps,
-): TaskGroup[] {
-  const groups = new Map<string, HyprClient[]>()
-  for (const client of clients) {
-    if (!isTaskClient(client)) continue
-    const key = (clientClass(client) || client.title || "app").toLowerCase()
-    const list = groups.get(key) ?? []
-    list.push(client)
-    groups.set(key, list)
-  }
-
+): TaskItem[] {
+  pruneWorkspaceMemory(clients)
   const focusedAddr = focused ? clientAddr(focused) : ""
-  const tasks: TaskGroup[] = []
-  for (const [key, members] of groups) {
-    members.sort(
-      (a, b) => (b.focusHistoryId ?? 0) - (a.focusHistoryId ?? 0),
-    )
-    const cls = clientClass(members[0])
-    const titles = members.map((c) => c.title).filter(Boolean)
-    const title =
-      members.length === 1
-        ? titles[0] || prettyClass(cls)
-        : `${prettyClass(cls)} (${members.length})`
+  const tasks: TaskItem[] = []
+  for (const client of clients) {
+    rememberRegularWorkspace(client)
+    if (!isTaskClient(client)) continue
+    if (!belongsToFocusedWorkspace(client, focusedWs)) continue
+    const cls = clientClass(client)
+    const title = client.title || prettyClass(cls)
     tasks.push({
-      key,
-      clients: members,
-      icon: iconFor(apps, cls, titles[0] || ""),
+      key: clientAddr(client) || `${cls}-${title}`,
+      client,
+      icon: iconFor(apps, cls, title),
       title,
-      focused: members.some((c) => clientAddr(c) === focusedAddr),
-      minimized: members.every((c) => isMinimized(c)),
+      focused: clientAddr(client) === focusedAddr,
+      minimized: isMinimized(client),
     })
   }
-  tasks.sort((a, b) => a.key.localeCompare(b.key))
+  tasks.sort(
+    (a, b) => (a.client.focusHistoryId ?? 0) - (b.client.focusHistoryId ?? 0),
+  )
   return tasks
 }
 
-function activateTask(group: TaskGroup, hypr: AstalHyprland.Hyprland) {
+function activateTask(item: TaskItem, hypr: AstalHyprland.Hyprland) {
+  const addr = clientAddr(item.client)
+  if (!addr) return
   const focused = hypr.focusedClient
-  const focusedAddr = focused ? clientAddr(focused) : ""
-  const inGroup = group.clients.some((c) => clientAddr(c) === focusedAddr)
-
-  if (inGroup && focused) {
-    if (group.clients.length === 1) {
-      hyprWs("toggle", [focusedAddr])
-      return
-    }
-    const index = group.clients.findIndex((c) => clientAddr(c) === focusedAddr)
-    const next = group.clients[(index + 1) % group.clients.length]
-    hyprWs("focus", [clientAddr(next)])
+  if (focused && clientAddr(focused) === addr) {
+    hyprWs("toggle", [addr])
     return
   }
+  hyprWs("focus", [addr])
+}
 
-  hyprWs("focus", [clientAddr(group.clients[0])])
+function closeTask(client: HyprClient) {
+  const addr = clientAddr(client)
+  if (!addr) return
+  const kill = (client as HyprClient & { kill?: () => void }).kill
+  if (typeof kill === "function") {
+    try {
+      kill.call(client)
+      return
+    } catch {
+      /* fall through to hyprctl */
+    }
+  }
+  execAsync(["hyprctl", "dispatch", "closewindow", `address:${addr}`]).catch(
+    console.error,
+  )
+}
+
+function desktopAppFor(apps: AstalApps.Apps, client: HyprClient) {
+  const cls = clientClass(client)
+  const queries = [
+    cls,
+    cls.split(".").pop() || "",
+    (client.initialClass || "").trim(),
+    (client.title || "").split(/\s+/)[0] || "",
+  ]
+  for (const query of queries) {
+    if (!query) continue
+    const hit = apps.fuzzy_query(query)[0]
+    if (hit) return hit
+  }
+  return null
+}
+
+function launchNewInstance(client: HyprClient, apps: AstalApps.Apps) {
+  const found = desktopAppFor(apps, client)
+  if (found) {
+    try {
+      found.launch()
+      return
+    } catch {
+      const exe =
+        (found as AstalApps.Application & { executable?: string }).executable ||
+        ""
+      if (exe) {
+        execAsync(["hyprctl", "dispatch", "exec", exe]).catch(console.error)
+        return
+      }
+    }
+  }
+  const cls = clientClass(client)
+  const fallback = (cls.split(".").pop() || cls).toLowerCase()
+  if (fallback) {
+    execAsync(["hyprctl", "dispatch", "exec", fallback]).catch(console.error)
+  }
+}
+
+type MenuHost = Gtk.Button & {
+  _codaClient?: HyprClient
+  _codaApps?: AstalApps.Apps
+  _codaMenu?: boolean
+}
+
+function attachTaskMenu(
+  button: Gtk.Button,
+  client: HyprClient,
+  apps: AstalApps.Apps,
+) {
+  const host = button as MenuHost
+  host._codaClient = client
+  host._codaApps = apps
+  if (host._codaMenu) return
+  host._codaMenu = true
+
+  const pop = new Gtk.Popover()
+  pop.set_parent(button)
+  pop.set_autohide(true)
+  pop.set_has_arrow(false)
+  pop.add_css_class("task-menu")
+
+  const box = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 2,
+  })
+  const closeBtn = new Gtk.Button({ label: "Close" })
+  closeBtn.add_css_class("task-menu-item")
+  closeBtn.connect("clicked", () => {
+    if (host._codaClient) closeTask(host._codaClient)
+    pop.popdown()
+  })
+  const newBtn = new Gtk.Button({ label: "New instance" })
+  newBtn.add_css_class("task-menu-item")
+  newBtn.connect("clicked", () => {
+    if (host._codaClient && host._codaApps) {
+      launchNewInstance(host._codaClient, host._codaApps)
+    }
+    pop.popdown()
+  })
+  box.append(closeBtn)
+  box.append(newBtn)
+  pop.set_child(box)
+
+  const right = new Gtk.GestureClick({ button: Gdk.BUTTON_SECONDARY })
+  right.connect("pressed", () => {
+    pop.popup()
+  })
+  button.add_controller(right)
 }
 
 function Workspaces() {
@@ -220,30 +344,37 @@ function Taskbar() {
   const apps = new AstalApps.Apps()
   const clients = createBinding(hypr, "clients")
   const focused = createBinding(hypr, "focusedClient")
+  const focusedWs = createBinding(hypr, "focusedWorkspace")
   const tasks = createComputed(() =>
-    groupTasks(clients() ?? [], focused() ?? null, apps),
+    listTasks(
+      clients() ?? [],
+      focused() ?? null,
+      focusedWs() ?? null,
+      apps,
+    ),
   )
 
   return (
     <box class="taskbar" spacing={4} hexpand>
       <For each={tasks}>
-        {(group) => (
+        {(item) => (
           <button
             class={
-              group.focused
+              item.focused
                 ? "task focused"
-                : group.minimized
+                : item.minimized
                   ? "task minimized"
                   : "task"
             }
-            tooltipText={group.clients.map((c) => c.title || clientClass(c)).join("\n")}
-            onClicked={() => activateTask(group, hypr)}
+            tooltipText={item.title}
+            onClicked={() => activateTask(item, hypr)}
+            $={(self) => attachTaskMenu(self, item.client, apps)}
           >
             <box spacing={6}>
-              <image iconName={group.icon} pixelSize={16} />
+              <image iconName={item.icon} pixelSize={16} />
               <label
                 class="task-title"
-                label={group.title}
+                label={item.title}
                 maxWidthChars={18}
                 ellipsize={Pango.EllipsizeMode.END}
               />
