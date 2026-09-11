@@ -153,6 +153,16 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 - `packages/nvidia.txt` and `packages/optional-cups.txt` are **not** in the default compose.
 - `packages/ags-build-deps.txt` is **not** in the live ISO default set (keeps the image smaller until the shell is built).
 - `archiso/packages.x86_64` also includes archiso-mandatory packages (`mkinitcpio`, `mkinitcpio-archiso`) from `packages/live.txt`.
+- Unattended builds pin pacman providers in the default lists (`iptables`, `pipewire-jack`, `tesseract-data-eng`). `iptables` is a provider pin only — it does not enable a firewall.
+
+### Unattended host builds (abox)
+
+`scripts/build-iso.sh` must not prompt for a sudo password or a pacman provider. The script never calls `sudo`.
+
+- Prefer native / rootless `mkarchiso` when it is on `PATH` (archiso 89+ can unshare as a regular user).
+- Otherwise use Docker or Podman only if they already work as the current user (`docker info` without sudo). Add the builder to the `docker` group; do not grant passwordless root.
+- Optional host sudoers (outside this repo) may allow only `/usr/bin/mkarchiso` and `/usr/bin/docker`.
+- `archiso/pacman.conf` sets `NoConfirm`; container `pacman` invocations use `--noconfirm`.
 
 ### archiso overlay timing
 

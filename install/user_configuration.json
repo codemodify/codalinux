@@ -73,11 +73,13 @@
     "pipewire-audio",
     "pipewire-pulse",
     "pipewire-alsa",
+    "pipewire-jack",
     "wireplumber",
     "bluez",
     "bluez-utils",
     "iwd",
     "systemd-resolvconf",
+    "iptables",
     "hyprland",
     "hyprlock",
     "hypridle",
@@ -111,7 +113,8 @@
     "mpv",
     "imv",
     "zathura",
-    "zathura-pdf-mupdf"
+    "zathura-pdf-mupdf",
+    "tesseract-data-eng"
   ],
   "parallel downloads": 5,
   "profile_config": null,

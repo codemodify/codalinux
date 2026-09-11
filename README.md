@@ -60,7 +60,16 @@ The checker rejects known policy violations (AUR helpers, Calamares, NetworkMana
 ./scripts/build-iso.sh
 ```
 
-On Arch this runs `mkarchiso`. On other hosts it uses a privileged `archlinux` Docker/Podman container when available. Output: `out/codalinux-<date>-x86_64.iso`.
+On Arch this runs `mkarchiso` as the current user when possible (archiso 89+ can unshare). Otherwise it uses a privileged `archlinux` container **only if Docker/Podman already works without sudo**. The script never calls `sudo` and never answers pacman provider prompts. Output: `out/codalinux-<date>-x86_64.iso`.
+
+### Unattended local builds (abox)
+
+`./scripts/build-iso.sh` must stay noninteractive: no sudo password prompts, no pacman provider menus.
+
+- Prefer native `mkarchiso` on Arch.
+- If you use Docker, add the builder account to the `docker` group so `docker info` works without sudo. Re-login after `usermod -aG docker "$USER"`.
+- Optional host sudoers may allow **only** `/usr/bin/mkarchiso` and `/usr/bin/docker`. Do **not** grant passwordless root (`ALL=(ALL) NOPASSWD: ALL`).
+- Provider packages are pinned in `packages/` (`iptables`, `pipewire-jack`, `tesseract-data-eng`) so pacstrap does not ask.
 
 The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` wrapper, VirtualBox software-render path). Locale/timezone/keymap are Bozeman, Montana defaults (`en_US.UTF-8`, `America/Denver`, `us`) and are not asked at install time.
 

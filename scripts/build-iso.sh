@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Build the CodaLinux live ISO from archiso/.
 #
+# Unattended: never prompts for sudo or pacman providers.
 # Paths (in order):
-#   1. Native Arch host with mkarchiso in PATH
-#   2. Privileged Docker/Podman using docker.io/library/archlinux
-#   3. Print setup instructions and exit 1
+#   1. Native/rootless mkarchiso when it is in PATH
+#   2. Docker/Podman as the current user (must already work without sudo)
+#   3. Exit with a docker-group / setup message
 #
 # Usage (repo root):
 #   ./scripts/build-iso.sh
@@ -21,6 +22,32 @@ work="${1:-${root}/work}"
 out="${2:-${root}/out}"
 
 log() { printf '%s\n' "$*"; }
+
+fail_no_sudo() {
+  cat >&2 <<'EOF'
+This script never calls sudo. Unattended abox builds must not prompt.
+
+If you need elevated tools:
+  - Prefer native/rootless mkarchiso (archiso 89+ can unshare as a regular user).
+  - For Docker: add your user to the docker group, then re-login:
+        # one-time, interactive — not this script
+        usermod -aG docker "$USER"
+    docker info must work without sudo. Do not grant passwordless root.
+  - Optional sudoers (host admin, not this repo) may allow only
+    /usr/bin/mkarchiso and /usr/bin/docker — never ALL=(ALL) NOPASSWD: ALL.
+EOF
+  exit 1
+}
+
+engine_usable() {
+  local bin="$1"
+  command -v "${bin}" >/dev/null 2>&1 || return 1
+  if [[ "${bin}" == docker ]]; then
+    docker info >/dev/null 2>&1
+  else
+    "${bin}" info >/dev/null 2>&1
+  fi
+}
 
 prepare_overlay() {
   "${root}/scripts/compose-package-lists.sh"
@@ -86,7 +113,11 @@ prepare_overlay() {
 # A leftover db.lck from a killed mkarchiso run makes pacstrap fail.
 clean_build_dirs() {
   if [[ -d "${work}" ]]; then
-    rm -rf "${work}" 2>/dev/null || sudo rm -rf "${work}"
+    if ! rm -rf "${work}"; then
+      echo "Cannot remove ${work} (often a root-owned leftover from an old sudo build)." >&2
+      echo "chown -R \"\$USER:\$USER\" ${work} and retry. This script will not sudo." >&2
+      exit 1
+    fi
   fi
   mkdir -p "${work}" "${out}"
 }
@@ -95,6 +126,7 @@ run_mkarchiso() {
   prepare_overlay
   clean_build_dirs
   log "Running mkarchiso -v -w ${work} -o ${out} ${profile}"
+  # mkarchiso drives pacstrap; lists pin providers so pacman stays noninteractive.
   mkarchiso -v -w "${work}" -o "${out}" "${profile}"
   log "ISO output:"
   ls -lh "${out}"/*.iso 2>/dev/null || ls -lh "${out}"
@@ -119,16 +151,13 @@ run_in_arch_container() {
       exec ./scripts/build-iso.sh $(printf '%q' "${work}") $(printf '%q' "${out}")
     "
   )
-  if [[ "$(id -u)" -ne 0 ]] && [[ "${engine}" == docker ]]; then
-    cmd=(sudo "${cmd[@]}")
-  fi
-  log "Building inside ${engine} archlinux:latest (privileged)"
+  log "Building inside ${engine} archlinux:latest (privileged, no sudo)"
   "${cmd[@]}"
 }
 
 if [[ -n "${CODA_ISO_INNER:-}" ]] || [[ "${CODA_ISO_ENGINE:-}" == native ]]; then
   if ! command -v mkarchiso >/dev/null 2>&1; then
-    echo "CODA_ISO_INNER/native set but mkarchiso is missing. pacman -S archiso" >&2
+    echo "CODA_ISO_INNER/native set but mkarchiso is missing. pacman -S --noconfirm --needed archiso" >&2
     exit 1
   fi
   run_mkarchiso
@@ -141,32 +170,42 @@ if command -v mkarchiso >/dev/null 2>&1; then
 fi
 
 engine="${CODA_ISO_ENGINE:-}"
-if [[ -z "${engine}" ]]; then
-  if command -v docker >/dev/null 2>&1; then
-    engine=docker
-  elif command -v podman >/dev/null 2>&1; then
-    engine=podman
-  fi
-fi
-
 if [[ -n "${engine}" ]]; then
+  if ! engine_usable "${engine}"; then
+    echo "${engine} is not usable without sudo." >&2
+    fail_no_sudo
+  fi
   run_in_arch_container "${engine}"
   exit 0
 fi
 
+if engine_usable docker; then
+  run_in_arch_container docker
+  exit 0
+fi
+if engine_usable podman; then
+  run_in_arch_container podman
+  exit 0
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  echo "docker is installed but 'docker info' failed without sudo." >&2
+  fail_no_sudo
+fi
+
 cat >&2 <<'EOF'
-mkarchiso not found, and neither docker nor podman is available.
+mkarchiso not found, and docker/podman are not usable without sudo.
 
-CodaLinux ISOs are built with official archiso:
+CodaLinux ISOs are built with official archiso, unattended:
 
-  # On Arch:
-  pacman -S --needed archiso
-  sudo ./scripts/build-iso.sh
+  # On Arch (preferred; archiso 89+ can run mkarchiso without root via unshare):
+  pacman -S --noconfirm --needed archiso
+  ./scripts/build-iso.sh
 
-  # On other hosts with Docker:
-  sudo docker pull archlinux:latest
-  sudo ./scripts/build-iso.sh
+  # On other hosts: docker must work as your user (docker group), then:
+  docker pull archlinux:latest
+  ./scripts/build-iso.sh
 
-See docs/TODO.md and DESIGN.md.
+See README.md (Unattended local builds) and DESIGN.md.
 EOF
 exit 1

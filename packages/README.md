@@ -29,5 +29,6 @@ Compose default sets into ISO and installer consumers:
 - No AUR packages (`aylurs-gtk-shell`, `libastal*`, `xlibre-*`, …).
 - No AUR helpers, Calamares, NetworkManager, firewalld/ufw, or Plymouth.
 - No Coda-specific package names — this repo does not publish a pacman repo.
+- Pin pacman providers so unattended builds never prompt: `iptables`, `pipewire-jack`, `tesseract-data-eng`.
 
-`scripts/check-package-lists.sh` greps for the known-forbidden names above.
+`scripts/check-package-lists.sh` greps for the known-forbidden names above and requires the provider pins.

@@ -50,6 +50,7 @@ pipewire
 pipewire-audio
 pipewire-pulse
 pipewire-alsa
+pipewire-jack
 wireplumber
 bluez
 bluez-utils
@@ -57,6 +58,7 @@ bluez-utils
 # --- packages/network.txt ---
 iwd
 systemd-resolvconf
+iptables
 
 # --- packages/desktop.txt ---
 hyprland
@@ -95,6 +97,7 @@ mpv
 imv
 zathura
 zathura-pdf-mupdf
+tesseract-data-eng
 
 # --- packages/live.txt ---
 mkinitcpio-archiso
