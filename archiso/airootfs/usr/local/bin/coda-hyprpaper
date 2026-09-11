@@ -1,24 +1,48 @@
 #!/usr/bin/env bash
-# Start hyprpaper with the xdg config. Log to /tmp/hyprpaper.log and
-# apply Horos over IPC once the socket is up (config-only apply can
-# still miss if hyprlang drops the wallpaper target).
+# Start hyprpaper with the xdg config. Always write /tmp/hyprpaper.log
+# and also /var/log plus the 9p guest-logs share when those are writable.
 set -euo pipefail
 
 conf="${HYPRPAPER_CONF:-/etc/xdg/hypr/hyprpaper.conf}"
 wall="${HYPRPAPER_WALL:-/usr/share/backgrounds/codalinux/default.png}"
-log="${HYPRPAPER_LOG:-/tmp/hyprpaper.log}"
 
-{
-  echo "coda-hyprpaper: start $(date -Iseconds 2>/dev/null || date)"
-  echo "coda-hyprpaper: conf=${conf} wall=${wall}"
-} >>"${log}" || true
+LOG_FILES=()
+
+collect_logs() {
+  mkdir -p /tmp
+  if ! touch /tmp/hyprpaper.log 2>/dev/null; then
+    mkdir -p /tmp
+    touch /tmp/hyprpaper.log 2>/dev/null || true
+  fi
+  LOG_FILES+=(/tmp/hyprpaper.log)
+  local p
+  for p in /var/log/hyprpaper.log /var/log/coda-wallpaper.log \
+           /mnt/coda-guest-logs/hyprpaper.log; do
+    if [[ -d "$(dirname "${p}")" ]] && touch "${p}" 2>/dev/null; then
+      LOG_FILES+=("${p}")
+    fi
+  done
+}
+
+wlog() {
+  local f
+  for f in "${LOG_FILES[@]}"; do
+    printf '%s\n' "$*" >>"${f}" 2>/dev/null || true
+  done
+}
+
+collect_logs
+wlog "coda-hyprpaper: start $(date -Iseconds 2>/dev/null || date)"
+wlog "coda-hyprpaper: conf=${conf} wall=${wall} logs=${LOG_FILES[*]}"
 
 if [[ ! -f "${conf}" ]]; then
-  echo "coda-hyprpaper: missing ${conf}" | tee -a "${log}" >&2
+  wlog "coda-hyprpaper: missing ${conf}"
+  echo "coda-hyprpaper: missing ${conf}" >&2
   exit 1
 fi
 if [[ ! -f "${wall}" ]]; then
-  echo "coda-hyprpaper: missing wallpaper ${wall}" | tee -a "${log}" >&2
+  wlog "coda-hyprpaper: missing wallpaper ${wall}"
+  echo "coda-hyprpaper: missing wallpaper ${wall}" >&2
 fi
 
 apply_wallpaper() {
@@ -27,19 +51,29 @@ apply_wallpaper() {
 }
 
 if command -v pidof >/dev/null 2>&1 && pidof hyprpaper >/dev/null 2>&1; then
-  apply_wallpaper >>"${log}" 2>&1 || true
+  apply_wallpaper >>/tmp/hyprpaper.log 2>&1 || true
+  wlog "coda-hyprpaper: already running; IPC apply attempted"
   exit 0
+fi
+
+if ! command -v hyprpaper >/dev/null 2>&1; then
+  wlog "coda-hyprpaper: hyprpaper binary not found"
+  exit 1
 fi
 
 (
   for _ in $(seq 1 10); do
     sleep 1
-    if apply_wallpaper >>"${log}" 2>&1; then
-      echo "coda-hyprpaper: IPC wallpaper apply ok" >>"${log}"
+    if apply_wallpaper >>/tmp/hyprpaper.log 2>&1; then
+      wlog "coda-hyprpaper: IPC wallpaper apply ok"
       exit 0
     fi
   done
-  echo "coda-hyprpaper: IPC wallpaper apply failed after retries" >>"${log}"
+  wlog "coda-hyprpaper: IPC wallpaper apply failed after retries"
 ) &
 
-exec hyprpaper -c "${conf}" --verbose >>"${log}" 2>&1
+# Mirror verbose output to every writable log.
+exec > >(tee -a "${LOG_FILES[@]}" >/dev/null)
+exec 2>&1
+wlog "coda-hyprpaper: exec hyprpaper -c ${conf} --verbose"
+exec hyprpaper -c "${conf}" --verbose

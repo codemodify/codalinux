@@ -70,7 +70,7 @@ archinstall's guided installer historically defaults toward NetworkManager for d
 | Display manager | greetd |
 | Greeter UI | Stub / custom placeholder (`agreety` until a branded greeter exists) |
 | Shell | **AGS/Astal** (vendored from source into `/usr/local` at ISO image-build time). Waybar / fuzzel / mako are **not** the default shell. |
-| Companions | hyprlock, hypridle, hyprpaper |
+| Companions | hyprlock, hypridle, hyprpaper (swaybg live/VM fallback) |
 | Portals | `xdg-desktop-portal-hyprland` + `xdg-desktop-portal-gtk` as needed |
 | Branding | Light: `/etc/os-release` as CodaLinux, theme/wallpaper placeholders, greetd theming hooks |
 | Plymouth | **Deferred** — do not add splash work in v1 scaffolding |
@@ -216,7 +216,7 @@ Live GUI notes:
 - Compositor config is `desktop/hypr/hyprland.lua` (Hyprland 0.55+ Lua). Companion tools still use hyprlang `.conf` (`hypridle` / `hyprlock` / `hyprpaper`).
 - The vendored AGS shell autostarts as `coda-ags` (bar with workspaces, running-app taskbar, and tile/stack toggle; launcher; notifications; control center). hyprpaper, the polkit agent, and blueman-applet still start. Super+Space / Super+D toggles the AGS launcher; Super+, toggles the control center; Super+N / Super+= add a workspace; Super+- removes an empty one; Super+T toggles tiling ↔ overlapping float (hyprfloat-style workspace float mode implemented in `coda-hypr-ws`, not tabbed groups and not a hyprpm plugin).
 - Floating windows use vendored **hyprbars** (`/usr/local/lib/hyprland/libhyprbars.so`, hyprland-plugins `7644cecdb947060682891a0db2a0cdc5c0b9e704`, the official hyprpm pin for Hyprland 0.56.2) for close / maximize / minimize. Tiled windows keep `hyprbars:no_bar`. Minimize uses `coda-hypr-ws minimize` (`special:minimized`). The plugin is compiled at ISO build time against official `hyprland` headers; do not run `hyprpm` on the live image. Do not track hyprland-plugins `main` — later chases need headers newer than Arch `hyprland` 0.56.2.
-- Live wallpaper is Plasma **Horos** (Nuno Pinheiro / Oxygen, not a Coda original) at `branding/wallpapers/default.png` via hyprpaper (`/usr/share/backgrounds/codalinux/default.png`). `scripts/gen-wallpaper.py` must not overwrite that file. hyprlock uses the same path. Live hypridle does not lock or DPMS-off on idle (hyprlock dies under VirtualBox/pixman). Super+L runs `coda-hyprlock`. If hyprlock still crashes: `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'` and `killall -9 hyprlock`.
+- Live wallpaper is Plasma **Horos** (Nuno Pinheiro / Oxygen, not a Coda original) at `branding/wallpapers/default.png` via `coda-wallpaper` (`hyprpaper`, then `swaybg` on the live/VM path) at `/usr/share/backgrounds/codalinux/default.png`. `scripts/gen-wallpaper.py` must not overwrite that file. hyprlock uses the same path. Live hypridle does not lock or DPMS-off on idle (hyprlock dies under VirtualBox/pixman). Super+L runs `coda-hyprlock`. If hyprlock still crashes: `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'` and `killall -9 hyprlock`.
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
 

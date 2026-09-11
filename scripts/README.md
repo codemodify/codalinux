@@ -20,7 +20,8 @@
 | `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`) |
 | `coda-hypr-ws` | Workspace add/remove, tile↔overlapping-float, and taskbar focus/minimize |
 | `coda-hyprlock` | Start hyprlock with `/etc/xdg/hypr/hyprlock.conf` |
-| `coda-hyprpaper` | Start hyprpaper with the xdg config (`monitor = *`) and log to `/tmp/hyprpaper.log` |
+| `coda-hyprpaper` | Start hyprpaper with the xdg config (`monitor = *`); log `/tmp/hyprpaper.log` + `/var/log` |
+| `coda-wallpaper` | Session wallpaper: hyprpaper first, `swaybg` fallback; logs which backend won |
 | `coda-sync-desktop-from-host.sh` | Guest helper: copy hypr / wallpaper / AGS from the 9p share and restart |
 | `import-wallpaper.sh` | Copy a host still into `branding/wallpapers/default.png` (never generates) |
 | `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |

@@ -29,6 +29,7 @@ dry_run=0
 share="${CODA_QEMU_SHARE:-${root}}"
 mount_tag="${CODA_QEMU_MOUNT_TAG:-coda-host}"
 guest_mount="${CODA_QEMU_GUEST_MOUNT:-/mnt/coda-host}"
+share_writable=0
 qemu_pid=""
 cleaned=0
 
@@ -56,6 +57,9 @@ Options:
   --mount-tag NAME           Alias for --tag
   --guest-mount PATH         Printed guest mountpoint
                              (default: /mnt/coda-host)
+  --writable                 Export the host --share as read-write
+                             (default: readonly; guest-logs is always
+                             writable)
   --ram SIZE                 QEMU -m (default 4G; $CODA_QEMU_RAM)
   --cpus N                   vCPUs (default: min(nproc, 4), at least 2)
   --out DIR                  Artifacts (default out/qemu-desktop-dev
@@ -70,6 +74,7 @@ Artifacts (created at run time):
   qmp.sh         Helper: ./qmp.sh screendump [file.png]
   qemu.pid       QEMU pid
   qemu.cmd       Exact command line
+  guest-logs/    Writable 9p target (tag coda-guest-logs)
 
 Examples:
   ./scripts/qemu-desktop-dev.sh
@@ -105,6 +110,7 @@ while [[ $# -gt 0 ]]; do
       guest_mount="$2"
       shift 2
       ;;
+    --writable) share_writable=1; shift ;;
     --ram)
       [[ $# -ge 2 ]] || die "--ram needs a value"
       ram="$2"
@@ -374,9 +380,17 @@ else
   fw_args=(-bios "${ovmf_code}")
 fi
 
-# readonly: edit on the host, copy into the live overlay. security_model=none
-# is enough for a trusted local tree (passthrough needs root).
-virtfs_arg="local,path=${share},mount_tag=${mount_tag},security_model=none,readonly=on"
+# Host tree: readonly by default (edit on the host, copy into the live
+# overlay). --writable makes it read-write. Always add a second writable
+# virtfs for guest logs (hyprpaper.log / coda-wallpaper.log).
+guest_logs="${out_dir}/guest-logs"
+install -d "${guest_logs}"
+chmod a+rwx "${guest_logs}" || true
+virtfs_host="local,path=${share},mount_tag=${mount_tag},security_model=none"
+if [[ "${share_writable}" -ne 1 ]]; then
+  virtfs_host="${virtfs_host},readonly=on"
+fi
+virtfs_logs="local,path=${guest_logs},mount_tag=coda-guest-logs,security_model=none"
 
 cmd=(
   qemu-system-x86_64
@@ -390,7 +404,8 @@ cmd=(
   -boot order=d,menu=on
   -device virtio-vga
   "${display_args[@]}"
-  -virtfs "${virtfs_arg}"
+  -virtfs "${virtfs_host}"
+  -virtfs "${virtfs_logs}"
   -device virtio-net-pci,netdev=n0
   -netdev user,id=n0
   -device qemu-xhci
@@ -470,21 +485,30 @@ chmod +x "${out_dir}/qmp.sh"
 print_guest_steps() {
   cat <<EOF
 
-Guest 9p share (copy configs; do not rebuild the ISO)
+Guest 9p shares (copy configs / drop logs; do not rebuild the ISO)
   mount tag:    ${mount_tag}
   host path:    ${share}
   guest mount:  ${guest_mount}
+  host writable: $([[ "${share_writable}" -eq 1 ]] && echo yes || echo no)
+
+  guest-logs tag: coda-guest-logs
+  host path:      ${guest_logs}
+  guest mount:    /mnt/coda-guest-logs
+  (always writable — drop /tmp/hyprpaper.log here)
 
   # As root (tty2 is a root console) after the desktop is up:
   modprobe 9pnet_virtio 9p || true
-  mkdir -p ${guest_mount}
+  mkdir -p ${guest_mount} /mnt/coda-guest-logs
   mount -t 9p -o trans=virtio,version=9p2000.L ${mount_tag} ${guest_mount}
+  mount -t 9p -o trans=virtio,version=9p2000.L coda-guest-logs /mnt/coda-guest-logs
 
   # Preferred: helper from the share (always the host copy)
   ${guest_mount}/scripts/coda-sync-desktop-from-host.sh ${guest_mount}
   # After the next ISO rebuild this is also: coda-sync-desktop-from-host
 
   # Or copy by hand, then restart from a Hyprland terminal:
+  cp ${guest_mount}/scripts/coda-wallpaper /usr/local/bin/coda-wallpaper
+  cp ${guest_mount}/scripts/coda-hyprpaper /usr/local/bin/coda-hyprpaper
   cp ${guest_mount}/desktop/hypr/hyprpaper.conf /etc/xdg/hypr/
   cp ${guest_mount}/desktop/hypr/hyprpaper.conf /home/live/.config/hypr/
   cp ${guest_mount}/desktop/hypr/hyprland.lua /etc/xdg/hypr/
@@ -493,9 +517,11 @@ Guest 9p share (copy configs; do not rebuild the ISO)
   # wallpaper (if you changed branding/wallpapers/default.png):
   cp ${guest_mount}/branding/wallpapers/default.png /usr/share/backgrounds/codalinux/default.png
   # then, as user live in a foot window:
-  killall hyprpaper; coda-hyprpaper
+  killall swaybg hyprpaper; coda-wallpaper
   coda-ags quit; coda-ags &
   hyprctl reload
+  # If swaybg is missing on this ISO: pacman -S --noconfirm swaybg
+  # Logs: /tmp/hyprpaper.log, /var/log/coda-wallpaper.log, /mnt/coda-guest-logs/
 
   If mount fails, check 9p modules on the live image:
     find /usr/lib/modules/\$(uname -r) -name '*9p*'
@@ -509,7 +535,8 @@ EOF
 
 log "ISO ${iso}"
 log "OVMF ${ovmf_mode} ${ovmf_code}${ovmf_vars:+ ${ovmf_vars}}"
-log "share ${share} tag=${mount_tag} → guest ${guest_mount}"
+log "share ${share} tag=${mount_tag} → guest ${guest_mount} (writable=${share_writable})"
+log "guest-logs ${guest_logs} tag=coda-guest-logs → /mnt/coda-guest-logs"
 log "artifacts ${out_dir} (${display_mode}, ${ram}, ${cpus} cpu, wait)"
 
 print_guest_steps
