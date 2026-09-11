@@ -62,7 +62,9 @@ The checker rejects known policy violations (AUR helpers, Calamares, NetworkMana
 
 On Arch this runs `mkarchiso`. On other hosts it uses a privileged `archlinux` Docker/Podman container when available. Output: `out/codalinux-<date>-x86_64.iso`.
 
-The profile is intended to be buildable (mkinitcpio-archiso, pacman-init, UEFI systemd-boot, greetd → Hyprland, archinstall via `coda-install`). A first successful image and a hardware boot are still follow-ups — see [docs/TODO.md](docs/TODO.md).
+The profile is intended to be buildable (mkinitcpio-archiso, pacman-init, UEFI systemd-boot, greetd → Hyprland, archinstall via `coda-install`). Hardware verification is still a follow-up — see [docs/TODO.md](docs/TODO.md).
+
+A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an artifact when it succeeds.
 
 ### Install with archinstall
 
