@@ -8,13 +8,20 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Keep in sync with desktop/hypr/README.md
-HYPRBARS_COMMIT="${CODA_HYPRBARS_COMMIT:-722f15a77768eab13f01f5e5dce024bd2f61f270}"
+# Official hyprland-plugins hyprpm.toml pin for Hyprland 0.56.2
+# (hyprland commit efb5099… → plugin 7644cec…). Keep in sync with
+# desktop/hypr/README.md. Do not track hyprland-plugins main: later
+# chases expect headers Arch 0.56.2 does not ship
+# (hyprland/src/desktop/view/window/Window.hpp).
+HYPRBARS_COMMIT="${CODA_HYPRBARS_COMMIT:-7644cecdb947060682891a0db2a0cdc5c0b9e704}"
 HYPRBARS_URL="https://github.com/hyprwm/hyprland-plugins/archive/${HYPRBARS_COMMIT}.tar.gz"
+# pkg-config --modversion hyprland series this pin matches.
+HYPRBARS_HYPRLAND_SERIES="${CODA_HYPRBARS_HYPRLAND_SERIES:-0.56}"
 
 PREFIX="/usr/local"
 DESTDIR="${1:-${root}/archiso/airootfs}"
-CACHE="${CODA_HYPRBARS_CACHE:-${root}/.cache/coda-hyprbars}"
+CACHE_ROOT="${CODA_HYPRBARS_CACHE:-${root}/.cache/coda-hyprbars}"
+CACHE="${CACHE_ROOT}/${HYPRBARS_COMMIT}"
 JOBS="${CODA_HYPRBARS_JOBS:-$(nproc 2>/dev/null || echo 4)}"
 
 log() { printf 'vendor-hyprbars: %s\n' "$*"; }
@@ -66,7 +73,18 @@ build_and_install() {
     echo "vendor-hyprbars: missing ${src}/Makefile" >&2
     exit 1
   }
-  log "building hyprbars against $(pkg-config --modversion hyprland 2>/dev/null || echo unknown) hyprland.pc"
+  local hypr_ver
+  hypr_ver="$(pkg-config --modversion hyprland 2>/dev/null || echo unknown)"
+  case "${hypr_ver}" in
+    "${HYPRBARS_HYPRLAND_SERIES}".*)
+      ;;
+    *)
+      echo "vendor-hyprbars: hyprland ${hypr_ver} is not ${HYPRBARS_HYPRLAND_SERIES}.x" >&2
+      echo "Update HYPRBARS_COMMIT from hyprland-plugins hyprpm.toml commit_pins, then retry." >&2
+      exit 1
+      ;;
+  esac
+  log "building hyprbars ${HYPRBARS_COMMIT} against ${hypr_ver} hyprland.pc"
   make -C "${src}" -j "${JOBS}" all
   local so=""
   if [[ -f "${src}/hyprbars.so" ]]; then
