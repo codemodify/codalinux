@@ -86,7 +86,7 @@ fi
 if [[ -n "${scripts_src}" ]]; then
   install -d /usr/local/bin
   local_bin=""
-  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws coda-ags; do
+  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws coda-ags coda-settings; do
     if [[ -f "${scripts_src}/${local_bin}" ]]; then
       install -m 0755 "${scripts_src}/${local_bin}" "/usr/local/bin/${local_bin}"
       log "wrapper → /usr/local/bin/${local_bin}"

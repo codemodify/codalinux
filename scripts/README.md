@@ -2,8 +2,8 @@
 
 ## Iteration phases
 
-- **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later.
-- **ISO smoke** (boot, greetd, first paint): `./scripts/qemu-boot-test.sh`
+- **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later. virtio-vga is 1920x1080 (bare `-device virtio-vga` is 640x480).
+- **ISO smoke** (boot, greetd, first paint): `./scripts/qemu-boot-test.sh` (same 1920x1080 virtio-vga default)
 - **Package / vendor / squashfs changes**: `./scripts/build-iso.sh`
 
 ## Inventory
@@ -26,10 +26,10 @@
 | `coda-sync-desktop-from-host.sh` | Guest helper: copy hypr / wallpaper / AGS from the 9p share and restart |
 | `import-wallpaper.sh` | Copy a host still into `branding/wallpapers/default.png` (never generates) |
 | `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |
-| `coda-settings` | Open official Wi-Fi / BT / audio / webcam / appearance tools |
+| `coda-settings` | Settings hub helpers: display (hyprctl), Wi-Fi (impala), BT, audio, appearance, about |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
-| `qemu-boot-test.sh` | Boot the live ISO under QEMU/KVM + OVMF (preferred automated ISO smoke path; serial + QMP screenshots) |
-| `qemu-desktop-dev.sh` | Interactive GTK QEMU + virtio-9p host share for desktop UX iteration |
+| `qemu-boot-test.sh` | Boot the live ISO under QEMU/KVM + OVMF (preferred automated ISO smoke path; serial + QMP screenshots; virtio-vga 1920x1080) |
+| `qemu-desktop-dev.sh` | Interactive GTK QEMU + virtio-9p host share for desktop UX iteration (virtio-vga 1920x1080) |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |
 
 Run compose + check after editing `packages/*.txt`.

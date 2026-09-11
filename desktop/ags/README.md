@@ -31,7 +31,7 @@ app.tsx                 AGS entry (`ags run` looks for app.ts/tsx)
 Bar.tsx                 top bar (workspaces +/−, tile/stack, running-app taskbar)
 Launcher.tsx            application launcher
 Notification*.tsx       notification popups (Astal notifd)
-ControlCenter.tsx       settings surface
+ControlCenter.tsx       Settings hub (sidebar categories + tools)
 Clipboard.tsx           cliphist picker
 style.css               shell theme
 ```
@@ -45,9 +45,9 @@ style.css               shell theme
 - The bar lists each Hyprland window on the **active workspace** (not grouped by class). Click focuses; click again on the focused window minimizes it to `special:minimized`. Right-click: Close, or New instance (`.desktop` Exec via AstalApps, else `hyprctl dispatch exec` of the class).
 - Workspace `+` / `−` and the Tile/Stack control call `/usr/local/bin/coda-hypr-ws` (same helper as Super+N / Super+− / Super+T). **Stack** is floating/overlapping windows on the current workspace (hyprfloat-style float mode via `hyprctl` / Lua dispatchers). Tabbed Hyprland window groups are not used. New windows on a stacked workspace are floated by `coda-hypr-ws apply-new` from `hyprland.lua`.
 - Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize is `/usr/local/bin/coda-hypr-ws minimize` → `special:minimized` (same restore path as the taskbar). Scroll the titlebar to shade / unshade (`coda-hypr-ws shade`). Tiled windows hide the bar.
-- The control-center Lock tile runs `coda-hyprlock`. Live hypridle does not lock on idle.
+- The Settings hub (window name `control-center`) is a System Settings-style sidebar: Overview, Display, Sound, Network, Bluetooth, Appearance, Input, About. Lock still runs `coda-hyprlock`. Live hypridle does not lock on idle.
 
-Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-manager` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`, plus the input-help text.
+Display uses `hyprctl` (optional `wlr-randr`). Network stays systemd-networkd + iwd; Wi-Fi UI is `impala`. Other pages launch official apps: `pavucontrol`, `blueman-manager`, `nwg-look`, `snapshot`, plus input-help / about.
 
 ## Build deps
 

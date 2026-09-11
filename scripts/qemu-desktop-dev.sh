@@ -7,6 +7,9 @@
 # headless serial + QMP screenshots. Use scripts/build-iso.sh when
 # packages, vendor builds, or squashfs contents change.
 #
+# virtio-vga without xres/yres comes up at 640x480. Both QEMU helpers
+# pin 1920x1080 so the live desktop is usable.
+#
 # Arch host packages (abox):
 #   pacman -S --needed qemu-system-x86 edk2-ovmf qemu-ui-gtk
 # Needs /dev/kvm (user in group kvm). OVMF is required (UEFI-only ISO).
@@ -40,6 +43,7 @@ Usage: qemu-desktop-dev.sh [options] [ISO]
 Boot the CodaLinux UEFI live ISO with QEMU/KVM + OVMF for desktop UX
 trial/error. Default is a GTK window that stays up until Ctrl-C, with
 the host repo shared into the guest over virtio-9p (tag coda-host).
+Guest GPU is virtio-vga at 1920x1080 (bare virtio-vga is 640x480).
 
 ISO is the first non-option argument, or $CODA_ISO, or the newest
 out/codalinux-*.iso under the repo root.
@@ -402,7 +406,7 @@ cmd=(
   "${fw_args[@]}"
   -cdrom "${iso}"
   -boot order=d,menu=on
-  -device virtio-vga
+  -device virtio-vga,xres=1920,yres=1080
   "${display_args[@]}"
   -virtfs "${virtfs_host}"
   -virtfs "${virtfs_logs}"
