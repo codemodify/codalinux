@@ -4,14 +4,13 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 1. Live ISO (`archiso/` + `scripts/build-iso.sh`)
 
-- [ ] Run `mkarchiso` on an Arch build host and boot the image on UEFI hardware or firmware (OVMF).
-- [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso; fall back to split `uefi-x64.systemd-boot.*` names if needed.
-- [ ] Finish systemd-boot entries (kernel cmdline, accessibility entry, optional memtest) using archiso template identifiers (`%ARCH%`, `%ARCHISO_LABEL%`, …).
-- [ ] Copy `desktop/`, `sessions/`, and `branding/` into `airootfs` from `scripts/build-iso.sh` instead of hand-maintaining duplicates.
+- [x] Profile includes mkinitcpio-archiso hooks, pacman-init, UEFI systemd-boot entries, greetd/iwd/networkd enables, os-release overlay, `coda-install`.
+- [x] `scripts/build-iso.sh` runs native `mkarchiso` or a privileged `archlinux` container.
+- [ ] Run `mkarchiso` and boot the image on UEFI hardware or firmware (OVMF).
+- [ ] Confirm `bootmodes=('uefi.systemd-boot')` matches the build host's archiso.
 - [ ] Verify the os-release pacman hook wins over the `filesystem` package.
-- [ ] Enable greetd + networkd + iwd + resolved + bluetooth on the live image and confirm they start.
-- [ ] Decide live-session UX: greetd autologin to Hyprland vs. greeter on boot.
-- [ ] Add a live installer launcher (terminal command or panel action) that runs archinstall with `install/user_configuration.json`.
+- [ ] Confirm greetd + Hyprland + PipeWire actually start on the live image (tty2 is the rescue console).
+- [ ] Accessibility / speech boot entry (optional; not in v1).
 - [ ] Keep the ISO official-repos-only; no `[codalinux]` repo, no AUR helper.
 - [ ] Periodic rebuild pipeline (manual first; CI only if an Arch builder exists).
 

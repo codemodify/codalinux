@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Live-ISO helper: run archinstall with CodaLinux defaults.
+# Disk layout is still chosen in the TUI / a local config override.
+set -euo pipefail
+
+config="${CODA_ARCHINSTALL_CONFIG:-/usr/share/codalinux/install/user_configuration.json}"
+
+if ! command -v archinstall >/dev/null 2>&1; then
+  echo "archinstall is not installed. On the live ISO it should be." >&2
+  exit 1
+fi
+
+if [[ ! -f "${config}" ]]; then
+  echo "Missing ${config}. Copy install/user_configuration.json onto the machine." >&2
+  exit 1
+fi
+
+echo "Starting archinstall with ${config}"
+echo "CodaLinux defaults: systemd-boot, ext4, PipeWire, official Arch repos only."
+echo "Fill in the disk layout. greetd + systemd-networkd + iwd still need the custom profile (install/profiles/codalinux.py)."
+exec archinstall --config "${config}" "$@"

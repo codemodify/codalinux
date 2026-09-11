@@ -1,8 +1,10 @@
-CodaLinux live image (scaffold)
+CodaLinux live image
 
-  Network:  systemd-networkd + iwd   (iwctl)
-  Session:  greetd → Hyprland (Wayland + XWayland)
-  Install:  archinstall --config <repo>/install/user_configuration.json
+  Graphical session: greetd starts Hyprland on tty1 (Wayland + XWayland)
+  Rescue console:    tty2 autologin (root, empty password)
+  Network:           systemd-networkd + iwd    (iwctl)
+  Install:           coda-install
+                     (archinstall + CodaLinux defaults; disk layout is interactive)
 
-Locked decisions: see /usr/local/share/codalinux or the git tree DESIGN.md.
-Support: https://github.com/codemodify/codalinux/issues
+Locked stack: systemd-boot, ext4, official Arch repos only, no NetworkManager.
+Decisions: DESIGN.md in the git tree. Support: https://github.com/codemodify/codalinux/issues

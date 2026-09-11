@@ -182,7 +182,7 @@ Live ISO service symlinks live under `archiso/airootfs/etc/systemd/system/`. Ins
 | Locale | `en_US.UTF-8` | Installer |
 | Console keymap | `us` | Installer |
 | Timezone | `UTC` until the installer sets one | Installer |
-| Live session | stock archiso root console + greetd placeholder | Later live-UX work |
+| Live session | greetd starts Hyprland on tty1 as root; tty2 is a root rescue console | Installer |
 | Installed users | Created by archinstall credentials file | Yes |
 
 Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.

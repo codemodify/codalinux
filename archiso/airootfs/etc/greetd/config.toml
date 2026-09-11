@@ -1,6 +1,5 @@
-# greetd stub. Replace agreety with a branded greeter later.
-# TODO: live autologin — uncomment [initial_session] once the Hyprland
-# session is verified on the ISO.
+# Live ISO: greetd owns tty1 and starts Hyprland for a tryable session.
+# tty2 autologins to a root console if the graphical session fails.
 
 [terminal]
 vt = 1
@@ -9,6 +8,6 @@ vt = 1
 command = "agreety --cmd /usr/bin/Hyprland"
 user = "greeter"
 
-# [initial_session]
-# command = "Hyprland"
-# user = "root"
+[initial_session]
+command = "Hyprland"
+user = "root"

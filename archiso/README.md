@@ -1,12 +1,14 @@
 # archiso profile
 
-This directory is a **CodaLinux archiso profile**, not a vendor of the `archiso` tool. Build it on an Arch host:
+This directory is a **CodaLinux archiso profile**, not a vendor of the `archiso` tool.
 
 ```bash
-sudo ./scripts/build-iso.sh
+./scripts/build-iso.sh
 ```
 
-`scripts/build-iso.sh` composes `packages.x86_64`, copies branding/desktop/session overlays into `airootfs/`, then runs `mkarchiso`.
+On Arch that runs `mkarchiso` directly. Elsewhere it uses a privileged `archlinux` container (Docker or Podman) if one is available.
+
+`scripts/build-iso.sh` composes `packages.x86_64`, copies branding/desktop/session/installer overlays into `airootfs/`, then runs `mkarchiso`.
 
 ## Contents
 
