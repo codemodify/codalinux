@@ -16,6 +16,7 @@
 | `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |
 | `coda-settings` | Open official Wi-Fi / BT / audio / webcam / appearance tools |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
+| `qemu-boot-test.sh` | Boot the live ISO under QEMU/KVM + OVMF (preferred automated test path; serial + QMP screenshots) |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |
 
 Run compose + check after editing `packages/*.txt`.
