@@ -33,7 +33,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("systemctl --user start pipewire pipewire-pulse wireplumber")
     hl.exec_cmd("/usr/lib/xdg-desktop-portal-hyprland")
     hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
-    hl.exec_cmd("hyprpaper")
+    hl.exec_cmd("hyprpaper -c /etc/xdg/hypr/hyprpaper.conf")
     hl.exec_cmd("coda-ags")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("blueman-applet")
@@ -51,30 +51,19 @@ hl.config({
         },
     },
 
-    -- Tabbed stack uses Hyprland window groups (no i3 stacked layout).
-    -- auto_group keeps new windows in the workspace stack after Super+T.
-    group = {
-        auto_group = true,
-        col = {
-            border_active   = "rgba(3dd6f5ff)",
-            border_inactive = "rgba(3a4550ff)",
-        },
-        groupbar = {
-            enabled       = true,
-            font_size     = 11,
-            height        = 18,
-            stacked       = false,
-            render_titles = true,
-            text_color    = "0xffe8eef2",
-            col = {
-                active   = "rgba(3dd6f5cc)",
-                inactive = "rgba(2a343acc)",
-            },
-        },
-    },
-
     decoration = {
         rounding = 8,
+        -- Keep chrome readable on floating/overlapping windows.
+        -- Blur stays off: VirtualBox software-render (pixman) is the live default.
+        shadow = {
+            enabled = true,
+            range   = 12,
+            render_power = 3,
+            color   = "rgba(00000066)",
+        },
+        blur = {
+            enabled = false,
+        },
     },
 
     animations = {
@@ -116,8 +105,13 @@ hl.bind(mainMod .. " + SHIFT + equal", hl.dsp.exec_cmd("coda-hypr-ws add"))
 hl.bind(mainMod .. " + plus", hl.dsp.exec_cmd("coda-hypr-ws add"))
 hl.bind(mainMod .. " + minus", hl.dsp.exec_cmd("coda-hypr-ws remove"))
 hl.bind(mainMod .. " + T", hl.dsp.exec_cmd("coda-hypr-ws toggle-stack"))
-hl.bind(mainMod .. " + TAB", hl.dsp.group.next())
-hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.group.prev())
+hl.bind(mainMod .. " + TAB", hl.dsp.window.cycle_next())
+hl.bind(mainMod .. " + SHIFT + TAB", hl.dsp.window.cycle_next({ next = false }))
+
+-- New windows on a stacked (floating) workspace join the overlap cascade.
+hl.on("window.open", function()
+    hl.exec_cmd("coda-hypr-ws apply-new")
+end)
 
 for i = 1, 10 do
     local key = i % 10

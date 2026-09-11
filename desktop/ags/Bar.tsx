@@ -203,8 +203,8 @@ function StackToggle() {
       class={mode((m) => (m === "stack" ? "stack-toggle stack" : "stack-toggle"))}
       tooltipText={mode((m) =>
         m === "stack"
-          ? "Stacking — click for tiling"
-          : "Tiling — click for stacking",
+          ? "Overlapping float — click for tiling"
+          : "Tiling — click for overlapping float",
       )}
       onClicked={() => hyprWs("toggle-stack")}
     >

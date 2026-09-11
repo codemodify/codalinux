@@ -9,7 +9,8 @@
 | `coda-install` | Live helper: Bozeman locale defaults; disk is the only prompt |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
 | `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`) |
-| `coda-hypr-ws` | Workspace add/remove, tile↔stack (groups), and taskbar focus/minimize |
+| `coda-hypr-ws` | Workspace add/remove, tile↔overlapping-float, and taskbar focus/minimize |
+| `gen-wallpaper.py` | Write `branding/wallpapers/default.png` (stdlib PNG, no extra image libs) |
 | `coda-settings` | Open official Wi-Fi / BT / audio / webcam / appearance tools |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
 | `hooks/nvidia.sh` | NVIDIA detect/install placeholder (no-op) |

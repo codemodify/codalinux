@@ -14,11 +14,27 @@ open_wifi() {
   if command -v impala >/dev/null 2>&1; then
     term impala
   fi
-  term iwctl
+  if command -v iwctl >/dev/null 2>&1; then
+    term iwctl
+  fi
+  echo "coda-settings: install impala or iwctl for Wi-Fi (iwd)." >&2
+  exit 1
 }
 
 open_netstatus() {
-  term bash -lc 'echo "=== networkctl ==="; networkctl status; echo; echo "=== iwctl devices ==="; iwctl device list 2>/dev/null || true; echo; read -r -p "Enter to close "'
+  term bash -lc '
+    echo "CodaLinux network (systemd-networkd + iwd — not NetworkManager)"
+    echo
+    echo "=== networkctl ==="
+    networkctl status || true
+    echo
+    echo "=== iwctl devices ==="
+    iwctl device list 2>/dev/null || true
+    echo
+    echo "Wi-Fi UI: coda-settings wifi  (impala)"
+    echo
+    read -r -p "Enter to close "
+  '
 }
 
 open_bluetooth() {
@@ -32,19 +48,27 @@ open_bluetooth() {
 }
 
 open_audio() {
-  exec pavucontrol
+  if command -v pavucontrol >/dev/null 2>&1; then
+    exec pavucontrol
+  fi
+  echo "coda-settings: pavucontrol is not installed." >&2
+  exit 1
 }
 
 open_webcam() {
   if command -v snapshot >/dev/null 2>&1; then
     exec snapshot
   fi
-  echo "snapshot is not installed" >&2
+  echo "coda-settings: snapshot is not installed." >&2
   exit 1
 }
 
 open_appearance() {
-  exec nwg-look
+  if command -v nwg-look >/dev/null 2>&1; then
+    exec nwg-look
+  fi
+  echo "coda-settings: nwg-look is not installed." >&2
+  exit 1
 }
 
 open_input() {

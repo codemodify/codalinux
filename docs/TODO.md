@@ -38,7 +38,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 - [x] Pin AGS 3.1.2 + Astal commits in `desktop/ags/README.md` and `scripts/vendor-ags.sh`.
 - [x] Implement the unified shell (bar, notifications, launcher, control center).
-- [x] AGS taskbar of running apps, workspace add/remove, and per-workspace tile ↔ stack (Hyprland groups) via `coda-hypr-ws`.
+- [x] AGS taskbar of running apps, workspace add/remove, and per-workspace tile ↔ overlapping-float stack via `coda-hypr-ws` (hyprfloat semantics; not tabbed groups).
 - [x] Vendor from source at ISO build time with official-repo deps in `packages/ags-build-deps.txt`. No AUR helper, no Coda repo.
 - [x] Start AGS from `desktop/hypr/hyprland.lua` via `coda-ags` (Waybar is not a fallback).
 - [ ] Confirm the vendored shell on a real live boot (VirtualBox / OVMF).
@@ -46,7 +46,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 ## 4. Nearby follow-ups (not blockers for the three tracks above)
 
 - [ ] Branded greetd greeter (theme hooks are placeholders).
-- [x] Default hyprpaper still at `branding/wallpapers/default.png` (simple branded gradient). Full theme assets still later.
+- [x] Default hyprpaper / hyprlock still at `branding/wallpapers/default.png` (branded gradient). Full theme assets still later.
 - [ ] XLibre session packaging decision (see [DESIGN.md](../DESIGN.md#xlibre-session-path)); still no Coda repo.
 - [ ] NVIDIA detect/install hook implementation.
 - [ ] Optional CUPS profile using `packages/optional-cups.txt`.

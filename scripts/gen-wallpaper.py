@@ -36,9 +36,9 @@ def lerp(a: int, b: int, t: float) -> int:
 
 def main() -> None:
     width, height = 1600, 900
-    top = (18, 22, 28)
-    bottom = (20, 48, 58)
-    accent = (127, 180, 200)
+    top = (22, 32, 42)
+    bottom = (18, 78, 92)
+    accent = (61, 214, 245)
     pixels = bytearray(width * height * 4)
     for y in range(height):
         ty = y / (height - 1)
