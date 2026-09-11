@@ -28,8 +28,6 @@ prepare_overlay() {
 
   local overlay="${profile}/airootfs"
 
-  install -d "${overlay}/usr/lib"
-  install -m 0644 "${root}/branding/os-release" "${overlay}/usr/lib/os-release"
   install -d "${overlay}/etc/pacman.d/hooks"
   install -m 0644 "${root}/branding/hooks/codalinux-os-release.hook" \
     "${overlay}/etc/pacman.d/hooks/codalinux-os-release.hook"
@@ -39,8 +37,11 @@ prepare_overlay() {
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"
-  install -m 0644 "${root}/branding/issue" "${overlay}/etc/issue"
-  install -m 0644 "${root}/branding/issue.net" "${overlay}/etc/issue.net"
+  install -m 0644 "${root}/branding/issue" \
+    "${overlay}/usr/local/share/codalinux/issue"
+  install -m 0644 "${root}/branding/issue.net" \
+    "${overlay}/usr/local/share/codalinux/issue.net"
+  # Do not write /usr/lib/os-release or /etc/issue* here — filesystem owns them.
 
   install -d "${overlay}/usr/share/wayland-sessions"
   install -m 0644 "${root}/sessions/wayland/codalinux-hyprland.desktop" \

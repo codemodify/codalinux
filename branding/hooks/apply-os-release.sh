@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Re-apply CodaLinux /usr/lib/os-release after the filesystem package writes Arch's.
-# archiso copies airootfs *before* pacman, so this hook is required.
+# Re-apply CodaLinux identity after the filesystem package writes Arch's files.
+# archiso copies airootfs *before* pacman, so these packaged paths cannot live
+# in the overlay or pacstrap fails with "exists in filesystem".
 set -euo pipefail
 
-src="/usr/local/share/codalinux/os-release"
-if [[ ! -f "${src}" ]]; then
-  echo "codalinux: missing ${src}" >&2
-  exit 0
-fi
+share="/usr/local/share/codalinux"
 
-install -m 0644 "${src}" /usr/lib/os-release
+if [[ -f "${share}/os-release" ]]; then
+  install -m 0644 "${share}/os-release" /usr/lib/os-release
+fi
+if [[ -f "${share}/issue" ]]; then
+  install -m 0644 "${share}/issue" /etc/issue
+fi
+if [[ -f "${share}/issue.net" ]]; then
+  install -m 0644 "${share}/issue.net" /etc/issue.net
+fi
