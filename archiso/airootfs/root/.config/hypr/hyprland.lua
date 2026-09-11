@@ -55,6 +55,10 @@ hl.config({
         gaps_in     = 6,
         gaps_out    = 12,
         border_size = 4,
+        -- Floating/tiled: grab edges and corners without Super.
+        resize_on_border = true,
+        extend_border_grab_area = 16,
+        hover_icon_on_border = true,
         col = {
             active_border   = { colors = { "rgba(3dd6f5ff)" } },
             inactive_border = "rgba(3a4550ff)",
@@ -187,6 +191,8 @@ end
 
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+-- Extra resize grab if Super is awkward on a VM tablet mouse.
+hl.bind("ALT + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), { locked = true, repeating = true })

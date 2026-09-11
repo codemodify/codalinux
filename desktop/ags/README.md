@@ -42,7 +42,7 @@ style.css               shell theme
 - App sources: `/usr/local/share/codalinux/ags`.
 - Wrapper: `/usr/local/bin/coda-ags` sets `GI_TYPELIB_PATH` / `LD_LIBRARY_PATH` and runs `ags run` (instance name `coda`).
 - Hyprland starts `coda-ags` on `hyprland.start`. Super+Space / Super+D toggles the launcher; Super+, toggles the control center.
-- The bar lists running Hyprland clients (grouped by app class). Click focuses and switches workspace; click again on the focused single window minimizes it to `special:minimized`. Multi-window groups cycle on click.
+- The bar lists each Hyprland window on the **active workspace** (not grouped by class). Click focuses; click again on the focused window minimizes it to `special:minimized`. Right-click: Close, or New instance (`.desktop` Exec via AstalApps, else `hyprctl dispatch exec` of the class).
 - Workspace `+` / `−` and the Tile/Stack control call `/usr/local/bin/coda-hypr-ws` (same helper as Super+N / Super+− / Super+T). **Stack** is floating/overlapping windows on the current workspace (hyprfloat-style float mode via `hyprctl` / Lua dispatchers). Tabbed Hyprland window groups are not used. New windows on a stacked workspace are floated by `coda-hypr-ws apply-new` from `hyprland.lua`.
 - Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize matches the taskbar (`coda-hypr-ws minimize`). Tiled windows hide the bar.
 - The control-center Lock tile runs `coda-hyprlock`. Live hypridle does not lock on idle.
