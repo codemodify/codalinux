@@ -1,6 +1,5 @@
 import { createBinding, For } from "ags"
 import app from "ags/gtk4/app"
-import GLib from "gi://GLib"
 import Bar from "./Bar"
 import Clipboard from "./Clipboard"
 import ControlCenter from "./ControlCenter"
@@ -19,10 +18,7 @@ app.start({
   css: style,
   gtkTheme: "Adwaita",
   instanceName: "coda",
-  requestHandler(request, res) {
-    const [, argv] = GLib.shell_parse_argv(request)
-    if (!argv) return res("argv parse error")
-
+  requestHandler(argv, res) {
     switch (argv[0]) {
       case "toggle":
         return res(toggleNamed(argv[1] ?? ""))
