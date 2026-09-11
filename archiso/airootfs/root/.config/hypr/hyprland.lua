@@ -1,5 +1,6 @@
 -- CodaLinux Hyprland session (Lua / Hyprland 0.55+).
 -- Unified shell is vendored AGS/Astal (coda-ags). Waybar is not used.
+-- Super+T / bar Tile↔Stack = overlapping float (coda-hypr-ws), not tabbed groups.
 -- Docs: https://wiki.hypr.land/Configuring/Start/
 
 local terminal = "foot"
