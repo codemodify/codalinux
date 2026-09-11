@@ -17,6 +17,8 @@ Commands:
   focus ADDRESS    focus a window (restore from special:minimized if needed)
   minimize [ADDR]  hide a window on special:minimized (active if omitted)
   toggle ADDRESS   focus, or minimize when it is already focused
+  shade [up|down|toggle] [ADDR]
+                   KDE-style roll-up: keep the hyprbars titlebar, hide the rest
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from typing import Any
 
 
 MINIMIZED_WS = "special:minimized"
+# Match plugin:hyprbars.bar_height in desktop/hypr/hyprland.lua.
+SHADE_HEIGHT = 28
 HYPRCTL = os.environ.get("CODA_HYPRCTL", "hyprctl")
 STATE_PATH = Path(
     os.environ.get(
@@ -52,7 +56,11 @@ def dispatch_ok(result: subprocess.CompletedProcess[str]) -> bool:
     if result.returncode != 0:
         return False
     text = f"{result.stdout} {result.stderr}".lower()
-    return "invalid" not in text and "error" not in text
+    return (
+        "invalid" not in text
+        and "error" not in text
+        and "unknown dispatcher" not in text
+    )
 
 
 def dispatch(lua_expr: str, legacy: list[str] | None = None) -> None:
@@ -120,20 +128,45 @@ def load_state() -> dict[str, Any]:
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {"modes": {}}
+        return {"modes": {}, "last_ws": {}, "shade": {}}
     if not isinstance(data, dict):
-        return {"modes": {}}
+        return {"modes": {}, "last_ws": {}, "shade": {}}
     modes = data.get("modes")
     if not isinstance(modes, dict):
         data["modes"] = {}
+    if not isinstance(data.get("last_ws"), dict):
+        data["last_ws"] = {}
+    if not isinstance(data.get("shade"), dict):
+        data["shade"] = {}
     return data
+
+
+def save_state(state: dict[str, Any]) -> None:
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(json.dumps(state), encoding="utf-8")
 
 
 def save_mode(workspace_id: int, mode: str) -> None:
     state = load_state()
     state.setdefault("modes", {})[str(workspace_id)] = mode
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state), encoding="utf-8")
+    save_state(state)
+
+
+def remember_last_ws(address: str, workspace_id: int) -> None:
+    if workspace_id <= 0:
+        return
+    state = load_state()
+    state.setdefault("last_ws", {})[norm_addr(address)] = workspace_id
+    save_state(state)
+
+
+def last_regular_ws(address: str) -> int | None:
+    raw = load_state().get("last_ws", {}).get(norm_addr(address))
+    try:
+        wid = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return wid if wid > 0 else None
 
 
 def persisted_mode(workspace_id: int) -> str | None:
@@ -179,6 +212,97 @@ def pick_remove_workspace(
     if lower:
         return max(lower)
     return min(others)
+
+
+def client_xywh(client: dict[str, Any]) -> tuple[int, int, int, int]:
+    at = client.get("at") or [0, 0]
+    size = client.get("size") or [0, 0]
+    try:
+        x = int(at[0] if isinstance(at, list) else 0)
+        y = int(at[1] if isinstance(at, list) else 0)
+        width = int(size[0] if isinstance(size, list) else 0)
+        height = int(size[1] if isinstance(size, list) else 0)
+    except (TypeError, ValueError, IndexError):
+        return 0, 0, 0, 0
+    return x, y, width, height
+
+
+def cursor_pos() -> tuple[int, int] | None:
+    try:
+        data = hypr_json("cursorpos")
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        data = None
+    if isinstance(data, dict):
+        try:
+            return int(data.get("x") or 0), int(data.get("y") or 0)
+        except (TypeError, ValueError):
+            return None
+    result = hypr_run(["cursorpos"])
+    text = (result.stdout or "").strip().replace(" ", "")
+    if "," not in text:
+        return None
+    left, right = text.split(",", 1)
+    try:
+        return int(left), int(right)
+    except ValueError:
+        return None
+
+
+def titlebar_hit(client: dict[str, Any], cx: int, cy: int) -> bool:
+    """True if the pointer is on this float's hyprbars strip (bar_part_of_window)."""
+    if not is_floating(client):
+        return False
+    x, y, width, height = client_xywh(client)
+    if width <= 0 or height <= 0:
+        return False
+    band = max(SHADE_HEIGHT, min(height, SHADE_HEIGHT + 8))
+    return x <= cx <= x + width and y <= cy <= y + band
+
+
+def window_under_titlebar() -> dict[str, Any] | None:
+    pos = cursor_pos()
+    if pos is None:
+        return None
+    cx, cy = pos
+    try:
+        clients = hypr_json("clients")
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        return None
+    hits: list[dict[str, Any]] = []
+    for client in clients:
+        if titlebar_hit(client, cx, cy):
+            hits.append(client)
+    if not hits:
+        return None
+    hits.sort(key=lambda item: int(item.get("focusHistoryID") or 9999))
+    return hits[0]
+
+
+def resolve_client(address: str | None) -> dict[str, Any] | None:
+    clients = hypr_json("clients")
+    if address:
+        found = find_client(clients, address)
+        if found:
+            return found
+    try:
+        focused = hypr_json("activewindow")
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
+        focused = None
+    if isinstance(focused, dict) and focused.get("address"):
+        return focused
+    ranked = sorted(
+        clients,
+        key=lambda item: int(item.get("focusHistoryID") or 9999),
+    )
+    for client in ranked:
+        if not is_special_ws(client.get("workspace")):
+            return client
+    return ranked[0] if ranked else None
+
+
+def client_minimized(address: str) -> bool:
+    found = find_client(hypr_json("clients"), address)
+    return bool(found and is_special_ws(found.get("workspace")))
 
 
 def find_client(clients: list[dict[str, Any]], address: str) -> dict[str, Any] | None:
@@ -423,11 +547,10 @@ def cmd_focus(address: str) -> None:
         raise SystemExit(1)
     sel = win_sel(address)
     if is_special_ws(client.get("workspace")):
-        dest = regular_workspace_id(hypr_json("activeworkspace"), hypr_json("workspaces"))
-        dispatch(
-            f'hl.dsp.window.move({{ workspace = {dest}, follow = true, window = "{sel}" }})',
-            legacy=["movetoworkspace", str(dest) + "," + sel],
+        dest = last_regular_ws(address) or regular_workspace_id(
+            hypr_json("activeworkspace"), hypr_json("workspaces")
         )
+        move_window_workspace(sel, str(dest), follow=True)
         return
     dispatch(
         f'hl.dsp.focus({{ window = "{sel}" }})',
@@ -435,18 +558,155 @@ def cmd_focus(address: str) -> None:
     )
 
 
-def cmd_minimize(address: str | None = None) -> None:
-    if not address:
-        focused = hypr_json("activewindow")
-        address = str((focused or {}).get("address") or "")
-    if not address:
-        print("coda-hypr-ws: no active window to minimize", file=sys.stderr)
-        raise SystemExit(1)
-    sel = win_sel(address)
-    dispatch(
-        f'hl.dsp.window.move({{ workspace = "{MINIMIZED_WS}", window = "{sel}" }})',
-        legacy=["movetoworkspacesilent", f"{MINIMIZED_WS},{sel}"],
+def move_window_workspace(sel: str, dest: str, *, follow: bool) -> None:
+    """Move a window; verify it left, because Lua move can no-op with exit 0."""
+    follow_lua = "true" if follow else "false"
+    dest_num = dest.isdigit()
+    lua = (
+        f'hl.dsp.window.move({{ workspace = {dest}, follow = {follow_lua}, window = "{sel}" }})'
+        if dest_num
+        else f'hl.dsp.window.move({{ workspace = "{dest}", follow = {follow_lua}, window = "{sel}" }})'
     )
+    attempts: list[tuple[str | None, list[str] | None]] = [
+        (lua, ["movetoworkspacesilent" if not follow else "movetoworkspace", f"{dest},{sel}"]),
+        (None, ["movetoworkspace", f"{dest},{sel}"]),
+        (None, ["movetoworkspacesilent", f"{dest},{sel}"]),
+    ]
+    addr = sel
+    for lua_expr, legacy in attempts:
+        if lua_expr:
+            try:
+                dispatch(lua_expr, legacy=legacy)
+            except RuntimeError:
+                if legacy:
+                    hypr_run(["dispatch", *legacy])
+        elif legacy:
+            hypr_run(["dispatch", *legacy])
+        if dest.startswith("special"):
+            if client_minimized(addr):
+                return
+        else:
+            found = find_client(hypr_json("clients"), addr)
+            ws = (found or {}).get("workspace") or {}
+            try:
+                if int(ws.get("id") or 0) == int(dest):
+                    return
+            except (TypeError, ValueError):
+                if found and not is_special_ws(ws):
+                    return
+    if dest.startswith("special") and not client_minimized(addr):
+        raise RuntimeError(f"could not move {sel} to {dest}")
+
+
+def cmd_minimize(address: str | None = None) -> None:
+    client = resolve_client(address)
+    if client is None:
+        print("coda-hypr-ws: no window to minimize", file=sys.stderr)
+        raise SystemExit(1)
+    addr = str(client.get("address") or "")
+    if not addr:
+        print("coda-hypr-ws: no window to minimize", file=sys.stderr)
+        raise SystemExit(1)
+    if is_special_ws(client.get("workspace")):
+        return
+    ws = client.get("workspace") or {}
+    try:
+        remember_last_ws(addr, int(ws.get("id") or 0))
+    except (TypeError, ValueError):
+        pass
+    move_window_workspace(win_sel(addr), MINIMIZED_WS, follow=False)
+
+
+def shade_geom(address: str) -> dict[str, Any] | None:
+    raw = load_state().get("shade", {}).get(norm_addr(address))
+    return raw if isinstance(raw, dict) else None
+
+
+def save_shade_geom(address: str, x: int, y: int, width: int, height: int) -> None:
+    state = load_state()
+    state.setdefault("shade", {})[norm_addr(address)] = {
+        "x": x,
+        "y": y,
+        "w": width,
+        "h": height,
+    }
+    save_state(state)
+
+
+def clear_shade_geom(address: str) -> None:
+    state = load_state()
+    state.setdefault("shade", {}).pop(norm_addr(address), None)
+    save_state(state)
+
+
+def is_shaded(client: dict[str, Any]) -> bool:
+    addr = str(client.get("address") or "")
+    if shade_geom(addr):
+        _x, _y, _w, height = client_xywh(client)
+        return height <= SHADE_HEIGHT + 12
+    _x, _y, _w, height = client_xywh(client)
+    return 0 < height <= SHADE_HEIGHT + 4
+
+
+def apply_shade(client: dict[str, Any], want: str) -> None:
+    """want is 'up' (shade), 'down' (unshade), or 'toggle'."""
+    addr = str(client.get("address") or "")
+    if not addr:
+        return
+    if not is_floating(client):
+        return
+    x, y, width, height = client_xywh(client)
+    shaded = is_shaded(client)
+    if want == "up" and shaded:
+        return
+    if want == "down" and not shaded:
+        return
+    if want == "toggle":
+        want = "down" if shaded else "up"
+    if want == "up":
+        if height > SHADE_HEIGHT + 4:
+            save_shade_geom(addr, x, y, width, height)
+        place_window(addr, x, y, max(width, 120), SHADE_HEIGHT)
+        return
+    saved = shade_geom(addr)
+    if saved:
+        place_window(
+            addr,
+            int(saved.get("x") or x),
+            int(saved.get("y") or y),
+            max(int(saved.get("w") or width), 120),
+            max(int(saved.get("h") or 240), SHADE_HEIGHT + 40),
+        )
+        clear_shade_geom(addr)
+        return
+    place_window(addr, x, y, max(width, 320), max(int(height * 8), 240))
+
+
+def cmd_shade(direction: str | None = None, address: str | None = None) -> None:
+    want = (direction or "toggle").lower()
+    if want in {"shade", "roll", "rollup"}:
+        want = "up"
+    if want in {"unshade", "restore", "rolldown"}:
+        want = "down"
+    if want not in {"up", "down", "toggle"}:
+        print(f"coda-hypr-ws: unknown shade direction {direction}", file=sys.stderr)
+        raise SystemExit(2)
+    client = None
+    if address:
+        client = find_client(hypr_json("clients"), address)
+    elif want in {"up", "down"}:
+        # Pointer binds: only act when the cursor is on a float titlebar.
+        client = window_under_titlebar()
+        if client is None:
+            return
+    else:
+        client = resolve_client(None)
+    if client is None:
+        if address:
+            print(f"coda-hypr-ws: no window {address}", file=sys.stderr)
+            raise SystemExit(1)
+        return
+    apply_shade(client, want)
 
 
 def cmd_toggle(address: str) -> None:
@@ -488,6 +748,14 @@ def self_test() -> None:
     assert len(rects) == 3
     assert rects[0][0] == 0 and rects[1][0] == 36
     assert rects[0][2] < 1000
+    floating = {
+        "floating": True,
+        "at": [100, 200],
+        "size": [400, 300],
+    }
+    assert titlebar_hit(floating, 120, 210)
+    assert not titlebar_hit(floating, 120, 280)
+    assert not titlebar_hit({"floating": False, "at": [100, 200], "size": [400, 300]}, 120, 210)
     print("ok")
 
 
@@ -495,7 +763,7 @@ def usage() -> None:
     print(
         "usage: coda-hypr-ws "
         "[add|switch ID|remove|toggle-stack [on|off]|mode|apply-new|"
-        "focus ADDR|minimize [ADDR]|toggle ADDR]",
+        "focus ADDR|minimize [ADDR]|toggle ADDR|shade [up|down|toggle] [ADDR]]",
         file=sys.stderr,
     )
 
@@ -537,6 +805,26 @@ def main(argv: list[str]) -> int:
                 usage()
                 return 2
             cmd_toggle(argv[1])
+        elif cmd == "shade":
+            rest = argv[1:]
+            direction = "toggle"
+            address = None
+            if rest and rest[0] in {
+                "up",
+                "down",
+                "toggle",
+                "shade",
+                "unshade",
+                "roll",
+                "rollup",
+                "restore",
+                "rolldown",
+            }:
+                direction = rest[0]
+                rest = rest[1:]
+            if rest:
+                address = rest[0]
+            cmd_shade(direction, address)
         else:
             usage()
             return 2

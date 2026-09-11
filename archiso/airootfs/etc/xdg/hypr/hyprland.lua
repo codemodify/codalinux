@@ -152,7 +152,8 @@ if hl.plugin and hl.plugin.hyprbars and hl.plugin.hyprbars.add_button then
         fg_color = "rgb(ffffff)",
         size = 12,
         icon = "-",
-        action = "coda-hypr-ws minimize",
+        -- Absolute path: hyprbars runs action via exec, which may lack PATH.
+        action = "/usr/local/bin/coda-hypr-ws minimize",
     })
 end
 
@@ -193,6 +194,10 @@ hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- Extra resize grab if Super is awkward on a VM tablet mouse.
 hl.bind("ALT + mouse:273", hl.dsp.window.resize(), { mouse = true })
+-- hyprbars has no scroll hook. Non-consuming binds; coda-hypr-ws no-ops
+-- unless the pointer is on a floating titlebar (KDE shade / roll-up).
+hl.bind("mouse_up", hl.dsp.exec_cmd("/usr/local/bin/coda-hypr-ws shade up"), { n = true })
+hl.bind("mouse_down", hl.dsp.exec_cmd("/usr/local/bin/coda-hypr-ws shade down"), { n = true })
 
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), { locked = true, repeating = true })

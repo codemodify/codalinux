@@ -44,7 +44,7 @@ style.css               shell theme
 - Hyprland starts `coda-ags` on `hyprland.start`. Super+Space / Super+D toggles the launcher; Super+, toggles the control center.
 - The bar lists each Hyprland window on the **active workspace** (not grouped by class). Click focuses; click again on the focused window minimizes it to `special:minimized`. Right-click: Close, or New instance (`.desktop` Exec via AstalApps, else `hyprctl dispatch exec` of the class).
 - Workspace `+` / `−` and the Tile/Stack control call `/usr/local/bin/coda-hypr-ws` (same helper as Super+N / Super+− / Super+T). **Stack** is floating/overlapping windows on the current workspace (hyprfloat-style float mode via `hyprctl` / Lua dispatchers). Tabbed Hyprland window groups are not used. New windows on a stacked workspace are floated by `coda-hypr-ws apply-new` from `hyprland.lua`.
-- Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize matches the taskbar (`coda-hypr-ws minimize`). Tiled windows hide the bar.
+- Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize is `/usr/local/bin/coda-hypr-ws minimize` → `special:minimized` (same restore path as the taskbar). Scroll the titlebar to shade / unshade (`coda-hypr-ws shade`). Tiled windows hide the bar.
 - The control-center Lock tile runs `coda-hyprlock`. Live hypridle does not lock on idle.
 
 Control-center tiles launch official apps: `impala` (Wi-Fi / iwd), `blueman-manager` or `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`, plus the input-help text.

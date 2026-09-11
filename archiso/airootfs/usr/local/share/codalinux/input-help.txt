@@ -19,6 +19,7 @@ Modifier: Super (Windows key)
   Super+T          Tile ↔ stack (overlapping float) on this workspace
   Super+Tab        Next window
   Titlebar (float) close / maximize / minimize (hyprbars)
+  Titlebar scroll  shade / unshade (roll-up) on floating windows
   Volume / media   wpctl + playerctl
 
 If the lockscreen app dies (VirtualBox / pixman) Hyprland shows
