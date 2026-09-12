@@ -23,11 +23,28 @@ BOZEMAN = {
     },
 }
 
+DEFAULT_USER = "user"
+DEFAULT_PASSWORD = "1"
+DEFAULT_ROOT_PASSWORD = "1"
+DEFAULT_GROUPS = ["wheel", "video", "audio", "input", "render"]
+ENABLE_SERVICES = [
+    "greetd",
+    "systemd-networkd",
+    "systemd-resolved",
+    "iwd",
+    "bluetooth",
+]
+
 
 def load_config(path: Path) -> dict:
     cfg = json.loads(path.read_text(encoding="utf-8"))
     cfg.update(BOZEMAN)
     cfg["locale_config"] = dict(BOZEMAN["locale_config"])
+    services = list(cfg.get("services") or [])
+    for svc in ENABLE_SERVICES:
+        if svc not in services:
+            services.append(svc)
+    cfg["services"] = services
     return cfg
 
 
@@ -94,45 +111,61 @@ def runtime_config_path() -> Path:
     return Path(f"/tmp/codalinux-archinstall-{os.getuid()}.json")
 
 
-def creds_hint() -> None:
-    print("Silent install still needs archinstall credentials (not stored in git):")
-    print("  CODA_INSTALL_CREDS=/path/to/user_credentials.json")
-    print("  or CODA_INSTALL_USER=name CODA_INSTALL_PASSWORD=…")
-    print("    optional: CODA_INSTALL_ROOT_PASSWORD=…")
+def print_login_banner(user: str, password: str) -> None:
+    print()
+    print("Login after reboot:")
+    print(f"  user: {user}")
+    print(f"  password: {password}")
+    print()
 
 
-def maybe_creds_path() -> Path | None:
+def creds_from_file(path: Path) -> tuple[str, str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_USER, DEFAULT_PASSWORD
+    users = data.get("!users") or data.get("users") or []
+    if users and isinstance(users[0], dict):
+        name = str(users[0].get("username") or DEFAULT_USER)
+        pw = str(users[0].get("!password") or users[0].get("password") or DEFAULT_PASSWORD)
+        return name, pw
+    return DEFAULT_USER, DEFAULT_PASSWORD
+
+
+def resolved_account() -> tuple[str, str, str]:
+    user = os.environ.get("CODA_INSTALL_USER", "").strip() or DEFAULT_USER
+    password = os.environ.get("CODA_INSTALL_PASSWORD", "")
+    if not password:
+        password = DEFAULT_PASSWORD
+    root_pw = os.environ.get("CODA_INSTALL_ROOT_PASSWORD", "") or DEFAULT_ROOT_PASSWORD
+    return user, password, root_pw
+
+
+def maybe_creds_path() -> tuple[Path, str, str]:
+    """Always produce archinstall creds. Default account is user/1."""
     preset = os.environ.get("CODA_INSTALL_CREDS", "").strip()
     if preset:
         path = Path(preset)
         if not path.is_file():
-            print(f"CODA_INSTALL_CREDS={preset} is not a file.")
-            return None
-        return path
-    user = os.environ.get("CODA_INSTALL_USER", "").strip()
-    password = os.environ.get("CODA_INSTALL_PASSWORD", "")
-    root_pw = os.environ.get("CODA_INSTALL_ROOT_PASSWORD", "")
-    if not user and not root_pw:
-        return None
-    if user and not password:
-        print("CODA_INSTALL_USER is set but CODA_INSTALL_PASSWORD is empty.")
-        return None
-    creds: dict[str, Any] = {}
-    if root_pw:
-        creds["!root-password"] = root_pw
-    if user:
-        creds["!users"] = [
+            raise FileNotFoundError(f"CODA_INSTALL_CREDS={preset} is not a file.")
+        user, password = creds_from_file(path)
+        return path, user, password
+    user, password, root_pw = resolved_account()
+    creds: dict[str, Any] = {
+        "!root-password": root_pw,
+        "!users": [
             {
                 "username": user,
                 "!password": password,
                 "sudo": True,
-                "groups": [],
+                "groups": list(DEFAULT_GROUPS),
             }
-        ]
+        ],
+    }
     path = runtime_config_path().with_name(f"codalinux-archinstall-creds-{os.getuid()}.json")
     path.write_text(json.dumps(creds, indent=2) + "\n", encoding="utf-8")
     os.chmod(path, 0o600)
-    return path
+    return path, user, password
 
 
 def archinstall_cmd(
@@ -376,6 +409,35 @@ def suggest_layout_for_install(device: str) -> dict | None:
     return suggest_layout_via_sudo(device)
 
 
+def find_post_script() -> Path | None:
+    here = Path(__file__).resolve()
+    for path in (
+        Path("/usr/local/lib/codalinux/coda-install-post.sh"),
+        here.parent / "coda-install-post.sh",
+        Path("/usr/share/codalinux/install/coda-install-post.sh"),
+    ):
+        if path.is_file():
+            return path
+    return None
+
+
+def run_install(cmd: list[str], user: str) -> int:
+    print(f"Running: {' '.join(cmd)}")
+    rc = subprocess.call(cmd)
+    if rc != 0:
+        return rc
+    post = find_post_script()
+    if post is None:
+        print("coda-install-post.sh missing; installed system will have no Coda desktop.", file=sys.stderr)
+        return rc
+    target = os.environ.get("CODA_INSTALL_TARGET", "/mnt")
+    post_cmd = [str(post), "--user", user, "--target", target]
+    if os.geteuid() != 0:
+        post_cmd = ["sudo", "-E", "--", *post_cmd]
+    print(f"Running: {' '.join(post_cmd)}")
+    return subprocess.call(post_cmd)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) >= 3 and argv[1] == "--emit-layout":
         out_path = None
@@ -402,15 +464,14 @@ def main(argv: list[str]) -> int:
         else:
             print("Disk menu will be shown; locale/timezone/keymap stay Bozeman defaults.")
 
-    creds = maybe_creds_path()
-    if silent and creds is None:
-        creds_hint()
+    creds, login_user, login_password = maybe_creds_path()
+    print_login_banner(login_user, login_password)
+    os.environ.setdefault("CODA_INSTALL_USER", login_user)
 
     runtime.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     os.chmod(runtime, 0o644)
     cmd = archinstall_cmd(runtime, extra, silent, creds)
-    print(f"Running: {' '.join(cmd)}")
-    os.execvp(cmd[0], cmd)
+    return run_install(cmd, login_user)
 
 
 if __name__ == "__main__":

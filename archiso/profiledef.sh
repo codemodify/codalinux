@@ -24,6 +24,7 @@ file_permissions=(
   ["/usr/local/lib/codalinux/coda-live-setup.sh"]="0:0:755"
   ["/usr/local/lib/codalinux/coda-pacman-init.sh"]="0:0:755"
   ["/usr/local/lib/codalinux/coda-install-config.py"]="0:0:755"
+  ["/usr/local/lib/codalinux/coda-install-post.sh"]="0:0:755"
   ["/usr/local/bin/coda-install"]="0:0:755"
   ["/usr/local/bin/coda-hyprland"]="0:0:755"
   ["/usr/local/bin/coda-settings"]="0:0:755"

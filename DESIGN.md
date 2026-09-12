@@ -269,9 +269,9 @@ Live systemd-boot `archiso/efiboot/loader/loader.conf` uses `timeout 1` (editor 
 | Console keymap | `us` | **Not asked** — fixed |
 | Timezone | `America/Denver` (Bozeman, Montana) | **Not asked** — fixed |
 | Live session | greetd autologins user `live` into `/usr/local/bin/coda-hyprland` on tty1; tty2 is a root rescue console | Live ISO |
-| Installed users | Created by archinstall credentials file | Yes |
+| Installed users | `user` / `1` (sudo); root `1` | Env override |
 
-Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; layout is generated as root (`sudo -E python3 … --emit-layout`) because archinstall disk helpers recurse as `live`, then `archinstall --silent`. Credentials stay opt-in (`CODA_INSTALL_CREDS` or `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD`).
+Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; layout is generated as root (`sudo -E python3 … --emit-layout`) because archinstall disk helpers recurse as `live`, then `archinstall --silent`. Default login is **`user` / `1`** (root password `1`), printed before archinstall. After a successful install, `coda-install-post.sh` copies the live desktop onto `/mnt` and enables greetd autologin for `user` (not `live`). Env overrides (`CODA_INSTALL_CREDS`, `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD`) remain for automation.
 
 Live overlay size is **`cow_spacesize=4G`** on the systemd-boot entry (tmpfs limit for `/run/archiso/cowspace`). Stock 256M is too small for `coda-sandbox create` (~500M+ `base`).
 

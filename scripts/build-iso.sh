@@ -116,6 +116,10 @@ prepare_overlay() {
   try_bake_live_keyring "${overlay}/etc/pacman.d/gnupg"
   install -m 0755 "${root}/scripts/coda-install-config.py" \
     "${overlay}/usr/local/lib/codalinux/coda-install-config.py"
+  install -m 0755 "${root}/scripts/coda-install-post.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-post.sh"
+  install -m 0755 "${root}/scripts/coda-install-post.sh" \
+    "${overlay}/usr/share/codalinux/install/coda-install-post.sh"
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"

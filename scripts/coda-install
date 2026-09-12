@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Live-ISO installer entry: Bozeman/Montana locale defaults are fixed.
 # Disk: CODA_INSTALL_DISK=/dev/vda skips the menu and tries a silent layout.
-# Creds (opt-in, never hardcoded): CODA_INSTALL_CREDS=… or
-# CODA_INSTALL_USER + CODA_INSTALL_PASSWORD [+ CODA_INSTALL_ROOT_PASSWORD].
-# Config JSON is written as the invoking user (XDG_RUNTIME_DIR or /tmp).
-# disk_config is generated as root (`sudo -E python3 … --emit-layout`) because
-# archinstall disk helpers recurse as user live. Then exec sudo -E archinstall.
+# Default login is user / 1 (root password 1). Override with CODA_INSTALL_CREDS
+# or CODA_INSTALL_USER + CODA_INSTALL_PASSWORD [+ CODA_INSTALL_ROOT_PASSWORD].
+# After archinstall, coda-install-post.sh copies the live desktop onto /mnt.
 set -euo pipefail
 
 config="${CODA_ARCHINSTALL_CONFIG:-/usr/share/codalinux/install/user_configuration.json}"
@@ -26,6 +24,10 @@ echo "  timezone  America/Denver   (Bozeman, Montana)"
 echo "  locale    en_US.UTF-8"
 echo "  keymap    us"
 echo "  bootloader systemd-boot    root fs ext4    repos official Arch only"
+echo
+echo "Login after reboot:"
+echo "  user: ${CODA_INSTALL_USER:-user}"
+echo "  password: ${CODA_INSTALL_PASSWORD:-1}"
 echo
 
 if [[ -f "${helper}" ]]; then

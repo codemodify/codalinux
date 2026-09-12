@@ -16,7 +16,8 @@
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo**; vendors AGS |
 | `vendor-ags.sh` | Compile pinned AGS/Astal into airootfs `/usr/local` (works unprivileged via a staging sysroot) |
 | `vendor-hyprbars.sh` | Compile pinned hyprbars against official `hyprland` headers into `/usr/local/lib/hyprland` |
-| `coda-install` | Live helper: Bozeman locale defaults; disk is the only prompt; user-writable runtime JSON then `sudo archinstall` |
+| `coda-install` | Live helper: prints `user`/`1`, disk prompt, then archinstall + `coda-install-post.sh` |
+| `coda-install-post.sh` | After archinstall: copy live desktop to `/mnt`, greetd autologin `user` |
 | `coda-pacman-init.sh` | Live keyring oneshot (after graphical; no-ops if already populated) |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
 | `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`); cds to `$HOME`/`/tmp` first |
