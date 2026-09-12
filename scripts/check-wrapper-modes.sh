@@ -52,17 +52,32 @@ for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
   fi
 done
 
-helper_src="${root}/scripts/coda-install-config.py"
-helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/coda-install-config.py"
-if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
-  log_fail "missing executable scripts/coda-install-config.py"
-fi
-if [[ ! -f "${helper_overlay}" || ! -x "${helper_overlay}" ]]; then
-  log_fail "missing executable airootfs coda-install-config.py"
-fi
-if ! grep -qF "[\"/usr/local/lib/codalinux/coda-install-config.py\"]=\"0:0:755\"" \
+for helper_name in coda-install-config.py coda-pacman-init.sh; do
+  helper_src="${root}/scripts/${helper_name}"
+  helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/${helper_name}"
+  if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
+    log_fail "missing executable scripts/${helper_name}"
+  fi
+  if [[ "${helper_name}" == coda-install-config.py ]]; then
+    if [[ ! -f "${helper_overlay}" || ! -x "${helper_overlay}" ]]; then
+      log_fail "missing executable airootfs ${helper_name}"
+    fi
+    if ! grep -qF "[\"/usr/local/lib/codalinux/${helper_name}\"]=\"0:0:755\"" \
+        "${root}/archiso/profiledef.sh"; then
+      log_fail "profiledef.sh missing 755 for ${helper_name}"
+    fi
+  fi
+done
+if ! grep -qF "[\"/usr/local/lib/codalinux/coda-pacman-init.sh\"]=\"0:0:755\"" \
     "${root}/archiso/profiledef.sh"; then
-  log_fail "profiledef.sh missing 755 for coda-install-config.py"
+  log_fail "profiledef.sh missing 755 for coda-pacman-init.sh"
+fi
+if ! grep -qE '^timeout [12]$' "${root}/archiso/efiboot/loader/loader.conf"; then
+  log_fail "archiso/efiboot/loader/loader.conf timeout must be 1 or 2"
+fi
+if grep -qE '^WantedBy=multi-user\.target' \
+    "${root}/archiso/airootfs/etc/systemd/system/pacman-init.service"; then
+  log_fail "pacman-init.service must not WantedBy=multi-user.target (blocks greetd)"
 fi
 
 if ! grep -qx 'swaybg' "${root}/packages/desktop.txt"; then

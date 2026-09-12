@@ -67,6 +67,21 @@ prepare_overlay() {
     "${overlay}/usr/local/lib/codalinux/apply-locale.sh"
   install -m 0755 "${root}/scripts/coda-live-setup.sh" \
     "${overlay}/usr/local/lib/codalinux/coda-live-setup.sh"
+  install -m 0755 "${root}/scripts/coda-pacman-init.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-pacman-init.sh"
+  # Stock tmpfs on /etc/pacman.d/gnupg wiped any baked keyring every boot.
+  rm -f "${overlay}/etc/systemd/system/multi-user.target.wants/pacman-init.service"
+  if command -v pacman-key >/dev/null 2>&1; then
+    local gpgdir="${overlay}/etc/pacman.d/gnupg"
+    mkdir -p "${gpgdir}"
+    if [[ ! -s "${gpgdir}/pubring.kbx" && ! -s "${gpgdir}/pubring.gpg" ]]; then
+      log "build-iso: pre-populating live pacman keyring (pacman-init can no-op)"
+      pacman-key --gpgdir "${gpgdir}" --init
+      pacman-key --gpgdir "${gpgdir}" --populate archlinux
+    fi
+  else
+    log "build-iso: no pacman-key here; live pacman-init will populate after greetd"
+  fi
   install -m 0755 "${root}/scripts/coda-install-config.py" \
     "${overlay}/usr/local/lib/codalinux/coda-install-config.py"
   install -d "${overlay}/usr/local/share/codalinux"

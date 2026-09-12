@@ -1,0 +1,11 @@
+[Unit]
+Description=Initialize pacman keyring after the live desktop is up
+
+[Timer]
+OnBootSec=3s
+AccuracySec=1s
+Persistent=false
+Unit=pacman-init.service
+
+[Install]
+WantedBy=timers.target

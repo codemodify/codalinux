@@ -1,15 +1,15 @@
 [Unit]
 Description=Initializes Pacman keyring
-Requires=etc-pacman.d-gnupg.mount
-After=etc-pacman.d-gnupg.mount time-sync.target
-BindsTo=etc-pacman.d-gnupg.mount
+# Do not Requires/BindsTo etc-pacman.d-gnupg.mount: that tmpfs hid any
+# baked keyring and forced a full populate on every boot.
+After=local-fs.target time-sync.target graphical.target
 Before=archlinux-keyring-wkd-sync.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/bin/pacman-key --init
-ExecStart=/usr/bin/pacman-key --populate
+ExecStart=/usr/local/lib/codalinux/coda-pacman-init.sh
 
 [Install]
-WantedBy=multi-user.target
+# Not WantedBy=multi-user.target — that gates graphical/greetd.
+# Started by pacman-init.timer after the desktop is up.
