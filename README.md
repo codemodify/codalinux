@@ -13,7 +13,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Kernel / initramfs | stock `linux` + mkinitcpio + CPU microcode |
 | Init | systemd |
 | Root filesystem | ext4 |
-| Packages | `pacman` + official Arch repos only (no Coda repo, no default AUR helper) |
+| Packages | Official Arch repos only (no Coda repo, no default AUR helper). Host `pacman` = core OS; extra software = `coda-sandbox` + `bubblewrap` |
 | Network | systemd-networkd + iwd (not NetworkManager; no firewall by default) |
 | Display | Wayland + XWayland default; XLibre (X11) session path supported later |
 | Display manager | greetd (placeholder greeter) |
@@ -21,7 +21,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Delivery | archiso live ISO + archinstall (not Calamares) |
 | Support | GitHub issues |
 
-The authoritative write-up is **[DESIGN.md](DESIGN.md)**. Implementation backlog is **[docs/TODO.md](docs/TODO.md)**.
+The authoritative write-up is **[DESIGN.md](DESIGN.md)** (core vs desktop vs **bubblewrap sandboxes**). Implementation backlog is **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**.
 
 ## Repository layout
 
@@ -32,8 +32,8 @@ install/      archinstall config + custom profile stubs
 desktop/      Hyprland, hypr* companions, AGS/Astal app layout
 branding/     os-release, wallpaper/theme placeholders
 sessions/     Wayland Hyprland session + XLibre path notes
-scripts/      ISO compose/build helpers and NVIDIA hook placeholder
-docs/         Implementation TODOs
+scripts/      ISO compose/build helpers, coda-sandbox, NVIDIA hook placeholder
+docs/         Implementation TODOs + sandbox command reference
 ```
 
 Layout assumptions (airootfs overlay timing, how lists are composed, why AGS is in-tree) are recorded in [DESIGN.md](DESIGN.md#repository-layout-assumptions).
@@ -93,6 +93,19 @@ coda-install
 
 That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). greetd + systemd-networkd + iwd still need the custom profile for a full installed desktop; see [`install/`](install/README.md).
 
+### Extra software (sandboxes)
+
+Do not `pacman -S` experimental apps onto the host. Create a throwaway Arch root and run it with upstream `bwrap`:
+
+```bash
+sudo coda-sandbox create db
+sudo coda-sandbox install db postgresql
+sudo coda-sandbox enter db
+sudo coda-sandbox destroy db --force
+```
+
+See [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop.
+
 ## What this repo does not contain
 
 - A second package repository or binary package pipeline
@@ -100,6 +113,8 @@ That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (
 - Working NVIDIA auto-detection (hook + package list only)
 - Plymouth (explicitly deferred)
 - Calamares
+- A shipping read-only A/B core (documented target only)
+- Docker / Distrobox as a required app runtime
 
 ## Support
 

@@ -1,0 +1,436 @@
+#!/usr/bin/env bash
+# coda-sandbox — disposable Arch roots (pacman --root) run with upstream bwrap.
+# Extra software goes here so host /usr stays a core/OS tree.
+# Requires: Arch/CodaLinux host, pacman, official repos, bubblewrap.
+# create / pacman / destroy need root. See docs/sandbox.md and DESIGN.md.
+set -euo pipefail
+
+DEFAULT_NAME="default"
+STORE_ROOT="${CODA_SANDBOX_STORE:-}"
+CACHE_DIR="${CODA_SANDBOX_CACHE:-}"
+BIND_HOME=1
+FORCE="${CODA_SANDBOX_FORCE:-0}"
+EXTRA_BINDS=()
+
+usage() {
+  cat <<'EOF'
+Usage: coda-sandbox <command> [name] [args…]
+
+Disposable Arch roots for extra packages. Host pacman is for the core OS.
+Sandbox pacman is the default way to add software (e.g. postgresql).
+
+Commands:
+  create [name]              Bootstrap a minimal Arch root (pacstrap or
+                             pacman --root). Default name: default
+  clone <src> <dst>          Copy an existing sandbox tree
+  pacman [name] <args…>      pacman --root <sandbox> --cachedir <shared>
+                             If the first token starts with -, name is default
+  install [name] <pkgs…>     pacman --noconfirm -S into the sandbox
+  enter [name]               bwrap: sandbox is /, then a login shell
+  run [name] <cmd…>          bwrap: sandbox is /, then cmd
+  list                       Show sandboxes
+  destroy [name]             Delete a sandbox (needs --force or confirm)
+  path [name]                Print the sandbox root
+  help                       This text
+
+Options (before or after the command):
+  --force                    destroy without prompt
+  --no-home                  do not bind $HOME into enter/run
+  --bind HOST:GUEST          extra bind (repeatable)
+  --store DIR                sandbox store (default /var/lib/coda/sandboxes)
+  --cache DIR                shared pacman cache
+
+Environment:
+  CODA_SANDBOX_STORE   CODA_SANDBOX_CACHE   CODA_SANDBOX_FORCE=1
+
+Defaults (root):
+  /var/lib/coda/sandboxes/<name>/root
+  /var/cache/coda/pacman
+
+Unprivileged fallback (when those paths are not writable):
+  ~/.local/share/coda/sandboxes/   ~/.cache/coda/pacman/
+
+Host requirements: Arch or CodaLinux, initialized pacman keyring, network
+for the first create, official core/extra, package bubblewrap, and root
+for extract. This script calls upstream bwrap — it does not reimplement it.
+
+Examples:
+  sudo coda-sandbox create db
+  sudo coda-sandbox install db postgresql
+  sudo coda-sandbox enter db
+  sudo coda-sandbox run db postgres --version
+  sudo coda-sandbox destroy db --force
+EOF
+}
+
+log() { printf 'coda-sandbox: %s\n' "$*"; }
+die() { printf 'coda-sandbox: %s\n' "$*" >&2; exit 1; }
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "need $1 on the host (official Arch package)"
+}
+
+valid_name() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
+    die "bad sandbox name '$1' (use letters, digits, . _ -)"
+}
+
+default_store() {
+  if [[ -n "${STORE_ROOT}" ]]; then
+    printf '%s' "${STORE_ROOT}"
+    return
+  fi
+  if [[ -d /var/lib/coda/sandboxes ]] || [[ "${EUID}" -eq 0 ]]; then
+    printf '%s' /var/lib/coda/sandboxes
+    return
+  fi
+  if mkdir -p /var/lib/coda/sandboxes 2>/dev/null; then
+    printf '%s' /var/lib/coda/sandboxes
+    return
+  fi
+  printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/coda/sandboxes"
+}
+
+default_cache() {
+  if [[ -n "${CACHE_DIR}" ]]; then
+    printf '%s' "${CACHE_DIR}"
+    return
+  fi
+  if [[ -d /var/cache/coda/pacman ]] || [[ "${EUID}" -eq 0 ]]; then
+    printf '%s' /var/cache/coda/pacman
+    return
+  fi
+  if mkdir -p /var/cache/coda/pacman 2>/dev/null; then
+    printf '%s' /var/cache/coda/pacman
+    return
+  fi
+  printf '%s' "${XDG_CACHE_HOME:-${HOME}/.cache}/coda/pacman"
+}
+
+need_priv() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    return 0
+  fi
+  die "$1 needs root (pacman --root extracts as uid 0). Retry with sudo."
+}
+
+sandbox_dir() { printf '%s/%s' "$(default_store)" "$1"; }
+sandbox_root() { printf '%s/%s/root' "$(default_store)" "$1"; }
+sandbox_meta() { printf '%s/%s/meta' "$(default_store)" "$1"; }
+
+exists() {
+  [[ -d "$(sandbox_root "$1")" && -f "$(sandbox_meta "$1")" ]]
+}
+
+write_meta() {
+  local name="$1"
+  local dir
+  dir="$(sandbox_dir "${name}")"
+  mkdir -p "${dir}"
+  cat >"$(sandbox_meta "${name}")" <<EOF
+name=${name}
+created=$(date -Iseconds 2>/dev/null || date)
+root=$(sandbox_root "${name}")
+EOF
+}
+
+bootstrap_root() {
+  local root="$1"
+  local cache="$2"
+  mkdir -p "${root}/var/lib/pacman" "${cache}"
+  if [[ -f /etc/pacman.d/mirrorlist ]]; then
+    mkdir -p "${root}/etc/pacman.d"
+    if [[ ! -f "${root}/etc/pacman.d/mirrorlist" ]]; then
+      cp -a /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist"
+    fi
+  fi
+  if [[ -f /etc/resolv.conf ]]; then
+    mkdir -p "${root}/etc"
+    cp -a /etc/resolv.conf "${root}/etc/resolv.conf" 2>/dev/null || \
+      printf 'nameserver 1.1.1.1\n' >"${root}/etc/resolv.conf"
+  fi
+
+  local -a common=(
+    --noconfirm
+    --needed
+    --root "${root}"
+    --cachedir "${cache}"
+  )
+  if [[ -f /etc/pacman.conf ]]; then
+    common+=(--config /etc/pacman.conf)
+  fi
+  if [[ -d /etc/pacman.d/gnupg ]]; then
+    common+=(--gpgdir /etc/pacman.d/gnupg)
+  fi
+
+  if command -v pacstrap >/dev/null 2>&1; then
+    log "bootstrapping ${root} with pacstrap base (host cache ${cache})"
+    # -c host cache, -K init target keyring; use host config/mirrors.
+    pacstrap -C /etc/pacman.conf -c -K "${root}" base
+    return 0
+  fi
+
+  need_cmd pacman
+  log "bootstrapping ${root} with pacman --root base (host cache ${cache})"
+  pacman -Sy "${common[@]}" base
+}
+
+cmd_create() {
+  local name="${1:-${DEFAULT_NAME}}"
+  valid_name "${name}"
+  need_priv "create"
+  need_cmd pacman
+  if exists "${name}"; then
+    die "sandbox '${name}' already exists ($(sandbox_root "${name}"))"
+  fi
+  local root cache
+  root="$(sandbox_root "${name}")"
+  cache="$(default_cache)"
+  mkdir -p "${root}" "${cache}"
+  write_meta "${name}"
+  if ! bootstrap_root "${root}" "${cache}"; then
+    rm -rf "$(sandbox_dir "${name}")"
+    die "bootstrap failed; removed ${name}"
+  fi
+  log "created ${name} at ${root}"
+  log "install software with: coda-sandbox install ${name} <packages>"
+}
+
+cmd_clone() {
+  local src="${1:-}" dst="${2:-}"
+  [[ -n "${src}" && -n "${dst}" ]] || die "usage: coda-sandbox clone <src> <dst>"
+  valid_name "${src}"
+  valid_name "${dst}"
+  need_priv "clone"
+  exists "${src}" || die "no sandbox '${src}'"
+  if exists "${dst}"; then
+    die "sandbox '${dst}' already exists"
+  fi
+  mkdir -p "$(sandbox_dir "${dst}")"
+  cp -a "$(sandbox_root "${src}")" "$(sandbox_root "${dst}")"
+  write_meta "${dst}"
+  log "cloned ${src} → ${dst}"
+}
+
+cmd_pacman() {
+  local name="${DEFAULT_NAME}"
+  if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+    name="$1"
+    shift
+  fi
+  valid_name "${name}"
+  need_priv "pacman"
+  exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox pacman [name] <pacman-args>"
+  need_cmd pacman
+  local root cache
+  root="$(sandbox_root "${name}")"
+  cache="$(default_cache)"
+  mkdir -p "${cache}"
+  local -a args=(
+    --root "${root}"
+    --cachedir "${cache}"
+  )
+  if [[ -f /etc/pacman.conf ]]; then
+    args+=(--config /etc/pacman.conf)
+  fi
+  if [[ -d /etc/pacman.d/gnupg ]]; then
+    args+=(--gpgdir /etc/pacman.d/gnupg)
+  fi
+  pacman "${args[@]}" "$@"
+}
+
+cmd_install() {
+  local name="${DEFAULT_NAME}"
+  # Name only when that sandbox already exists; otherwise args are packages
+  # for "default" (so `install vim git` does not steal "vim" as a name).
+  if [[ $# -ge 2 ]] && exists "$1"; then
+    name="$1"
+    shift
+  fi
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox install [name] <packages…>"
+  cmd_pacman "${name}" --noconfirm --needed -S "$@"
+}
+
+cmd_list() {
+  local store
+  store="$(default_store)"
+  if [[ ! -d "${store}" ]]; then
+    log "no store at ${store}"
+    return 0
+  fi
+  local d name root
+  local found=0
+  for d in "${store}"/*; do
+    [[ -d "${d}" ]] || continue
+    name="$(basename "${d}")"
+    root="${d}/root"
+    if [[ ! -d "${root}" ]]; then
+      continue
+    fi
+    found=1
+    printf '%s\t%s\n' "${name}" "${root}"
+  done
+  if [[ "${found}" -eq 0 ]]; then
+    log "no sandboxes in ${store}"
+  fi
+}
+
+cmd_path() {
+  local name="${1:-${DEFAULT_NAME}}"
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}'"
+  printf '%s\n' "$(sandbox_root "${name}")"
+}
+
+cmd_destroy() {
+  local name="${1:-${DEFAULT_NAME}}"
+  valid_name "${name}"
+  need_priv "destroy"
+  exists "${name}" || die "no sandbox '${name}'"
+  local dir
+  dir="$(sandbox_dir "${name}")"
+  if [[ "${FORCE}" != 1 ]]; then
+    local ans=""
+    read -r -p "coda-sandbox: destroy ${name} (${dir})? [y/N] " ans || true
+    [[ "${ans}" == y || "${ans}" == Y ]] || die "aborted"
+  fi
+  rm -rf "${dir}"
+  log "destroyed ${name}"
+}
+
+bwrap_run() {
+  local name="$1"
+  shift
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}'"
+  need_cmd bwrap
+  local root cache
+  root="$(sandbox_root "${name}")"
+  cache="$(default_cache)"
+  mkdir -p "${root}/tmp" "${root}/run" "${root}/var/cache/pacman/pkg" "${cache}"
+
+  local -a bw=(
+    bwrap
+    --unshare-pid
+    --unshare-uts
+    --hostname "coda-${name}"
+    --die-with-parent
+    --bind "${root}" /
+    --proc /proc
+    --dev /dev
+    --ro-bind /sys /sys
+    --tmpfs /tmp
+    --tmpfs /run
+    --bind "${cache}" /var/cache/pacman/pkg
+  )
+
+  if [[ -f /etc/resolv.conf ]]; then
+    bw+=(--ro-bind /etc/resolv.conf /etc/resolv.conf)
+  fi
+  if [[ -f /etc/hosts ]]; then
+    bw+=(--ro-bind-try /etc/hosts /etc/hosts)
+  fi
+
+  if [[ "${BIND_HOME}" -eq 1 && -n "${HOME:-}" && -d "${HOME}" ]]; then
+    bw+=(--bind "${HOME}" "${HOME}")
+    bw+=(--setenv HOME "${HOME}")
+    if [[ -n "${USER:-}" ]]; then
+      bw+=(--setenv USER "${USER}")
+    fi
+  fi
+
+  local spec host guest
+  for spec in "${EXTRA_BINDS[@]}"; do
+    host="${spec%%:*}"
+    guest="${spec#*:}"
+    [[ -n "${host}" && -n "${guest}" && "${host}" != "${spec}" ]] || \
+      die "bad --bind '${spec}' (want HOST:GUEST)"
+    bw+=(--bind "${host}" "${guest}")
+  done
+
+  if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR}" ]]; then
+    bw+=(--bind-try "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}")
+  fi
+
+  local cwd="/"
+  if [[ "${BIND_HOME}" -eq 1 && -n "${HOME:-}" && -d "${HOME}" ]]; then
+    cwd="${HOME}"
+  fi
+  bw+=(--chdir "${cwd}")
+
+  if [[ $# -eq 0 ]]; then
+    if [[ -x "${root}/bin/bash" ]]; then
+      set -- /bin/bash -l
+    else
+      set -- /bin/sh -l
+    fi
+  fi
+
+  exec "${bw[@]}" "$@"
+}
+
+cmd_enter() {
+  local name="${1:-${DEFAULT_NAME}}"
+  bwrap_run "${name}"
+}
+
+cmd_run() {
+  local name="${DEFAULT_NAME}"
+  if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+    name="$1"
+    shift
+  fi
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox run [name] <cmd…>"
+  bwrap_run "${name}" "$@"
+}
+
+# Parse global flags anywhere before the command dispatch.
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --force) FORCE=1; shift ;;
+    --no-home) BIND_HOME=0; shift ;;
+    --store)
+      [[ $# -ge 2 ]] || die "--store needs a directory"
+      STORE_ROOT="$2"
+      shift 2
+      ;;
+    --cache)
+      [[ $# -ge 2 ]] || die "--cache needs a directory"
+      CACHE_DIR="$2"
+      shift 2
+      ;;
+    --bind)
+      [[ $# -ge 2 ]] || die "--bind needs HOST:GUEST"
+      EXTRA_BINDS+=("$2")
+      shift 2
+      ;;
+    --) shift; ARGS+=("$@"); break ;;
+    *) ARGS+=("$1"); shift ;;
+  esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+cmd="${1:-help}"
+shift || true
+
+case "${cmd}" in
+  help|-h|--help) usage ;;
+  create) cmd_create "${1:-${DEFAULT_NAME}}" ;;
+  clone) cmd_clone "${1:-}" "${2:-}" ;;
+  pacman) cmd_pacman "$@" ;;
+  install) cmd_install "$@" ;;
+  enter) cmd_enter "${1:-${DEFAULT_NAME}}" ;;
+  run) cmd_run "$@" ;;
+  list|ls) cmd_list ;;
+  destroy|rm|remove) cmd_destroy "${1:-${DEFAULT_NAME}}" ;;
+  path) cmd_path "${1:-${DEFAULT_NAME}}" ;;
+  *)
+    usage >&2
+    die "unknown command '${cmd}'"
+    ;;
+esac

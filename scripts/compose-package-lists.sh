@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Compose packages/*.txt into archiso and archinstall consumers.
 # nvidia.txt, optional-cups.txt, and ags-build-deps.txt stay opt-in.
+# sandbox.txt (bubblewrap) is in the default compose.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,10 +22,10 @@ emit() {
 }
 
 emit "${root}/archiso/packages.x86_64" \
-  base.txt hardware.txt network.txt desktop.txt apps.txt live.txt
+  base.txt hardware.txt network.txt desktop.txt apps.txt sandbox.txt live.txt
 
 emit "${root}/install/packages.txt" \
-  base.txt hardware.txt network.txt desktop.txt apps.txt
+  base.txt hardware.txt network.txt desktop.txt apps.txt sandbox.txt
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 not found; wrote text lists only (JSON packages array unchanged)" >&2

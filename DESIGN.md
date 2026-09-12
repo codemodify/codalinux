@@ -2,7 +2,9 @@
 
 This document is the source of truth for locked v1 architecture. Do not contradict it in ISO profiles, installer configs, package lists, or desktop stubs. If a later decision changes the stack, update this file in the same change.
 
-CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence; day-to-day updates come from official Arch repositories via `pacman`.
+CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence.
+
+**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / enter / destroy tool. This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. See [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
 
 ## Locked stack
 
@@ -28,10 +30,15 @@ CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. 
 | Repositories | Official Arch `core` and `extra` only |
 | Coda package repo | **None** — do not add a `[codalinux]` repo to `pacman.conf` |
 | AUR helper | **None by default** — do not ship yay/paru/pamac |
+| Host pacman | **Core / OS only** — kernel, firmware, boot, session stack. Rare after install. |
+| App / extra pacman | **`pacman --root` inside `coda-sandbox`** (default way to add software) |
+| Isolation | Upstream **bubblewrap** (`bwrap`). Do not reimplement it. |
+| Docker / Distrobox | **Not required** for v1. Optional later, alongside bwrap. |
+| Firejail | **Not** the primary sandbox. |
 | Multilib | **Off by default** — enable only if a later decision requires 32-bit NVIDIA userspace |
 | Security | Stock Arch defaults (pacman signature policy, no extra MAC/firewall product) |
 
-Package names that are **not** in official repositories must not appear in default lists. That includes AGS/Astal binaries and XLibre. See [Out-of-repo components](#out-of-repo-components).
+Package names that are **not** in official repositories must not appear in default lists. That includes AGS/Astal binaries and XLibre. See [Out-of-repo components](#out-of-repo-components). `bubblewrap` is official `extra` and lives in [`packages/sandbox.txt`](packages/sandbox.txt).
 
 ### Hardware and graphics
 
@@ -137,6 +144,57 @@ v1 approach:
 2. [`sessions/xlibre/`](sessions/xlibre/README.md) holds the future `.desktop` stub and packaging notes.
 3. Shipping XLibre later requires an explicit packaging decision (source build, optional user-enabled upstream repo, or waiting for official packages). That decision is **not** made here.
 
+## Core, desktop, and sandboxes
+
+Three layers. Do not collapse them back into “install postgres on the host.”
+
+| Layer | What it is | How it is updated | v1 status |
+| --- | --- | --- | --- |
+| **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot | Host pacman, later **gated**; target is read-only **A/B** slots | Documented target. Not implemented. Today’s ISO is still a full desktop image. |
+| **Desktop** | Hyprland + vendored AGS/Astal, greetd, portals, official settings apps | Same image as core for now (do not rip out this PR) | Shipped on live/install. May become a slot or a sandbox later. |
+| **Apps / extras** | Disposable Arch roots (`pacman --root`) run with `bwrap` | `coda-sandbox pacman` / `install` | **This is the default place for `pacman -S postgres` workflows.** |
+
+### Why bubblewrap (not Docker or Firejail)
+
+- **bubblewrap** is a small upstream setuid-optional helper (`extra/bubblewrap`) that sets up user/mount namespaces and bind mounts. Flatpak uses it. License: **LGPL-2.1-or-later**. CodaLinux ships the Arch package; it does not fork or reimplement `bwrap`.
+- **Docker / Podman** need a daemon or a heavier image workflow. They are optional later notes, not v1 requirements. Distrobox is the same class.
+- **Firejail** is a different policy language and is not the Arch-root + `pacman --root` model.
+
+A sandbox is an Arch filesystem tree, not a container image format. Throw it away with `coda-sandbox destroy`. Persist user data (database files, project dirs) with binds under `$HOME` or a data directory so destroy does not take the only copy.
+
+### Folder mapping (target)
+
+```
+Core (future RO A/B slots — not implemented)
+  /usr          OS userland (read-only when A/B lands)
+  /boot         UKI / systemd-boot + kernel
+  /etc          Base OS config (or a small writable overlay)
+
+Data (writable, survives OS slot swaps)
+  /home         Users
+  /var          Logs, caches, sandbox store, shared pacman cache
+  /etc overlay  Host-specific bits if /etc is split later
+
+Sandboxes (disposable roots on the data path)
+  /var/lib/coda/sandboxes/<name>/root     pacman --root tree
+  /var/lib/coda/sandboxes/<name>/meta     coda-sandbox metadata
+  /var/cache/coda/pacman                  Shared package cache
+
+User-unprivileged fallback (when /var/lib/coda is not writable)
+  ${XDG_DATA_HOME:-~/.local/share}/coda/sandboxes/
+  ${XDG_CACHE_HOME:-~/.cache}/coda/pacman/
+```
+
+`create` / `pacman` / `destroy` need enough privilege to extract packages as root (typical: run as root or sudo). `enter` / `run` bind the sandbox as `/` so **host `/usr` is not the sandbox’s `/usr`**.
+
+### Phases
+
+1. **Now (this tree):** `bubblewrap` on the desktop live/install image; `coda-sandbox` wired into `/usr/local/bin`; docs. Desktop stays. Host is still a single mutable ext4 root.
+2. **Installer:** partition or subvolumes for **core vs data**; put sandboxes and `/home` on data.
+3. **Later:** read-only A/B core images, gated OS updates, optional Distrobox or Flatpak **alongside** bwrap — not instead of it.
+
+Do not claim A/B or a core-only ISO exists until those land. Commands: [docs/sandbox.md](docs/sandbox.md).
+
 ## Repository layout assumptions
 
 These are scaffolding choices, not product-stack changes. Prefer this conventional Arch-derivative layout unless a later change replaces it.
@@ -159,6 +217,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 
 - Lists are plain text, one official package per line. `#` comments and blank lines are ignored.
 - [`scripts/compose-package-lists.sh`](scripts/compose-package-lists.sh) concatenates the default sets into `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `install/user_configuration.json`.
+- `packages/sandbox.txt` (`bubblewrap`) is in the default compose (live + install).
 - `packages/nvidia.txt` and `packages/optional-cups.txt` are **not** in the default compose.
 - `packages/ags-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-ags.sh` on the Arch ISO builder).
 - `packages/hyprbars-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-hyprbars.sh`).
@@ -255,7 +314,9 @@ Do not add `bios.syslinux.*`.
 - Calamares
 - A default firewall
 - NetworkManager
+- Docker / Distrobox / Firejail as the required app runtime
+- Claiming a read-only A/B core is already shipping
 
 ## Next steps
 
-See [docs/TODO.md](docs/TODO.md) for the ISO build, archinstall profile, and AGS shell backlog.
+See [docs/TODO.md](docs/TODO.md) for the ISO build, archinstall profile, AGS shell, and sandbox / A/B backlog.

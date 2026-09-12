@@ -122,6 +122,9 @@ pavucontrol
 impala
 snapshot
 
+# --- packages/sandbox.txt ---
+bubblewrap
+
 # --- packages/live.txt ---
 mkinitcpio-archiso
 arch-install-scripts
