@@ -17,7 +17,7 @@ On Arch that runs `mkarchiso` directly. Elsewhere it uses a privileged `archlinu
 | `profiledef.sh` | ISO metadata; UEFI + systemd-boot only |
 | `packages.x86_64` | Generated from `packages/*.txt` — do not hand-edit |
 | `pacman.conf` | Official `core` + `extra` only |
-| `efiboot/` | systemd-boot loader stubs (`timeout 1`) |
+| `efiboot/` | systemd-boot loader stubs (`timeout 1`, `cow_spacesize=4G`) |
 | `airootfs/` | Root overlay: hostname, networkd, iwd, greetd, service wants |
 
 ## Assumptions

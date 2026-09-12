@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 BOZEMAN = {
@@ -91,8 +94,53 @@ def runtime_config_path() -> Path:
     return Path(f"/tmp/codalinux-archinstall-{os.getuid()}.json")
 
 
-def archinstall_cmd(config_path: Path, extra: list[str], silent: bool) -> list[str]:
+def creds_hint() -> None:
+    print("Silent install still needs archinstall credentials (not stored in git):")
+    print("  CODA_INSTALL_CREDS=/path/to/user_credentials.json")
+    print("  or CODA_INSTALL_USER=name CODA_INSTALL_PASSWORD=…")
+    print("    optional: CODA_INSTALL_ROOT_PASSWORD=…")
+
+
+def maybe_creds_path() -> Path | None:
+    preset = os.environ.get("CODA_INSTALL_CREDS", "").strip()
+    if preset:
+        path = Path(preset)
+        if not path.is_file():
+            print(f"CODA_INSTALL_CREDS={preset} is not a file.")
+            return None
+        return path
+    user = os.environ.get("CODA_INSTALL_USER", "").strip()
+    password = os.environ.get("CODA_INSTALL_PASSWORD", "")
+    root_pw = os.environ.get("CODA_INSTALL_ROOT_PASSWORD", "")
+    if not user and not root_pw:
+        return None
+    if user and not password:
+        print("CODA_INSTALL_USER is set but CODA_INSTALL_PASSWORD is empty.")
+        return None
+    creds: dict[str, Any] = {}
+    if root_pw:
+        creds["!root-password"] = root_pw
+    if user:
+        creds["!users"] = [
+            {
+                "username": user,
+                "!password": password,
+                "sudo": True,
+                "groups": [],
+            }
+        ]
+    path = runtime_config_path().with_name(f"codalinux-archinstall-creds-{os.getuid()}.json")
+    path.write_text(json.dumps(creds, indent=2) + "\n", encoding="utf-8")
+    os.chmod(path, 0o600)
+    return path
+
+
+def archinstall_cmd(
+    config_path: Path, extra: list[str], silent: bool, creds: Path | None
+) -> list[str]:
     cmd = ["archinstall", "--config", str(config_path)]
+    if creds is not None:
+        cmd.extend(["--creds", str(creds)])
     if silent:
         cmd.append("--silent")
     cmd.extend(extra)
@@ -101,64 +149,157 @@ def archinstall_cmd(config_path: Path, extra: list[str], silent: bool) -> list[s
     return ["sudo", "-E", "--", *cmd]
 
 
-def suggest_layout(device: str) -> dict | None:
-    """Use archinstall's helper when the installed version exposes it."""
+def _import_device_handler() -> Any | None:
     try:
         from archinstall.lib.disk.device_handler import device_handler
-        from archinstall.lib.disk.filesystem import suggest_single_disk_layout
-    except Exception:
+
+        return device_handler
+    except Exception as current_exc:
         try:
             from archinstall.lib.disk.devicehandler import device_handler  # type: ignore
-            from archinstall.lib.disk.filesystem import suggest_single_disk_layout
-        except Exception as exc:
-            print(f"Could not import archinstall disk helpers ({exc}).")
+
+            return device_handler
+        except Exception:
+            print(f"Could not import archinstall.lib.disk.device_handler ({current_exc}).")
             return None
+
+
+def _import_suggest_layout() -> Any | None:
+    # Current archinstall: async helper in disk_menu. Older: filesystem.
+    try:
+        from archinstall.lib.disk.disk_menu import suggest_single_disk_layout
+
+        return suggest_single_disk_layout
+    except Exception:
+        pass
+    try:
+        from archinstall.lib.disk.filesystem import suggest_single_disk_layout
+
+        return suggest_single_disk_layout
+    except Exception as exc:
+        print(f"Could not import suggest_single_disk_layout ({exc}).")
+        return None
+
+
+def _ext4_type() -> Any:
+    try:
+        from archinstall.lib.models.device import FilesystemType
+
+        return FilesystemType.EXT4
+    except Exception:
+        return "ext4"
+
+
+def _resolve_device(device_handler: Any, device: str) -> Any | None:
+    path = Path(device)
+    for getter in ("get_device", "get_device_by_path"):
+        fn = getattr(device_handler, getter, None)
+        if fn is None:
+            continue
+        for arg in (path, device):
+            try:
+                dev = fn(arg)
+            except Exception:
+                dev = None
+            if dev:
+                return dev
+    for item in getattr(device_handler, "devices", None) or []:
+        info = getattr(item, "device_info", None)
+        raw = None
+        if info is not None:
+            raw = getattr(info, "path", None)
+        raw = raw or getattr(item, "path", None) or getattr(item, "device_path", None)
+        if raw is None:
+            continue
+        if Path(str(raw)) == path or str(raw) == device:
+            return item
+    return None
+
+
+def _call_suggest(fn: Any, dev: Any, fs: Any) -> Any | None:
+    attempts: list[dict[str, Any]] = [
+        {"filesystem_type": fs, "separate_home": False},
+        {"filesystem_type": fs},
+        {},
+    ]
+    last_type_error: Exception | None = None
+    for kwargs in attempts:
+        try:
+            if inspect.iscoroutinefunction(fn):
+                return asyncio.run(fn(dev, **kwargs))
+            return fn(dev, **kwargs)
+        except TypeError as exc:
+            last_type_error = exc
+            continue
+        except Exception as exc:
+            print(f"suggest_single_disk_layout failed: {exc}")
+            return None
+    if last_type_error is not None:
+        print(f"suggest_single_disk_layout failed: {last_type_error}")
+    return None
+
+
+def layout_to_disk_config(layout: Any) -> dict | None:
+    """Normalize DeviceModification or DiskLayoutConfiguration to archinstall JSON."""
+    if isinstance(layout, dict):
+        if layout.get("config_type"):
+            return layout
+        if "device_modifications" in layout:
+            return layout
+        if "device" in layout and "partitions" in layout:
+            return {
+                "config_type": "default_layout",
+                "device_modifications": [layout],
+            }
+        return None
+    for method in ("json", "model_dump"):
+        fn = getattr(layout, method, None)
+        if fn is None:
+            continue
+        try:
+            data = fn()
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            converted = layout_to_disk_config(data)
+            if converted:
+                return converted
+    try:
+        from archinstall.lib.models.device import DiskLayoutConfiguration, DiskLayoutType
+
+        if hasattr(layout, "partitions") and hasattr(layout, "device"):
+            cfg = DiskLayoutConfiguration(
+                config_type=DiskLayoutType.Default,
+                device_modifications=[layout],
+            )
+            return cfg.json()
+    except Exception:
+        pass
+    return None
+
+
+def suggest_layout(device: str) -> dict | None:
+    """Build disk_config via current archinstall helpers (device_handler + disk_menu)."""
+    device_handler = _import_device_handler()
+    suggest_fn = _import_suggest_layout()
+    if device_handler is None or suggest_fn is None:
+        return None
 
     try:
         device_handler.load_devices()
     except Exception:
         pass
-    dev = None
-    for getter in ("get_device", "get_device_by_path"):
-        fn = getattr(device_handler, getter, None)
-        if fn:
-            try:
-                dev = fn(device)
-            except Exception:
-                dev = None
-            if dev:
-                break
-    if dev is None:
-        devices = getattr(device_handler, "devices", None)
-        if devices:
-            for item in devices:
-                path = getattr(item, "path", None) or getattr(item, "device_path", None)
-                if path == device:
-                    dev = item
-                    break
+    dev = _resolve_device(device_handler, device)
     if dev is None:
         print(f"archinstall did not recognize {device}.")
         return None
-    try:
-        layout = suggest_single_disk_layout(dev)
-    except TypeError:
-        try:
-            layout = suggest_single_disk_layout(dev, filesystem_type="ext4")
-        except Exception as exc:
-            print(f"suggest_single_disk_layout failed: {exc}")
-            return None
-    except Exception as exc:
-        print(f"suggest_single_disk_layout failed: {exc}")
+    raw = _call_suggest(suggest_fn, dev, _ext4_type())
+    if raw is None:
         return None
-    for method in ("json", "model_dump"):
-        fn = getattr(layout, method, None)
-        if fn:
-            data = fn()
-            if isinstance(data, dict):
-                return data
-    if isinstance(layout, dict):
-        return layout
-    return None
+    data = layout_to_disk_config(raw)
+    if data is None:
+        print("suggest_single_disk_layout returned an unusable layout.")
+    return data
 
 
 def main(argv: list[str]) -> int:
@@ -181,9 +322,13 @@ def main(argv: list[str]) -> int:
         else:
             print("Disk menu will be shown; locale/timezone/keymap stay Bozeman defaults.")
 
+    creds = maybe_creds_path()
+    if silent and creds is None:
+        creds_hint()
+
     runtime.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     os.chmod(runtime, 0o644)
-    cmd = archinstall_cmd(runtime, extra, silent)
+    cmd = archinstall_cmd(runtime, extra, silent, creds)
     print(f"Running: {' '.join(cmd)}")
     os.execvp(cmd[0], cmd)
 
