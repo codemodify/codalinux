@@ -4,8 +4,13 @@
 set -euo pipefail
 
 # mkarchiso runs this as root in the airootfs; ldconfig -X is OK here.
+# Bake a real /etc/ld.so.cache so live ldconfig.service can skip
+# (ConditionFileNotEmpty=!/etc/ld.so.cache).
 if command -v ldconfig >/dev/null 2>&1; then
   ldconfig -X
+fi
+if [[ ! -s /etc/ld.so.cache ]]; then
+  echo "customize_airootfs: /etc/ld.so.cache missing or empty after ldconfig" >&2
 fi
 
 if [[ -f /etc/locale.gen ]] && grep -q '^#en_US.UTF-8 UTF-8' /etc/locale.gen; then
