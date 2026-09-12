@@ -271,7 +271,7 @@ Live systemd-boot `archiso/efiboot/loader/loader.conf` uses `timeout 1` (editor 
 | Live session | greetd autologins user `live` into `/usr/local/bin/coda-hyprland` on tty1; tty2 is a root rescue console | Live ISO |
 | Installed users | Created by archinstall credentials file | Yes |
 
-Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; a successful `device_handler` + `suggest_single_disk_layout` path launches `archinstall --silent`. Credentials stay opt-in (`CODA_INSTALL_CREDS` or `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD`).
+Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; layout is generated as root (`sudo -E python3 … --emit-layout`) because archinstall disk helpers recurse as `live`, then `archinstall --silent`. Credentials stay opt-in (`CODA_INSTALL_CREDS` or `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD`).
 
 Live overlay size is **`cow_spacesize=4G`** on the systemd-boot entry (tmpfs limit for `/run/archiso/cowspace`). Stock 256M is too small for `coda-sandbox create` (~500M+ `base`).
 

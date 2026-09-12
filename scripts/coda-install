@@ -4,7 +4,8 @@
 # Creds (opt-in, never hardcoded): CODA_INSTALL_CREDS=… or
 # CODA_INSTALL_USER + CODA_INSTALL_PASSWORD [+ CODA_INSTALL_ROOT_PASSWORD].
 # Config JSON is written as the invoking user (XDG_RUNTIME_DIR or /tmp).
-# archinstall needs root, so the helper execs sudo -E when EUID != 0.
+# disk_config is generated as root (`sudo -E python3 … --emit-layout`) because
+# archinstall disk helpers recurse as user live. Then exec sudo -E archinstall.
 set -euo pipefail
 
 config="${CODA_ARCHINSTALL_CONFIG:-/usr/share/codalinux/install/user_configuration.json}"
