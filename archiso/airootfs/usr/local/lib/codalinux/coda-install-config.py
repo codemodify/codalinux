@@ -75,6 +75,32 @@ def pick_disk() -> str | None:
     return raw
 
 
+def runtime_config_path() -> Path:
+    """User-writable archinstall JSON. /run is root-only on the live ISO."""
+    override = os.environ.get("CODA_ARCHINSTALL_RUNTIME", "").strip()
+    if override:
+        return Path(override)
+    xdg = os.environ.get("XDG_RUNTIME_DIR", "").strip()
+    if xdg:
+        runtime_dir = Path(xdg)
+        try:
+            if runtime_dir.is_dir() and os.access(runtime_dir, os.W_OK):
+                return runtime_dir / "codalinux-archinstall.json"
+        except OSError:
+            pass
+    return Path(f"/tmp/codalinux-archinstall-{os.getuid()}.json")
+
+
+def archinstall_cmd(config_path: Path, extra: list[str], silent: bool) -> list[str]:
+    cmd = ["archinstall", "--config", str(config_path)]
+    if silent:
+        cmd.append("--silent")
+    cmd.extend(extra)
+    if os.geteuid() == 0:
+        return cmd
+    return ["sudo", "-E", "--", *cmd]
+
+
 def suggest_layout(device: str) -> dict | None:
     """Use archinstall's helper when the installed version exposes it."""
     try:
@@ -141,7 +167,8 @@ def main(argv: list[str]) -> int:
     )
     extra = argv[2:]
     cfg = load_config(src)
-    runtime = Path("/run/codalinux-archinstall.json")
+    runtime = runtime_config_path()
+    runtime.parent.mkdir(parents=True, exist_ok=True)
 
     disk = pick_disk()
     silent = False
@@ -155,10 +182,8 @@ def main(argv: list[str]) -> int:
             print("Disk menu will be shown; locale/timezone/keymap stay Bozeman defaults.")
 
     runtime.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-    cmd = ["archinstall", "--config", str(runtime)]
-    if silent:
-        cmd.append("--silent")
-    cmd.extend(extra)
+    os.chmod(runtime, 0o644)
+    cmd = archinstall_cmd(runtime, extra, silent)
     print(f"Running: {' '.join(cmd)}")
     os.execvp(cmd[0], cmd)
 

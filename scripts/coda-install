@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Live-ISO installer entry: Bozeman/Montana locale defaults are fixed.
 # Only disk layout (and credentials archinstall still requires) are interactive.
+# Config JSON is written as the invoking user (XDG_RUNTIME_DIR or /tmp).
+# archinstall needs root, so the helper execs sudo -E when EUID != 0.
 set -euo pipefail
 
 config="${CODA_ARCHINSTALL_CONFIG:-/usr/share/codalinux/install/user_configuration.json}"
@@ -28,4 +30,9 @@ if [[ -f "${helper}" ]]; then
 fi
 
 echo "Helper missing; launching archinstall with preseeded config."
-exec archinstall --config "${config}" "$@"
+# archinstall must run as root (partitions / pacstrap). Config generation
+# above is user-writable; this fallback only execs the installer.
+if [[ "${EUID}" -eq 0 ]]; then
+  exec archinstall --config "${config}" "$@"
+fi
+exec sudo -E -- archinstall --config "${config}" "$@"

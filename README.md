@@ -93,7 +93,7 @@ From a CodaLinux (or Arch) live environment, once the profile is wired up:
 coda-install
 ```
 
-That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). greetd + systemd-networkd + iwd still need the custom profile for a full installed desktop; see [`install/`](install/README.md).
+That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). It writes the runtime JSON under `$XDG_RUNTIME_DIR` or `/tmp` (override `CODA_ARCHINSTALL_RUNTIME`), then `exec sudo -E archinstall --config …` because archinstall must run as root. greetd + systemd-networkd + iwd still need the custom profile for a full installed desktop; see [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 
