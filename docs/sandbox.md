@@ -20,7 +20,7 @@ coda-sandbox path dev
 
 | Command | What it does |
 | --- | --- |
-| `create [name]` | Bootstrap `base` with `pacman --root` in a user namespace |
+| `create [name]` | Bootstrap `base` + `iptables` (`--noconfirm --needed`) in a user namespace |
 | `clone src dst` | Copy an existing sandbox |
 | `pacman [name] …` | Pass-through `pacman --root` (also via user namespace) |
 | `install [name] pkgs…` | `pacman --noconfirm -S`. Name is used only if that sandbox already exists |
@@ -47,7 +47,11 @@ Documented path: **`~/.coda/sandbox/<name>`** (singular `sandbox`). The name dir
 
 Not `/var/coda/sandbox`, not `/var/lib/coda/…`, and not XDG `~/.local/share/…` as the primary path. `~/.coda` is created on first use (`0700`). The pacman cache is **shared across this user’s named roots** (one download of `base`, many installs into one or more names). Override with `--store` / `--cache` or `CODA_SANDBOX_STORE` / `CODA_SANDBOX_CACHE`.
 
-`enter` / `run` bind the sandbox as `/`, plus `/proc`, `/dev`, read-only `/sys`, host `resolv.conf`, `~/.coda/cache/pacman` at `/var/cache/pacman/pkg` inside the sandbox, and `$HOME` by default.
+`enter` / `run` bind the sandbox as `/`, plus `/proc`, `/dev`, read-only `/sys` (try), host `resolv.conf`, `~/.coda/cache/pacman` at `/var/cache/pacman/pkg` inside the sandbox, and `$HOME` by default. Sandbox `/etc/resolv.conf` is written as a **regular file** (never a systemd symlink into `/run`); otherwise `bwrap --ro-bind` fails after `--tmpfs /run`.
+
+`destroy` does `chmod -R u+w` then `rm -rf` (userns root if needed) so mode `555` trees like `etc/ca-certificates/extracted/cadir` go away without sudo.
+
+`create` is unattended: generated `pacman.conf` has `NoConfirm`, CLI passes `--noconfirm --needed`, and bootstrap installs `base iptables` so `libxtables.so` does not ask iptables vs iptables-legacy.
 
 ## How user-namespace pacman works
 
