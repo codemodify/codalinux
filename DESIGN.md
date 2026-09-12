@@ -1,10 +1,12 @@
 # CodaLinux v1 design decisions
 
-This document is the source of truth for locked v1 architecture. Do not contradict it in ISO profiles, installer configs, package lists, or desktop stubs. If a later decision changes the stack, update this file in the same change.
+This document is the **decision log** for locked v1 choices. Do not contradict it in ISO profiles, installer configs, package lists, or desktop stubs. If a later decision changes the stack, update this file in the same change.
+
+The canonical **system picture** (partitions → layers → `/` folders → sandboxes → update model, with **Target** vs **Current tree**) is [architecture.md](architecture.md). Do not claim A/B slots or a core-only ISO work until they are built.
 
 CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence.
 
-**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / enter / destroy tool. **One named sandbox is one Arch root that holds many packages** (e.g. `dev` with `postgresql`, `redis`, `git`) — not one sandbox per app. Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. See [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
+**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / enter / destroy tool. **One named sandbox is one Arch root that holds many packages** (e.g. `dev` with `postgresql`, `redis`, `git`) — not one sandbox per app. Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. Picture: [architecture.md](architecture.md). Decisions below: [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
 
 ## Locked stack
 
@@ -190,7 +192,7 @@ Default store is **`~/.coda/sandbox`** (singular), not `/var/coda/…` and not X
 2. **Installer:** partition or subvolumes for **core vs data**; put `~/.coda/sandbox` and `/home` on data.
 3. **Later:** read-only A/B core images, gated OS updates, optional Distrobox or Flatpak **alongside** bwrap — not instead of it.
 
-Do not claim A/B or a core-only ISO exists until those land. Commands: [docs/sandbox.md](docs/sandbox.md).
+Do not claim A/B or a core-only ISO exists until those land. Picture: [architecture.md](architecture.md). Commands: [docs/sandbox.md](docs/sandbox.md).
 
 ## Repository layout assumptions
 
@@ -200,6 +202,8 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 
 | Path | Role |
 | --- | --- |
+| `architecture.md` | System picture (target vs current) |
+| `DESIGN.md` | This decision log |
 | `packages/` | Editable source of truth for package names |
 | `archiso/` | One archiso **profile** (not a copy of the `archiso` tool) |
 | `install/` | archinstall JSON + custom profile stubs |
@@ -316,4 +320,4 @@ Do not add `bios.syslinux.*`.
 
 ## Next steps
 
-See [docs/TODO.md](docs/TODO.md) for the ISO build, archinstall profile, AGS shell, and sandbox / A/B backlog.
+See [architecture.md](architecture.md) for the system picture and [docs/TODO.md](docs/TODO.md) for the ISO build, archinstall profile, AGS shell, and sandbox / A/B backlog.

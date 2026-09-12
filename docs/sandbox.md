@@ -2,7 +2,7 @@
 
 Day-to-day packages go in a **user-owned disposable Arch root**, not on the host. The helper is [`scripts/coda-sandbox`](../scripts/coda-sandbox). Isolation is **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, **LGPL-2.1-or-later**). CodaLinux does not reimplement bwrap and does not require Docker, Distrobox, or **sudo**.
 
-Product rules live in [DESIGN.md](../DESIGN.md#core-desktop-and-sandboxes).
+System picture: [architecture.md](../architecture.md). Locked choices: [DESIGN.md](../DESIGN.md#core-desktop-and-sandboxes).
 
 ## Commands
 
