@@ -210,6 +210,7 @@ SigLevel = ${siglevel}
 LocalFileSigLevel = Optional
 DownloadUser = root
 DisableSandbox
+NoConfirm
 
 [core]
 Include = ${mirror}
@@ -246,6 +247,33 @@ pacman_in_root() {
   as_userns_root pacman "${args[@]}" "$@"
 }
 
+# Write a regular file (never a systemd symlink). bwrap cannot bind over
+# /etc/resolv.conf when it points at /run/... and we mount a tmpfs on /run.
+materialize_resolv_conf() {
+  local root="$1"
+  local dest="${root}/etc/resolv.conf"
+  mkdir -p "${root}/etc"
+  if [[ -L "${dest}" ]]; then
+    rm -f "${dest}"
+  fi
+  if [[ -e /etc/resolv.conf ]]; then
+    cat /etc/resolv.conf >"${dest}" 2>/dev/null || \
+      printf 'nameserver 1.1.1.1\n' >"${dest}"
+  else
+    printf 'nameserver 1.1.1.1\n' >"${dest}"
+  fi
+}
+
+# User-owned trees still have 555 dirs (e.g. ca-certificates cadir).
+# chmod as the owner, then rm; userns root if that is not enough.
+remove_tree() {
+  local dir="$1"
+  [[ -e "${dir}" ]] || return 0
+  chmod -R u+w "${dir}" 2>/dev/null || true
+  rm -rf "${dir}" 2>/dev/null && return 0
+  as_userns_root /bin/bash -c 'chmod -R u+w -- "$1" && rm -rf -- "$1"' bash "${dir}"
+}
+
 bootstrap_root() {
   local root="$1"
   mkdir -p "${root}/var/lib/pacman" "${root}/etc/pacman.d"
@@ -253,13 +281,11 @@ bootstrap_root() {
     cp -a /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist" 2>/dev/null || \
       cp /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist"
   fi
-  if [[ -f /etc/resolv.conf ]]; then
-    mkdir -p "${root}/etc"
-    cp -a /etc/resolv.conf "${root}/etc/resolv.conf" 2>/dev/null || \
-      printf 'nameserver 1.1.1.1\n' >"${root}/etc/resolv.conf"
-  fi
-  log "bootstrapping ${root} with pacman --root base (user namespace, cache $(default_cache))"
-  pacman_in_root "${root}" -Sy base
+  materialize_resolv_conf "${root}"
+  # Pin iptables so libxtables.so does not ask iptables vs iptables-legacy.
+  # --noconfirm is also in pacman_in_root and NoConfirm in the generated conf.
+  log "bootstrapping ${root} with pacman --root base iptables (user namespace, cache $(default_cache))"
+  pacman_in_root "${root}" -Sy --noconfirm --needed base iptables
 }
 
 cmd_create() {
@@ -275,7 +301,7 @@ cmd_create() {
   mkdir -p "${root}"
   write_meta "${name}"
   if ! bootstrap_root "${root}"; then
-    rm -rf "$(sandbox_dir "${name}")"
+    remove_tree "$(sandbox_dir "${name}")"
     die "bootstrap failed; removed ${name}"
   fi
   log "created ${name} at ${root}"
@@ -365,7 +391,10 @@ cmd_destroy() {
     read -r -p "coda-sandbox: destroy ${name} (${dir})? [y/N] " ans || true
     [[ "${ans}" == y || "${ans}" == Y ]] || die "aborted"
   fi
-  rm -rf "${dir}"
+  remove_tree "${dir}"
+  if [[ -e "${dir}" ]]; then
+    die "could not remove ${dir} (555 dirs?). No sudo — check user namespaces."
+  fi
   log "destroyed ${name}"
 }
 
@@ -375,10 +404,11 @@ bwrap_run() {
   valid_name "${name}"
   exists "${name}" || die "no sandbox '${name}'"
   need_cmd bwrap
-  local root cache
+  local root cache host_resolv
   root="$(sandbox_root "${name}")"
   cache="$(default_cache)"
   mkdir -p "${root}/tmp" "${root}/run" "${root}/var/cache/pacman/pkg" "${cache}"
+  materialize_resolv_conf "${root}"
 
   local -a bw=(
     bwrap
@@ -389,14 +419,19 @@ bwrap_run() {
     --bind "${root}" /
     --proc /proc
     --dev /dev
-    --ro-bind /sys /sys
+    --ro-bind-try /sys /sys
     --tmpfs /tmp
     --tmpfs /run
     --bind "${cache}" /var/cache/pacman/pkg
+    --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   )
 
-  if [[ -f /etc/resolv.conf ]]; then
-    bw+=(--ro-bind /etc/resolv.conf /etc/resolv.conf)
+  host_resolv="/etc/resolv.conf"
+  if [[ -L "${host_resolv}" ]]; then
+    host_resolv="$(readlink -f /etc/resolv.conf || true)"
+  fi
+  if [[ -n "${host_resolv}" && -f "${host_resolv}" ]]; then
+    bw+=(--ro-bind-try "${host_resolv}" /etc/resolv.conf)
   fi
   if [[ -f /etc/hosts ]]; then
     bw+=(--ro-bind-try /etc/hosts /etc/hosts)
