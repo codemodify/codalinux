@@ -4,7 +4,7 @@ This document is the source of truth for locked v1 architecture. Do not contradi
 
 CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence.
 
-**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / enter / destroy tool. This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. See [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
+**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / enter / destroy tool. **One named sandbox is one Arch root that holds many packages** (e.g. `dev` with `postgresql`, `redis`, `git`) — not one sandbox per app. Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. See [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
 
 ## Locked stack
 
@@ -31,7 +31,7 @@ CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. 
 | Coda package repo | **None** — do not add a `[codalinux]` repo to `pacman.conf` |
 | AUR helper | **None by default** — do not ship yay/paru/pamac |
 | Host pacman | **Core / OS only** — kernel, firmware, boot, session stack. Rare after install. |
-| App / extra pacman | **`pacman --root` inside `coda-sandbox`** (default way to add software) |
+| App / extra pacman | **`pacman --root` inside `coda-sandbox`** (one named root, many packages) |
 | Isolation | Upstream **bubblewrap** (`bwrap`). Do not reimplement it. |
 | Docker / Distrobox | **Not required** for v1. Optional later, alongside bwrap. |
 | Firejail | **Not** the primary sandbox. |
@@ -152,7 +152,7 @@ Three layers. Do not collapse them back into “install postgres on the host.”
 | --- | --- | --- | --- |
 | **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot | Host pacman, later **gated**; target is read-only **A/B** slots | Documented target. Not implemented. Today’s ISO is still a full desktop image. |
 | **Desktop** | Hyprland + vendored AGS/Astal, greetd, portals, official settings apps | Same image as core for now (do not rip out this PR) | Shipped on live/install. May become a slot or a sandbox later. |
-| **Apps / extras** | Disposable Arch roots (`pacman --root`) run with `bwrap` | `coda-sandbox pacman` / `install` | **This is the default place for `pacman -S postgres` workflows.** |
+| **Apps / extras** | Disposable Arch roots (`pacman --root`) run with `bwrap` | `coda-sandbox pacman` / `install` (repeatable into the same name) | **Default place for extra software.** One name = many packages. |
 
 ### Why bubblewrap (not Docker or Firejail)
 
@@ -160,7 +160,7 @@ Three layers. Do not collapse them back into “install postgres on the host.”
 - **Docker / Podman** need a daemon or a heavier image workflow. They are optional later notes, not v1 requirements. Distrobox is the same class.
 - **Firejail** is a different policy language and is not the Arch-root + `pacman --root` model.
 
-A sandbox is an Arch filesystem tree, not a container image format. Throw it away with `coda-sandbox destroy`. Persist user data (database files, project dirs) with binds under `$HOME` or a data directory so destroy does not take the only copy.
+A named sandbox is **one Arch root**, not one app. Create `dev` once, then `coda-sandbox install dev postgresql`, `coda-sandbox install dev redis git`, and so on. Do not assume a 1:1 app↔sandbox mapping. The tree is not a container image format. Throw it away with `coda-sandbox destroy`. Persist user data (database files, project dirs) with binds under `$HOME` or a data directory so destroy does not take the only copy.
 
 ### Folder mapping (target)
 
@@ -171,26 +171,23 @@ Core (future RO A/B slots — not implemented)
   /etc          Base OS config (or a small writable overlay)
 
 Data (writable, survives OS slot swaps)
-  /home         Users
-  /var          Logs, caches, sandbox store, shared pacman cache
+  /home         Users (includes ~/.coda/sandbox)
+  /var          Logs and host caches
   /etc overlay  Host-specific bits if /etc is split later
 
-Sandboxes (disposable roots on the data path)
-  /var/lib/coda/sandboxes/<name>/root     pacman --root tree
-  /var/lib/coda/sandboxes/<name>/meta     coda-sandbox metadata
-  /var/cache/coda/pacman                  Shared package cache
-
-User-unprivileged fallback (when /var/lib/coda is not writable)
-  ${XDG_DATA_HOME:-~/.local/share}/coda/sandboxes/
-  ${XDG_CACHE_HOME:-~/.cache}/coda/pacman/
+Sandboxes (user-owned under $HOME, no sudo)
+  ~/.coda/sandbox/<name>/           sandbox directory (documented path)
+  ~/.coda/sandbox/<name>/root       pacman --root tree
+  ~/.coda/sandbox/<name>/meta
+  ~/.coda/cache/pacman              shared cache for this user
 ```
 
-`create` / `pacman` / `destroy` need enough privilege to extract packages as root (typical: run as root or sudo). `enter` / `run` bind the sandbox as `/` so **host `/usr` is not the sandbox’s `/usr`**.
+Default store is **`~/.coda/sandbox`** (singular), not `/var/coda/…` and not XDG `~/.local/share/…`. The cache is shared across this user’s named roots (one download of `base`, many installs). `coda-sandbox` never needs sudo. `pacman --root` runs inside `unshare --map-root-user` so extract sees uid 0 while files on disk stay owned by the real user. `enter` / `run` are unprivileged `bwrap` and bind the sandbox as `/` so **host `/usr` is not the sandbox’s `/usr`**. Override with `--store` / `CODA_SANDBOX_STORE`.
 
 ### Phases
 
 1. **Now (this tree):** `bubblewrap` on the desktop live/install image; `coda-sandbox` wired into `/usr/local/bin`; docs. Desktop stays. Host is still a single mutable ext4 root.
-2. **Installer:** partition or subvolumes for **core vs data**; put sandboxes and `/home` on data.
+2. **Installer:** partition or subvolumes for **core vs data**; put `~/.coda/sandbox` and `/home` on data.
 3. **Later:** read-only A/B core images, gated OS updates, optional Distrobox or Flatpak **alongside** bwrap — not instead of it.
 
 Do not claim A/B or a core-only ISO exists until those land. Commands: [docs/sandbox.md](docs/sandbox.md).

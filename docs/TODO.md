@@ -59,10 +59,10 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the live/install image.
 
-- [ ] Installer disk layout: **core** vs **data** (home, `/var`, `/var/lib/coda/sandboxes`, shared pacman cache). Single ext4 `/` is still the v1 default until this lands.
+- [ ] Installer disk layout: **core** vs **data** (`/home` includes `~/.coda/sandbox`). Single ext4 `/` is still the v1 default until this lands.
 - [ ] Read-only **A/B** core slots and gated host `pacman` / OS updates. Documented in DESIGN.md; **not implemented**.
 - [ ] Optional Distrobox / Podman **alongside** `coda-sandbox`, not as a replacement.
 - [ ] Flatpak alongside bwrap (still official-repo / documented policy only).
 - [ ] GUI entry from the AGS Settings hub (list / enter / destroy).
-- [ ] Unprivileged user-namespace create (today `pacman --root` extract needs root).
-- [ ] Confirm `coda-sandbox create` on a live ISO with network (pacstrap `base`).
+- [x] User-owned create/install/destroy via `unshare --map-root-user` (no sudo). Store: `~/.coda/sandbox/<name>` (one name = many packages).
+- [ ] Confirm `coda-sandbox create` on a live ISO with network (`pacman --root base` in a user namespace).

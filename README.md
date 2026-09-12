@@ -98,11 +98,14 @@ That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (
 Do not `pacman -S` experimental apps onto the host. Create a throwaway Arch root and run it with upstream `bwrap`:
 
 ```bash
-sudo coda-sandbox create db
-sudo coda-sandbox install db postgresql
-sudo coda-sandbox enter db
-sudo coda-sandbox destroy db --force
+coda-sandbox create dev
+coda-sandbox install dev postgresql
+coda-sandbox install dev redis git
+coda-sandbox enter dev
+coda-sandbox destroy dev --force
 ```
+
+Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`.
 
 See [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop.
 
