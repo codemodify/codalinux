@@ -23,6 +23,7 @@ On Arch that runs `mkarchiso` directly. Elsewhere it uses a privileged `archlinu
 ## Assumptions
 
 - Overlay files are copied **before** pacman installs packages. `os-release` is re-applied by the hook in `branding/hooks/`.
+- `root/customize_airootfs.sh` bakes `ldconfig` + `en_US.UTF-8` when mkarchiso still runs that hook. `ldconfig.service.d/coda.conf` keeps live sysinit from rebuilding the linker cache.
 - No BIOS/syslinux tree on purpose (UEFI-only).
 - No `syslinux/` or `grub/` directories.
 - `mkinitcpio` and `mkinitcpio-archiso` come from `packages/live.txt`.

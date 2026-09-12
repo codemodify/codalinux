@@ -139,6 +139,6 @@ Do not rebuild the ISO just to read this document. The desktop image already inc
 2. **Sandbox helper** (on a live/Arch session with network): the commands in [Sandboxes](#sandboxes-implemented). First `create` bootstraps `base` and needs `pacman` on the host. This is **not** an A/B disk test.
 3. **ISO smoke**: `./scripts/qemu-boot-test.sh` after `./scripts/build-iso.sh`. Confirms the mutable desktop live image, not OS-A/OS-B.
 
-Live boot: systemd-boot `timeout 1`. `pacman-init` is **off the greeter critical path** (timer after `graphical.target`, not `WantedBy=multi-user.target`). Keyring still populates in the background; ISO build pre-populates it when `pacman-key` is available. See [DESIGN.md](DESIGN.md#service-enablement).
+Live boot: systemd-boot `timeout 1`. `pacman-init` is **off the greeter critical path** (timer after `graphical.target`, not `WantedBy=multi-user.target`). `ldconfig.service` must not rebuild the linker cache on every live boot: squashfs already has `/etc/ld.so.cache`; a drop-in clears `ConditionNeedsUpdate=/etc` (that OR is what cost ~32s on QEMU). See [DESIGN.md](DESIGN.md#service-enablement).
 
 A/B partition layouts, RO core mounts, and gated host pacman are **future work** ([docs/TODO.md](docs/TODO.md) §5).

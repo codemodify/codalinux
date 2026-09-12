@@ -18,6 +18,7 @@ airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86,arm64' '-b' '1M' '-Xdict-
 file_permissions=(
   ["/root"]="0:0:750"
   ["/root/.bash_profile"]="0:0:644"
+  ["/root/customize_airootfs.sh"]="0:0:755"
   ["/usr/local/lib/codalinux/apply-os-release.sh"]="0:0:755"
   ["/usr/local/lib/codalinux/apply-locale.sh"]="0:0:755"
   ["/usr/local/lib/codalinux/coda-live-setup.sh"]="0:0:755"

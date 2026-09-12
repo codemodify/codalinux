@@ -75,6 +75,22 @@ fi
 if ! grep -qE '^timeout [12]$' "${root}/archiso/efiboot/loader/loader.conf"; then
   log_fail "archiso/efiboot/loader/loader.conf timeout must be 1 or 2"
 fi
+if [[ ! -f "${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf" ]]; then
+  log_fail "missing ldconfig.service.d/coda.conf (ConditionNeedsUpdate reset)"
+fi
+if ! grep -qE '^ConditionNeedsUpdate=$' \
+    "${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf"; then
+  log_fail "ldconfig.service.d/coda.conf must reset ConditionNeedsUpdate="
+fi
+cust="${root}/archiso/airootfs/root/customize_airootfs.sh"
+if [[ ! -f "${cust}" || ! -x "${cust}" ]]; then
+  log_fail "missing executable root/customize_airootfs.sh"
+fi
+if ! grep -qF "[\"/root/customize_airootfs.sh\"]=\"0:0:755\"" \
+    "${root}/archiso/profiledef.sh"; then
+  log_fail "profiledef.sh missing 755 for customize_airootfs.sh"
+fi
+
 if grep -qE '^WantedBy=multi-user\.target' \
     "${root}/archiso/airootfs/etc/systemd/system/pacman-init.service"; then
   log_fail "pacman-init.service must not WantedBy=multi-user.target (blocks greetd)"
