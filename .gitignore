@@ -8,6 +8,7 @@
 
 # Generated onto airootfs by scripts/build-iso.sh — source of truth is
 # branding/, desktop/, sessions/, install/, scripts/coda-install.
+archiso/airootfs/etc/pacman.d/gnupg/
 archiso/airootfs/usr/lib/os-release
 archiso/airootfs/etc/issue
 archiso/airootfs/etc/issue.net

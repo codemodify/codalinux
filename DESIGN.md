@@ -254,6 +254,10 @@ Not enabled: NetworkManager, CUPS, firewalld, Plymouth.
 
 Live ISO service symlinks live under `archiso/airootfs/etc/systemd/system/`. Installed-system enablement is an archinstall profile responsibility.
 
+`pacman-init.service` must **not** be `WantedBy=multi-user.target`. Graphical.target waits on multi-user, so that oneshot (`pacman-key --init` + `--populate`) delayed greetd/Hyprland by tens of seconds. A `pacman-init.timer` (`WantedBy=timers.target`, `OnBootSec=3s`) starts the same job **after** `graphical.target`. The stock `etc-pacman.d-gnupg.mount` tmpfs is masked: it wiped `/etc/pacman.d/gnupg` every boot. `scripts/build-iso.sh` pre-populates that keyring when `pacman-key` is on the builder so the live oneshot can no-op. Do not delete pacman-init — `coda-install` / live `pacman` still need a keyring.
+
+Live systemd-boot `archiso/efiboot/loader/loader.conf` uses `timeout 1` (editor still yes). `coda-live-setup` only runs `locale-gen` when `en_US.UTF-8` is missing.
+
 ### Hostname, locale, users
 
 | Item | v1 scaffold default | Overridable |
