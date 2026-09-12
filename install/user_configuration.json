@@ -137,7 +137,8 @@
     "tesseract-data-eng",
     "pavucontrol",
     "impala",
-    "snapshot"
+    "snapshot",
+    "bubblewrap"
   ],
   "parallel downloads": 5,
   "profile_config": null,

@@ -15,6 +15,7 @@ need_bins=(
   coda-wallpaper
   coda-install
   coda-settings
+  coda-sandbox
   coda-sync-desktop-from-host
 )
 
@@ -40,7 +41,7 @@ for bin in "${need_bins[@]}"; do
 done
 
 for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
-           coda-hypr-ws coda-install coda-settings; do
+           coda-hypr-ws coda-install coda-settings coda-sandbox; do
   f="${root}/scripts/${src}"
   if [[ ! -f "${f}" ]]; then
     log_fail "missing source wrapper: ${f}"
@@ -53,6 +54,10 @@ done
 
 if ! grep -qx 'swaybg' "${root}/packages/desktop.txt"; then
   log_fail "packages/desktop.txt must list swaybg (live/VM wallpaper fallback)"
+fi
+
+if ! grep -qx 'bubblewrap' "${root}/packages/sandbox.txt"; then
+  log_fail "packages/sandbox.txt must list bubblewrap (coda-sandbox backbone)"
 fi
 
 if [[ "${failed}" -ne 0 ]]; then

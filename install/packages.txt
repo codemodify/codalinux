@@ -122,3 +122,6 @@ pavucontrol
 impala
 snapshot
 
+# --- packages/sandbox.txt ---
+bubblewrap
+

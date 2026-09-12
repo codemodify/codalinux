@@ -139,6 +139,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-hyprland"
   install -m 0755 "${root}/scripts/coda-settings" \
     "${overlay}/usr/local/bin/coda-settings"
+  install -m 0755 "${root}/scripts/coda-sandbox" \
+    "${overlay}/usr/local/bin/coda-sandbox"
   install -m 0755 "${root}/scripts/coda-ags" \
     "${overlay}/usr/local/bin/coda-ags"
   install -m 0755 "${root}/scripts/coda-hypr-ws" \
@@ -158,7 +160,7 @@ prepare_overlay() {
   local wrap
   for wrap in coda-hyprpaper coda-wallpaper coda-ags coda-hyprland \
               coda-hyprlock coda-hypr-ws coda-install coda-settings \
-              coda-sync-desktop-from-host; do
+              coda-sandbox coda-sync-desktop-from-host; do
     if [[ ! -x "${overlay}/usr/local/bin/${wrap}" ]]; then
       echo "build-iso: ${overlay}/usr/local/bin/${wrap} is not executable" >&2
       exit 1
