@@ -3,6 +3,7 @@
 # Bake linker cache + locale so live sysinit/greetd do not.
 set -euo pipefail
 
+# mkarchiso runs this as root in the airootfs; ldconfig -X is OK here.
 if command -v ldconfig >/dev/null 2>&1; then
   ldconfig -X
 fi
