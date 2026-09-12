@@ -27,7 +27,7 @@
 | `import-wallpaper.sh` | Copy a host still into `branding/wallpapers/default.png` (never generates) |
 | `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |
 | `coda-settings` | Settings hub helpers: display, hypr gaps/animations, workspaces, wallpaper, Wi-Fi, BT, audio, power, about |
-| `coda-sandbox` | Disposable Arch roots: `create` / `pacman` / `enter` / `run` / `destroy` via upstream `bwrap` |
+| `coda-sandbox` | User-owned Arch roots under `~/.coda/sandbox/<name>` (no sudo; one name, many packages; upstream `bwrap`) |
 | `coda-live-setup.sh` | Creates `live` user, empty-password autologin, timezone/locale |
 | `qemu-boot-test.sh` | Boot the live ISO under QEMU/KVM + OVMF (preferred automated ISO smoke path; serial + QMP screenshots; virtio-vga 1920x1080) |
 | `qemu-desktop-dev.sh` | Interactive GTK QEMU + virtio-9p host share for desktop UX iteration (virtio-vga 1920x1080) |

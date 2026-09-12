@@ -21,19 +21,21 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Delivery | archiso live ISO + archinstall (not Calamares) |
 | Support | GitHub issues |
 
-The authoritative write-up is **[DESIGN.md](DESIGN.md)** (core vs desktop vs **bubblewrap sandboxes**). Implementation backlog is **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**.
+The system picture (partitions → layers → `/` → sandboxes → updates) is **[architecture.md](architecture.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**.
 
 ## Repository layout
 
 ```
-packages/     Source-of-truth package lists (official Arch names only)
-archiso/      archiso profile stubs (UEFI + systemd-boot live ISO)
-install/      archinstall config + custom profile stubs
-desktop/      Hyprland, hypr* companions, AGS/Astal app layout
-branding/     os-release, wallpaper/theme placeholders
-sessions/     Wayland Hyprland session + XLibre path notes
-scripts/      ISO compose/build helpers, coda-sandbox, NVIDIA hook placeholder
-docs/         Implementation TODOs + sandbox command reference
+architecture.md  System picture (partitions, layers, `/`, sandboxes, updates)
+DESIGN.md        Locked decision log (do not contradict)
+packages/        Source-of-truth package lists (official Arch names only)
+archiso/         archiso profile stubs (UEFI + systemd-boot live ISO)
+install/         archinstall config + custom profile stubs
+desktop/         Hyprland, hypr* companions, AGS/Astal app layout
+branding/        os-release, wallpaper/theme placeholders
+sessions/        Wayland Hyprland session + XLibre path notes
+scripts/         ISO compose/build helpers, coda-sandbox, NVIDIA hook placeholder
+docs/            Implementation TODOs + sandbox command reference
 ```
 
 Layout assumptions (airootfs overlay timing, how lists are composed, why AGS is in-tree) are recorded in [DESIGN.md](DESIGN.md#repository-layout-assumptions).
@@ -42,7 +44,7 @@ Layout assumptions (airootfs overlay timing, how lists are composed, why AGS is 
 
 ### Read the decisions
 
-1. Skim [DESIGN.md](DESIGN.md) before changing the stack.
+1. Skim [architecture.md](architecture.md) for the system picture, then [DESIGN.md](DESIGN.md) before changing the stack.
 2. Edit package sets under [`packages/`](packages/README.md). Do not add AUR packages, unofficial repos, or a Coda `pacman` repo.
 3. Keep ISO and installer consumers in sync with `scripts/compose-package-lists.sh`.
 
@@ -107,7 +109,7 @@ coda-sandbox destroy dev --force
 
 Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`.
 
-See [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop.
+See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
 ## What this repo does not contain
 

@@ -57,7 +57,7 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 5. Core OS vs sandboxes (bubblewrap)
 
-Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the live/install image.
+Picture: [architecture.md](../architecture.md) (target A/B vs current mutable desktop root). Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the live/install image.
 
 - [ ] Installer disk layout: **core** vs **data** (`/home` includes `~/.coda/sandbox`). Single ext4 `/` is still the v1 default until this lands.
 - [ ] Read-only **A/B** core slots and gated host `pacman` / OS updates. Documented in DESIGN.md; **not implemented**.

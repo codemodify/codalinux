@@ -33,4 +33,4 @@ archinstall --config /usr/share/codalinux/install/user_configuration.json
 
 Keep `"additional-repositories": []`. Do not add a Coda repo.
 
-The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<name>` (no sudo; one named root holds many packages — see [docs/sandbox.md](../docs/sandbox.md)). Disk layout is still a single ext4 `/` until a core-vs-data split lands.
+The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<name>` (no sudo; one named root holds many packages — see [architecture.md](../architecture.md) and [docs/sandbox.md](../docs/sandbox.md)). Disk layout is still a single ext4 `/` until a core-vs-data split lands. Do not treat A/B OS slots as implemented.
