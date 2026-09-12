@@ -23,6 +23,48 @@ out="${2:-${root}/out}"
 
 log() { printf '%s\n' "$*"; }
 
+# Best-effort bake of airootfs /etc/pacman.d/gnupg. Never sudo; never fail
+# the ISO build. Live pacman-init.timer populates after greetd if this skips.
+try_bake_live_keyring() {
+  local gpgdir="$1"
+  mkdir -p "${gpgdir}"
+  if [[ -s "${gpgdir}/pubring.kbx" || -s "${gpgdir}/pubring.gpg" ]]; then
+    log "build-iso: live keyring already present at ${gpgdir}"
+    return 0
+  fi
+  if ! command -v pacman-key >/dev/null 2>&1; then
+    log "build-iso: no pacman-key here; live pacman-init will populate after greetd"
+    return 0
+  fi
+  local -a run=()
+  if [[ "${EUID}" -eq 0 ]]; then
+    :
+  elif command -v unshare >/dev/null 2>&1 \
+      && unshare --user --map-root-user --keep-caps true >/dev/null 2>&1; then
+    run=(unshare --user --map-root-user --keep-caps --)
+  elif command -v unshare >/dev/null 2>&1 \
+      && unshare --user --map-root-user true >/dev/null 2>&1; then
+    run=(unshare --user --map-root-user --)
+  else
+    log "build-iso: pacman-key needs root and userns is unavailable; live pacman-init will populate after greetd"
+    return 0
+  fi
+  log "build-iso: pre-populating live pacman keyring (best-effort, no sudo)"
+  if ! "${run[@]}" pacman-key --gpgdir "${gpgdir}" --init; then
+    log "build-iso: pacman-key --init failed; live pacman-init will populate after greetd"
+    rm -rf "${gpgdir}"
+    mkdir -p "${gpgdir}"
+    return 0
+  fi
+  if ! "${run[@]}" pacman-key --gpgdir "${gpgdir}" --populate archlinux; then
+    log "build-iso: pacman-key --populate failed; live pacman-init will populate after greetd"
+    rm -rf "${gpgdir}"
+    mkdir -p "${gpgdir}"
+    return 0
+  fi
+  log "build-iso: baked keyring in ${gpgdir}"
+}
+
 fail_no_sudo() {
   cat >&2 <<'EOF'
 This script never calls sudo. Unattended abox builds must not prompt.
@@ -71,17 +113,7 @@ prepare_overlay() {
     "${overlay}/usr/local/lib/codalinux/coda-pacman-init.sh"
   # Stock tmpfs on /etc/pacman.d/gnupg wiped any baked keyring every boot.
   rm -f "${overlay}/etc/systemd/system/multi-user.target.wants/pacman-init.service"
-  if command -v pacman-key >/dev/null 2>&1; then
-    local gpgdir="${overlay}/etc/pacman.d/gnupg"
-    mkdir -p "${gpgdir}"
-    if [[ ! -s "${gpgdir}/pubring.kbx" && ! -s "${gpgdir}/pubring.gpg" ]]; then
-      log "build-iso: pre-populating live pacman keyring (pacman-init can no-op)"
-      pacman-key --gpgdir "${gpgdir}" --init
-      pacman-key --gpgdir "${gpgdir}" --populate archlinux
-    fi
-  else
-    log "build-iso: no pacman-key here; live pacman-init will populate after greetd"
-  fi
+  try_bake_live_keyring "${overlay}/etc/pacman.d/gnupg"
   install -m 0755 "${root}/scripts/coda-install-config.py" \
     "${overlay}/usr/local/lib/codalinux/coda-install-config.py"
   install -d "${overlay}/usr/local/share/codalinux"
