@@ -137,11 +137,19 @@
     "tesseract-data-eng",
     "pavucontrol",
     "impala",
-    "snapshot"
+    "snapshot",
+    "bubblewrap"
   ],
   "parallel downloads": 5,
   "profile_config": null,
   "script": "guided",
+  "services": [
+    "greetd",
+    "systemd-networkd",
+    "systemd-resolved",
+    "iwd",
+    "bluetooth"
+  ],
   "silent": false,
   "swap": true,
   "timezone": "America/Denver"

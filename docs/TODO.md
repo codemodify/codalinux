@@ -19,20 +19,11 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 2. archinstall profile (`install/`)
 
-- [ ] Turn `install/profiles/codalinux.py` into a real archinstall profile (or `--script`) that:
-  - installs systemd-boot (UEFI);
-  - formats `/` as ext4 by default;
-  - installs the composed official package set;
-  - enables greetd (not SDDM/GDM/LightDM);
-  - enables systemd-networkd + iwd + systemd-resolved;
-  - does **not** pull NetworkManager;
-  - writes CodaLinux `os-release` and session files;
-  - installs Hyprland configs into the new user's `~/.config`.
+- [x] `coda-install` + `coda-install-post.sh`: greetd autologin `user`, copy live `/usr/local` desktop, networkd+iwd, default creds `user`/`1`.
 - [ ] Keep `additional-repositories` empty.
 - [ ] Generate or validate `user_configuration.json` against the installed archinstall version (`archinstall --dry-run`).
 - [ ] Disk layout remains operator-supplied; document a recommended ESP + ext4 `/` layout only.
 - [ ] NVIDIA: call `scripts/hooks/nvidia.sh` from the profile when detection is implemented — not before.
-- [ ] Credentials stay out of git (`user_credentials.json` is local-only).
 
 ## 3. AGS / Astal shell (`desktop/ags/`)
 

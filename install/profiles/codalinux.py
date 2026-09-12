@@ -1,47 +1,75 @@
-"""CodaLinux archinstall profile stub.
+"""CodaLinux installed-system finish hook.
 
-Not imported by archinstall yet. Implement and register this (or an
-equivalent --script) before treating ISO installs as supported.
+archinstall `custom_commands` run inside arch-chroot, so they cannot copy
+live `/usr/local` (vendored AGS, coda-hyprland, hyprbars). `coda-install`
+runs `coda-install-post.sh` on the live ISO after archinstall exits, with
+the target mount (default `/mnt`).
 
-Locked behavior this profile must enforce
-----------------------------------------
-* Bootloader: systemd-boot (UEFI only).
-* Filesystem default: ext4 on /.
-* Packages: official Arch core/extra from install/packages.txt.
-* additional-repositories: always empty (no Coda repo, no XLibre repo).
-* Display manager: greetd + sessions/wayland/codalinux-hyprland.desktop.
-  Do not install SDDM/GDM/LightDM.
-* Network: enable systemd-networkd, systemd-resolved, iwd.
-  Do not install or enable NetworkManager.
-* Firewall: do not enable firewalld/ufw.
-* Branding: install branding/os-release via the pacman hook.
-* Desktop: copy desktop/hypr/* and start the vendored AGS shell (coda-ags).
-* NVIDIA: call scripts/hooks/nvidia.sh only after detection exists.
-* AGS: do not pacman -S AUR names; vendor from source into /usr/local
-  (see scripts/vendor-ags.sh). Do not ship Waybar as a fallback.
+This module is the same hook: `python3 codalinux.py --target /mnt --user user`.
 """
 
 from __future__ import annotations
 
-# TODO: subclass archinstall.default_profiles.profile.Profile (import path
-# varies by archinstall version). Register as a custom desktop profile.
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-TODO = [
-    "Load install/packages.txt and pass it to the installer package list",
-    "Enable greetd.service as the display manager",
-    "Install archiso/airootfs networkd + iwd units onto the target",
-    "Disable NetworkManager if a parent desktop profile pulled it in",
-    "Install branding hook and session desktop file",
-    "Copy Hyprland companion configs into the user skel",
-    "Leave CUPS and NVIDIA off unless explicitly requested",
+
+LOCKED = [
+    "Bootloader: systemd-boot (UEFI only)",
+    "Filesystem default: ext4 on /",
+    "Packages: official Arch core/extra from install/packages.txt",
+    "additional-repositories: empty",
+    "Display manager: greetd autologin → /usr/local/bin/coda-hyprland",
+    "Network: systemd-networkd + systemd-resolved + iwd (not NetworkManager)",
+    "Default account: user / 1 (sudo); root password 1",
 ]
 
 
-def main() -> None:
-    raise NotImplementedError(
-        "CodaLinux archinstall profile is a stub. See install/README.md and docs/TODO.md."
-    )
+def find_post_script() -> Path:
+    here = Path(__file__).resolve()
+    candidates = [
+        Path("/usr/local/lib/codalinux/coda-install-post.sh"),
+        here.parent.parent.parent / "scripts" / "coda-install-post.sh",
+        Path("/usr/share/codalinux/install/coda-install-post.sh"),
+        here.parent / "coda-install-post.sh",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise FileNotFoundError("coda-install-post.sh not found")
+
+
+def apply(target: str = "/mnt", user: str = "user") -> int:
+    script = find_post_script()
+    cmd = [str(script), "--user", user, "--target", target]
+    print(f"codalinux profile: {' '.join(cmd)}")
+    return subprocess.call(cmd)
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    user = os.environ.get("CODA_INSTALL_USER", "user")
+    target = os.environ.get("CODA_INSTALL_TARGET", "/mnt")
+    i = 0
+    while i < len(argv):
+        if argv[i] in ("--user",) and i + 1 < len(argv):
+            user = argv[i + 1]
+            i += 2
+            continue
+        if argv[i] in ("--target",) and i + 1 < len(argv):
+            target = argv[i + 1]
+            i += 2
+            continue
+        if not argv[i].startswith("-"):
+            target = argv[i]
+            i += 1
+            continue
+        print(f"unknown argument: {argv[i]}", file=sys.stderr)
+        return 2
+    return apply(target, user)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

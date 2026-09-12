@@ -52,7 +52,7 @@ for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
   fi
 done
 
-for helper_name in coda-install-config.py coda-pacman-init.sh; do
+for helper_name in coda-install-config.py coda-pacman-init.sh coda-install-post.sh; do
   helper_src="${root}/scripts/${helper_name}"
   helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/${helper_name}"
   if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
@@ -71,6 +71,19 @@ done
 if ! grep -qF "[\"/usr/local/lib/codalinux/coda-pacman-init.sh\"]=\"0:0:755\"" \
     "${root}/archiso/profiledef.sh"; then
   log_fail "profiledef.sh missing 755 for coda-pacman-init.sh"
+fi
+if ! grep -qF "[\"/usr/local/lib/codalinux/coda-install-post.sh\"]=\"0:0:755\"" \
+    "${root}/archiso/profiledef.sh"; then
+  log_fail "profiledef.sh missing 755 for coda-install-post.sh"
+fi
+if ! grep -qF 'user: ${CODA_INSTALL_USER:-user}' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must print default login user"
+fi
+if ! grep -qF 'password: ${CODA_INSTALL_PASSWORD:-1}' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must print default password 1"
+fi
+if grep -q 'raise NotImplementedError' "${root}/install/profiles/codalinux.py"; then
+  log_fail "install/profiles/codalinux.py must not be a NotImplementedError stub"
 fi
 if ! grep -qE '^timeout [12]$' "${root}/archiso/efiboot/loader/loader.conf"; then
   log_fail "archiso/efiboot/loader/loader.conf timeout must be 1 or 2"

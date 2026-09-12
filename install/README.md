@@ -1,6 +1,6 @@
 # archinstall profile
 
-CodaLinux installs with **archinstall**, not Calamares. This directory is a stub tailored to locked defaults.
+CodaLinux installs with **archinstall**, not Calamares.
 
 ## Files
 
@@ -8,42 +8,36 @@ CodaLinux installs with **archinstall**, not Calamares. This directory is a stub
 | --- | --- |
 | `user_configuration.json` | Guided-installer answers: systemd-boot, PipeWire, hostname `coda`; `packages` is generated |
 | `packages.txt` | Generated package list (no live-only tools) — source for the JSON array |
-| `profiles/codalinux.py` | Custom profile hooks — **not wired yet** |
+| `profiles/codalinux.py` | Finish hook: runs `coda-install-post.sh` on a target root |
+| `../scripts/coda-install-post.sh` | Real post-install: copy live `/usr/local` desktop, greetd for `user`, networkd+iwd |
 
-Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset. With a disk, the helper imports `archinstall.lib.disk.device_handler` and `suggest_single_disk_layout` from `disk_menu` (not the legacy `devicehandler` module) and writes `disk_config` for `--silent`.
+Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset.
 
-`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). `disk_config` is generated with `sudo -E python3 … --emit-layout` — as `live`, `import archinstall.lib.disk.device_handler` hits “maximum recursion depth exceeded”. Already-root skips that extra sudo. Then `exec sudo -E -- archinstall --config <that path> [--creds …] [--silent]`.
+## Default login (always printed)
 
-Credentials must never be committed. Silent install still needs them:
-
-```bash
-# Existing archinstall creds JSON (gitignored if named user_credentials.json)
-CODA_INSTALL_DISK=/dev/vda CODA_INSTALL_CREDS=./user_credentials.json coda-install
-
-# Opt-in test user (not a production password)
-CODA_INSTALL_DISK=/dev/vda \
-  CODA_INSTALL_USER=coda CODA_INSTALL_PASSWORD='…' \
-  CODA_INSTALL_ROOT_PASSWORD='…' \
-  coda-install
+```
+Login after reboot:
+  user: user
+  password: 1
 ```
 
-## What archinstall does not do for us yet
+Root password is also `1`. Automation may override with `CODA_INSTALL_CREDS` or `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD` / `CODA_INSTALL_ROOT_PASSWORD`.
 
-Upstream guided/desktop profiles do **not** match CodaLinux:
+`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`). `disk_config` is generated with `sudo -E python3 … --emit-layout`. After archinstall exits 0, **`coda-install-post.sh /mnt`** runs on the live ISO (not inside arch-chroot — that cannot see live `/usr/local`).
 
-- Greeter enums are SDDM / LightDM / GDM / Ly — **greetd is custom**.
-- Desktop networking often pulls **NetworkManager** — we use systemd-networkd + iwd.
-- Hyprland may exist as a community profile; it still will not enable our greetd + networkd + os-release hook.
+Post-install on the target:
 
-`profiles/codalinux.py` lists the hooks a real profile (or `archinstall --script`) must implement. Until then, `user_configuration.json` only encodes the parts guided install already understands.
-
-## Intended invocation (later)
+1. Copy live `/usr/local` Coda bits (`coda-hyprland`, `coda-ags`, `ags`, hyprbars, Astal).
+2. Hyprland configs into `/etc/xdg/hypr`, `/etc/skel`, and `/home/user`.
+3. `codalinux-hyprland.desktop` Wayland session.
+4. greetd enabled, autologin **`user`** → `/usr/local/bin/coda-hyprland` (never `live`).
+5. systemd-networkd, systemd-resolved, iwd enabled; NetworkManager not required.
+6. Branding/os-release hook if present.
 
 ```bash
-archinstall --config /usr/share/codalinux/install/user_configuration.json
-# plus a custom script/profile once codalinux.py is implemented
+CODA_INSTALL_DISK=/dev/vda coda-install
 ```
 
 Keep `"additional-repositories": []`. Do not add a Coda repo.
 
-The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<name>` (no sudo; one named root holds many packages — see [architecture.md](../architecture.md) and [docs/sandbox.md](../docs/sandbox.md)). Disk layout is still a single ext4 `/` until a core-vs-data split lands. Do not treat A/B OS slots as implemented.
+The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<name>`.
