@@ -75,12 +75,21 @@ fi
 if ! grep -qE '^timeout [12]$' "${root}/archiso/efiboot/loader/loader.conf"; then
   log_fail "archiso/efiboot/loader/loader.conf timeout must be 1 or 2"
 fi
-if [[ ! -f "${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf" ]]; then
-  log_fail "missing ldconfig.service.d/coda.conf (ConditionNeedsUpdate reset)"
+ldcfg="${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf"
+if [[ ! -f "${ldcfg}" ]]; then
+  log_fail "missing ldconfig.service.d/coda.conf"
 fi
-if ! grep -qE '^ConditionNeedsUpdate=$' \
-    "${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf"; then
-  log_fail "ldconfig.service.d/coda.conf must reset ConditionNeedsUpdate="
+if ! grep -qE '^ConditionNeedsUpdate=$' "${ldcfg}"; then
+  log_fail "ldconfig.service.d/coda.conf must reset all Condition* first"
+fi
+if ! grep -qE '^ConditionFileNotEmpty=!/etc/ld\.so\.cache$' "${ldcfg}"; then
+  log_fail "ldconfig.service.d/coda.conf must require ConditionFileNotEmpty=!/etc/ld.so.cache"
+fi
+if grep -qE '^ConditionFileNotEmpty=\|' "${ldcfg}"; then
+  log_fail "ldconfig.service.d/coda.conf FileNotEmpty must not use | (triggering OR)"
+fi
+if [[ -e "${root}/archiso/airootfs/etc/systemd/system/multi-user.target.wants/pacman-init.service" ]]; then
+  log_fail "pacman-init.service must not be in multi-user.target.wants"
 fi
 cust="${root}/archiso/airootfs/root/customize_airootfs.sh"
 if [[ ! -f "${cust}" || ! -x "${cust}" ]]; then
