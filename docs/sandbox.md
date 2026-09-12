@@ -75,11 +75,18 @@ Caveats:
 - `enter`/`run` stay as the real user (no uid remap) so those user-owned files stay writable.
 - The host must be Arch/CodaLinux with `pacman`. A Debian/Ubuntu cloud agent can exercise `unshare` and layout paths, not a full `create` of `base`.
 
+## Live ISO space
+
+`coda-sandbox create` bootstraps `base` (~500M+ installed) under `~/.coda`. That writes the live overlay. Stock archiso COW is **256M** (`cow_spacesize` default), which fills and fails with “Partition / too full”.
+
+The live kernel cmdline sets **`cow_spacesize=4G`** (`archiso/efiboot/loader/entries/01-codalinux-linux.conf`). That is a tmpfs **limit**, not a 4G preallocation. QEMU helpers default to 4G RAM (`CODA_QEMU_RAM`), which is enough headroom as long as the overlay is not filled. Check with `df -h /` / `df -h /run/archiso/cowspace`. To grow a running session: `mount -o remount,size=4G /run/archiso/cowspace` (as root). For large sandboxes, bind a virtio disk under `~/.coda` instead of filling RAM.
+
 ## Host requirements
 
 - Arch Linux or CodaLinux, official `core`/`extra`, working keyring, network for the first `create`
 - `bubblewrap` (`packages/sandbox.txt`) and `unshare` (`util-linux`, already in `base.txt`)
 - Unprivileged user namespaces
+- On the live ISO: 4G COW overlay (above) so `create` is not capped at 256M
 
 ## What this is not
 

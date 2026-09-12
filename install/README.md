@@ -10,11 +10,22 @@ CodaLinux installs with **archinstall**, not Calamares. This directory is a stub
 | `packages.txt` | Generated package list (no live-only tools) — source for the JSON array |
 | `profiles/codalinux.py` | Custom profile hooks — **not wired yet** |
 
-Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk layout is the interactive part (`coda-install` can pick a disk and generate an ext4 default layout, or fall back to archinstall's disk menu).
+Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset. With a disk, the helper imports `archinstall.lib.disk.device_handler` and `suggest_single_disk_layout` from `disk_menu` (not the legacy `devicehandler` module) and writes `disk_config` for `--silent`.
 
-`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). archinstall itself needs root, so the helper then `exec sudo -E -- archinstall --config <that path>`. Already-root (`sudo coda-install`) skips sudo.
+`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). archinstall itself needs root, so the helper then `exec sudo -E -- archinstall --config <that path> [--creds …] [--silent]`. Already-root (`sudo coda-install`) skips sudo.
 
-Credentials (`user_credentials.json`) must never be committed.
+Credentials must never be committed. Silent install still needs them:
+
+```bash
+# Existing archinstall creds JSON (gitignored if named user_credentials.json)
+CODA_INSTALL_DISK=/dev/vda CODA_INSTALL_CREDS=./user_credentials.json coda-install
+
+# Opt-in test user (not a production password)
+CODA_INSTALL_DISK=/dev/vda \
+  CODA_INSTALL_USER=coda CODA_INSTALL_PASSWORD='…' \
+  CODA_INSTALL_ROOT_PASSWORD='…' \
+  coda-install
+```
 
 ## What archinstall does not do for us yet
 

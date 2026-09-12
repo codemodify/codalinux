@@ -75,6 +75,10 @@ fi
 if ! grep -qE '^timeout [12]$' "${root}/archiso/efiboot/loader/loader.conf"; then
   log_fail "archiso/efiboot/loader/loader.conf timeout must be 1 or 2"
 fi
+if ! grep -qE '(^|[[:space:]])cow_spacesize=4G([[:space:]]|$)' \
+    "${root}/archiso/efiboot/loader/entries/01-codalinux-linux.conf"; then
+  log_fail "live kernel cmdline must set cow_spacesize=4G (sandbox create needs >256M)"
+fi
 ldcfg="${root}/archiso/airootfs/etc/systemd/system/ldconfig.service.d/coda.conf"
 if [[ ! -f "${ldcfg}" ]]; then
   log_fail "missing ldconfig.service.d/coda.conf"

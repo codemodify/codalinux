@@ -93,7 +93,7 @@ From a CodaLinux (or Arch) live environment, once the profile is wired up:
 coda-install
 ```
 
-That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). It writes the runtime JSON under `$XDG_RUNTIME_DIR` or `/tmp` (override `CODA_ARCHINSTALL_RUNTIME`), then `exec sudo -E archinstall --config …` because archinstall must run as root. greetd + systemd-networkd + iwd still need the custom profile for a full installed desktop; see [`install/`](install/README.md).
+That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). `CODA_INSTALL_DISK=/dev/vda coda-install` builds an ext4 `disk_config` and launches `archinstall --config … --silent` when layout succeeds. Silent still needs credentials: `CODA_INSTALL_CREDS=/path/to/user_credentials.json` or `CODA_INSTALL_USER` + `CODA_INSTALL_PASSWORD` (optional `CODA_INSTALL_ROOT_PASSWORD`). Do not commit passwords. Runtime JSON is `$XDG_RUNTIME_DIR` or `/tmp` (`CODA_ARCHINSTALL_RUNTIME`). archinstall needs root, so the helper `exec sudo -E`. greetd + systemd-networkd + iwd still need the custom profile; see [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 
@@ -107,7 +107,7 @@ coda-sandbox enter dev
 coda-sandbox destroy dev --force
 ```
 
-Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`.
+Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
 See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
