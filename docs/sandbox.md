@@ -42,7 +42,7 @@ Documented path: **`~/.coda/sandbox/<name>`** (singular `sandbox`). The name dir
 ~/.coda/sandbox/<name>/         sandbox directory
 ~/.coda/sandbox/<name>/root     pacman --root tree
 ~/.coda/sandbox/<name>/meta
-~/.coda/cache/pacman            shared cache for this user
+~/.coda/cache/pacman            shared pkg cache + generated pacman.conf
 ```
 
 Not `/var/coda/sandbox`, not `/var/lib/coda/…`, and not XDG `~/.local/share/…` as the primary path. `~/.coda` is created on first use (`0700`). The pacman cache is **shared across this user’s named roots** (one download of `base`, many installs into one or more names). Override with `--store` / `--cache` or `CODA_SANDBOX_STORE` / `CODA_SANDBOX_CACHE`.
@@ -58,6 +58,8 @@ unshare --user --map-root-user [--keep-caps] -- pacman --root <tree> …
 ```
 
 Inside that namespace the user **is** root, so `chown`/`mknod` during extract succeed. On the host, ns uid 0 maps to the real uid, so every file is owned by the creating user. The host keyring is copied into `~/.coda/cache/pacman/gnupg-host` so pacman does not write `/etc/pacman.d/gnupg`. `pacstrap` is not used (it expects a real root).
+
+Do **not** pass host `--config /etc/pacman.conf`. Stock Arch sets `DownloadUser = alpm`; only uid 0 is mapped, so `chown` of `var/lib/pacman/sync/download-*` fails with `EINVAL`. `coda-sandbox` writes `~/.coda/cache/pacman/pacman.conf` (copied to each root’s `/etc/pacman.conf`): official `core`/`extra`, host `mirrorlist`, `DownloadUser = root`, and `DisableSandbox` so Landlock/seccomp download sandbox does not also break under userns.
 
 Caveats:
 

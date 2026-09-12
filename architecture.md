@@ -101,7 +101,7 @@ Path spelling is locked: **`~/.coda/sandbox/<name>`** (singular `sandbox`).
 ```
 
 - **User-owned. No sudo** for create / install / pacman / enter / run / destroy.
-- `pacman --root` runs in `unshare --user --map-root-user` (optional `--keep-caps`) so extract sees uid 0 and files on disk stay owned by the real user.
+- `pacman --root` runs in `unshare --user --map-root-user` (optional `--keep-caps`) so extract sees uid 0 and files on disk stay owned by the real user. Uses a generated `~/.coda/cache/pacman/pacman.conf` (`DownloadUser = root`, `DisableSandbox`) — not host `/etc/pacman.conf` (`DownloadUser = alpm` fails in userns).
 - `enter` / `run` are unprivileged **upstream `bwrap`**. CodaLinux does not reimplement bubblewrap.
 - **One name = one Arch root = many packages/apps.** Example: `dev` with `postgresql`, `redis`, `git` via repeated `coda-sandbox install dev …`. Not one sandbox per app.
 - Host `pacman` = **core / OS only** (rare; gated later). Extra software goes in a sandbox.
