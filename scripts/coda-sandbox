@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# coda-sandbox — disposable Arch roots (pacman --root) run with upstream bwrap.
+# coda-sandbox — user-owned disposable Arch roots (pacman --root + bwrap).
 # Extra software goes here so host /usr stays a core/OS tree.
-# Requires: Arch/CodaLinux host, pacman, official repos, bubblewrap.
-# create / pacman / destroy need root. See docs/sandbox.md and DESIGN.md.
+# No sudo: pacman extract runs in a user namespace (unshare --map-root-user)
+# so files on disk are owned by the real user. Upstream bwrap for enter/run.
+# See docs/sandbox.md and DESIGN.md.
 set -euo pipefail
 
 DEFAULT_NAME="default"
@@ -18,48 +19,52 @@ Usage: coda-sandbox <command> [name] [args…]
 
 Disposable Arch roots for extra packages. Host pacman is for the core OS.
 Sandbox pacman is the default way to add software (e.g. postgresql).
+All commands run as your user — do not use sudo.
 
 Commands:
-  create [name]              Bootstrap a minimal Arch root (pacstrap or
-                             pacman --root). Default name: default
+  create [name]              Bootstrap a minimal Arch root with
+                             pacman --root inside a user namespace
   clone <src> <dst>          Copy an existing sandbox tree
-  pacman [name] <args…>      pacman --root <sandbox> --cachedir <shared>
+  pacman [name] <args…>      pacman --root <sandbox> --cachedir <cache>
                              If the first token starts with -, name is default
   install [name] <pkgs…>     pacman --noconfirm -S into the sandbox
   enter [name]               bwrap: sandbox is /, then a login shell
   run [name] <cmd…>          bwrap: sandbox is /, then cmd
-  list                       Show sandboxes
+  list                       Show your named sandboxes
   destroy [name]             Delete a sandbox (needs --force or confirm)
-  path [name]                Print the sandbox root
+  path [name]                Print the sandbox pacman root
   help                       This text
 
 Options (before or after the command):
   --force                    destroy without prompt
   --no-home                  do not bind $HOME into enter/run
   --bind HOST:GUEST          extra bind (repeatable)
-  --store DIR                sandbox store (default /var/lib/coda/sandboxes)
-  --cache DIR                shared pacman cache
+  --store DIR                sandbox store (default ~/.coda/sandbox)
+  --cache DIR                pacman cache (default ~/.coda/cache/pacman)
 
 Environment:
   CODA_SANDBOX_STORE   CODA_SANDBOX_CACHE   CODA_SANDBOX_FORCE=1
 
-Defaults (root):
-  /var/lib/coda/sandboxes/<name>/root
-  /var/cache/coda/pacman
+Defaults (user-owned, no sudo):
+  ~/.coda/sandbox/<name>/       sandbox directory
+  ~/.coda/sandbox/<name>/root   pacman --root tree
+  ~/.coda/sandbox/<name>/meta
+  ~/.coda/cache/pacman          shared cache for this user
 
-Unprivileged fallback (when those paths are not writable):
-  ~/.local/share/coda/sandboxes/   ~/.cache/coda/pacman/
+One named sandbox is one Arch root. Install many packages into it
+(repeat install / pacman); do not create one sandbox per app.
 
-Host requirements: Arch or CodaLinux, initialized pacman keyring, network
-for the first create, official core/extra, package bubblewrap, and root
-for extract. This script calls upstream bwrap — it does not reimplement it.
+Host requirements: Arch or CodaLinux, official core/extra, initialized
+keyring, network for the first create, bubblewrap, util-linux unshare,
+and unprivileged user namespaces. This script does not reimplement bwrap.
 
 Examples:
-  sudo coda-sandbox create db
-  sudo coda-sandbox install db postgresql
-  sudo coda-sandbox enter db
-  sudo coda-sandbox run db postgres --version
-  sudo coda-sandbox destroy db --force
+  coda-sandbox create dev
+  coda-sandbox install dev postgresql
+  coda-sandbox install dev redis git
+  coda-sandbox enter dev
+  coda-sandbox run dev postgres --version
+  coda-sandbox destroy dev --force
 EOF
 }
 
@@ -75,20 +80,21 @@ valid_name() {
     die "bad sandbox name '$1' (use letters, digits, . _ -)"
 }
 
+coda_home() {
+  local h="${HOME:-}"
+  if [[ -z "${h}" ]]; then
+    h="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6 || true)"
+  fi
+  [[ -n "${h}" ]] || die "HOME is unset"
+  printf '%s' "${h}"
+}
+
 default_store() {
   if [[ -n "${STORE_ROOT}" ]]; then
     printf '%s' "${STORE_ROOT}"
     return
   fi
-  if [[ -d /var/lib/coda/sandboxes ]] || [[ "${EUID}" -eq 0 ]]; then
-    printf '%s' /var/lib/coda/sandboxes
-    return
-  fi
-  if mkdir -p /var/lib/coda/sandboxes 2>/dev/null; then
-    printf '%s' /var/lib/coda/sandboxes
-    return
-  fi
-  printf '%s' "${XDG_DATA_HOME:-${HOME}/.local/share}/coda/sandboxes"
+  printf '%s/.coda/sandbox' "$(coda_home)"
 }
 
 default_cache() {
@@ -96,22 +102,16 @@ default_cache() {
     printf '%s' "${CACHE_DIR}"
     return
   fi
-  if [[ -d /var/cache/coda/pacman ]] || [[ "${EUID}" -eq 0 ]]; then
-    printf '%s' /var/cache/coda/pacman
-    return
-  fi
-  if mkdir -p /var/cache/coda/pacman 2>/dev/null; then
-    printf '%s' /var/cache/coda/pacman
-    return
-  fi
-  printf '%s' "${XDG_CACHE_HOME:-${HOME}/.cache}/coda/pacman"
+  printf '%s/.coda/cache/pacman' "$(coda_home)"
 }
 
-need_priv() {
-  if [[ "${EUID}" -eq 0 ]]; then
-    return 0
-  fi
-  die "$1 needs root (pacman --root extracts as uid 0). Retry with sudo."
+ensure_user_dirs() {
+  local store cache coda
+  store="$(default_store)"
+  cache="$(default_cache)"
+  coda="$(coda_home)/.coda"
+  mkdir -p "${store}" "${cache}"
+  chmod 0700 "${coda}" 2>/dev/null || true
 }
 
 sandbox_dir() { printf '%s/%s' "$(default_store)" "$1"; }
@@ -134,61 +134,92 @@ root=$(sandbox_root "${name}")
 EOF
 }
 
-bootstrap_root() {
-  local root="$1"
-  local cache="$2"
-  mkdir -p "${root}/var/lib/pacman" "${cache}"
-  if [[ -f /etc/pacman.d/mirrorlist ]]; then
-    mkdir -p "${root}/etc/pacman.d"
-    if [[ ! -f "${root}/etc/pacman.d/mirrorlist" ]]; then
-      cp -a /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist"
-    fi
+# Run as uid 0 inside a user namespace. Files created as "root" there are
+# owned by the real user on the host. Does not use sudo.
+as_userns_root() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    "$@"
+    return
   fi
-  if [[ -f /etc/resolv.conf ]]; then
-    mkdir -p "${root}/etc"
-    cp -a /etc/resolv.conf "${root}/etc/resolv.conf" 2>/dev/null || \
-      printf 'nameserver 1.1.1.1\n' >"${root}/etc/resolv.conf"
+  need_cmd unshare
+  if unshare --user --map-root-user --keep-caps true >/dev/null 2>&1; then
+    unshare --user --map-root-user --keep-caps -- "$@"
+    return
   fi
+  if unshare --user --map-root-user true >/dev/null 2>&1; then
+    unshare --user --map-root-user -- "$@"
+    return
+  fi
+  die "user namespaces required (unshare --map-root-user). Check max_user_namespaces / kernel.unprivileged_userns_clone. Do not sudo — enable userns instead."
+}
 
-  local -a common=(
+prepare_gpgdir() {
+  local dest="$1"
+  if [[ -d "${dest}" ]] && [[ -e "${dest}/pubring.gpg" || -d "${dest}/openpgp-revocs.d" ]]; then
+    return 0
+  fi
+  mkdir -p "${dest}"
+  if [[ -d /etc/pacman.d/gnupg ]]; then
+    cp -a /etc/pacman.d/gnupg/. "${dest}/" 2>/dev/null || \
+      cp -r /etc/pacman.d/gnupg/. "${dest}/" 2>/dev/null || true
+    chmod -R u+rwX "${dest}" 2>/dev/null || true
+  fi
+}
+
+pacman_in_root() {
+  local root="$1"
+  shift
+  need_cmd pacman
+  local cache gpgdir
+  cache="$(default_cache)"
+  mkdir -p "${root}/var/lib/pacman" "${cache}"
+  gpgdir="${cache}/gnupg-host"
+  prepare_gpgdir "${gpgdir}"
+
+  local -a args=(
     --noconfirm
     --needed
     --root "${root}"
     --cachedir "${cache}"
   )
   if [[ -f /etc/pacman.conf ]]; then
-    common+=(--config /etc/pacman.conf)
+    args+=(--config /etc/pacman.conf)
   fi
-  if [[ -d /etc/pacman.d/gnupg ]]; then
-    common+=(--gpgdir /etc/pacman.d/gnupg)
+  if [[ -d "${gpgdir}" ]]; then
+    args+=(--gpgdir "${gpgdir}")
   fi
+  as_userns_root pacman "${args[@]}" "$@"
+}
 
-  if command -v pacstrap >/dev/null 2>&1; then
-    log "bootstrapping ${root} with pacstrap base (host cache ${cache})"
-    # -c host cache, -K init target keyring; use host config/mirrors.
-    pacstrap -C /etc/pacman.conf -c -K "${root}" base
-    return 0
+bootstrap_root() {
+  local root="$1"
+  mkdir -p "${root}/var/lib/pacman" "${root}/etc/pacman.d"
+  if [[ -f /etc/pacman.d/mirrorlist && ! -f "${root}/etc/pacman.d/mirrorlist" ]]; then
+    cp -a /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist" 2>/dev/null || \
+      cp /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist"
   fi
-
-  need_cmd pacman
-  log "bootstrapping ${root} with pacman --root base (host cache ${cache})"
-  pacman -Sy "${common[@]}" base
+  if [[ -f /etc/resolv.conf ]]; then
+    mkdir -p "${root}/etc"
+    cp -a /etc/resolv.conf "${root}/etc/resolv.conf" 2>/dev/null || \
+      printf 'nameserver 1.1.1.1\n' >"${root}/etc/resolv.conf"
+  fi
+  log "bootstrapping ${root} with pacman --root base (user namespace, cache $(default_cache))"
+  pacman_in_root "${root}" -Sy base
 }
 
 cmd_create() {
   local name="${1:-${DEFAULT_NAME}}"
   valid_name "${name}"
-  need_priv "create"
   need_cmd pacman
+  ensure_user_dirs
   if exists "${name}"; then
     die "sandbox '${name}' already exists ($(sandbox_root "${name}"))"
   fi
-  local root cache
+  local root
   root="$(sandbox_root "${name}")"
-  cache="$(default_cache)"
-  mkdir -p "${root}" "${cache}"
+  mkdir -p "${root}"
   write_meta "${name}"
-  if ! bootstrap_root "${root}" "${cache}"; then
+  if ! bootstrap_root "${root}"; then
     rm -rf "$(sandbox_dir "${name}")"
     die "bootstrap failed; removed ${name}"
   fi
@@ -201,7 +232,7 @@ cmd_clone() {
   [[ -n "${src}" && -n "${dst}" ]] || die "usage: coda-sandbox clone <src> <dst>"
   valid_name "${src}"
   valid_name "${dst}"
-  need_priv "clone"
+  ensure_user_dirs
   exists "${src}" || die "no sandbox '${src}'"
   if exists "${dst}"; then
     die "sandbox '${dst}' already exists"
@@ -219,31 +250,14 @@ cmd_pacman() {
     shift
   fi
   valid_name "${name}"
-  need_priv "pacman"
   exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
   [[ $# -gt 0 ]] || die "usage: coda-sandbox pacman [name] <pacman-args>"
-  need_cmd pacman
-  local root cache
-  root="$(sandbox_root "${name}")"
-  cache="$(default_cache)"
-  mkdir -p "${cache}"
-  local -a args=(
-    --root "${root}"
-    --cachedir "${cache}"
-  )
-  if [[ -f /etc/pacman.conf ]]; then
-    args+=(--config /etc/pacman.conf)
-  fi
-  if [[ -d /etc/pacman.d/gnupg ]]; then
-    args+=(--gpgdir /etc/pacman.d/gnupg)
-  fi
-  pacman "${args[@]}" "$@"
+  ensure_user_dirs
+  pacman_in_root "$(sandbox_root "${name}")" "$@"
 }
 
 cmd_install() {
   local name="${DEFAULT_NAME}"
-  # Name only when that sandbox already exists; otherwise args are packages
-  # for "default" (so `install vim git` does not steal "vim" as a name).
   if [[ $# -ge 2 ]] && exists "$1"; then
     name="$1"
     shift
@@ -288,7 +302,6 @@ cmd_path() {
 cmd_destroy() {
   local name="${1:-${DEFAULT_NAME}}"
   valid_name "${name}"
-  need_priv "destroy"
   exists "${name}" || die "no sandbox '${name}'"
   local dir
   dir="$(sandbox_dir "${name}")"
@@ -387,7 +400,6 @@ cmd_run() {
   bwrap_run "${name}" "$@"
 }
 
-# Parse global flags anywhere before the command dispatch.
 ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
