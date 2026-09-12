@@ -12,6 +12,8 @@ CodaLinux installs with **archinstall**, not Calamares. This directory is a stub
 
 Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk layout is the interactive part (`coda-install` can pick a disk and generate an ext4 default layout, or fall back to archinstall's disk menu).
 
+`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). archinstall itself needs root, so the helper then `exec sudo -E -- archinstall --config <that path>`. Already-root (`sudo coda-install`) skips sudo.
+
 Credentials (`user_credentials.json`) must never be committed.
 
 ## What archinstall does not do for us yet

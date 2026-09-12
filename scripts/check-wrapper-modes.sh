@@ -52,6 +52,19 @@ for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
   fi
 done
 
+helper_src="${root}/scripts/coda-install-config.py"
+helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/coda-install-config.py"
+if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
+  log_fail "missing executable scripts/coda-install-config.py"
+fi
+if [[ ! -f "${helper_overlay}" || ! -x "${helper_overlay}" ]]; then
+  log_fail "missing executable airootfs coda-install-config.py"
+fi
+if ! grep -qF "[\"/usr/local/lib/codalinux/coda-install-config.py\"]=\"0:0:755\"" \
+    "${root}/archiso/profiledef.sh"; then
+  log_fail "profiledef.sh missing 755 for coda-install-config.py"
+fi
+
 if ! grep -qx 'swaybg' "${root}/packages/desktop.txt"; then
   log_fail "packages/desktop.txt must list swaybg (live/VM wallpaper fallback)"
 fi
