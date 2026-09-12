@@ -149,6 +149,10 @@ def archinstall_cmd(
     return ["sudo", "-E", "--", *cmd]
 
 
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
 def _import_device_handler() -> Any | None:
     try:
         from archinstall.lib.disk.device_handler import device_handler
@@ -160,7 +164,7 @@ def _import_device_handler() -> Any | None:
 
             return device_handler
         except Exception:
-            print(f"Could not import archinstall.lib.disk.device_handler ({current_exc}).")
+            _log(f"Could not import archinstall.lib.disk.device_handler ({current_exc}).")
             return None
 
 
@@ -177,7 +181,7 @@ def _import_suggest_layout() -> Any | None:
 
         return suggest_single_disk_layout
     except Exception as exc:
-        print(f"Could not import suggest_single_disk_layout ({exc}).")
+        _log(f"Could not import suggest_single_disk_layout ({exc}).")
         return None
 
 
@@ -232,10 +236,10 @@ def _call_suggest(fn: Any, dev: Any, fs: Any) -> Any | None:
             last_type_error = exc
             continue
         except Exception as exc:
-            print(f"suggest_single_disk_layout failed: {exc}")
+            _log(f"suggest_single_disk_layout failed: {exc}")
             return None
     if last_type_error is not None:
-        print(f"suggest_single_disk_layout failed: {last_type_error}")
+        _log(f"suggest_single_disk_layout failed: {last_type_error}")
     return None
 
 
@@ -291,18 +295,94 @@ def suggest_layout(device: str) -> dict | None:
         pass
     dev = _resolve_device(device_handler, device)
     if dev is None:
-        print(f"archinstall did not recognize {device}.")
+        _log(f"archinstall did not recognize {device}.")
         return None
     raw = _call_suggest(suggest_fn, dev, _ext4_type())
     if raw is None:
         return None
     data = layout_to_disk_config(raw)
     if data is None:
-        print("suggest_single_disk_layout returned an unusable layout.")
+        _log("suggest_single_disk_layout returned an unusable layout.")
     return data
 
 
+def emit_layout(device: str, out_path: Path | None = None) -> int:
+    """Root-only: print or write disk_config JSON. Diagnostics go to stderr."""
+    layout = suggest_layout(device)
+    if not layout:
+        return 1
+    text = json.dumps(layout, indent=2) + "\n"
+    if out_path is not None:
+        out_path.write_text(text, encoding="utf-8")
+        os.chmod(out_path, 0o644)
+        return 0
+    sys.stdout.write(text)
+    return 0
+
+
+def _parse_json_object(text: str) -> dict | None:
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def suggest_layout_via_sudo(device: str) -> dict | None:
+    helper = Path(__file__).resolve()
+    cmd = [
+        "sudo",
+        "-E",
+        "--",
+        sys.executable,
+        str(helper),
+        "--emit-layout",
+        device,
+    ]
+    try:
+        proc = subprocess.run(cmd, check=False, text=True, capture_output=True)
+    except OSError as exc:
+        _log(f"Privileged layout helper failed ({exc}).")
+        return None
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
+        if not proc.stderr.endswith("\n"):
+            sys.stderr.write("\n")
+    if proc.returncode != 0:
+        _log("Privileged layout helper exited non-zero.")
+        return None
+    data = _parse_json_object(proc.stdout)
+    if data is None:
+        _log("Privileged layout helper returned no disk_config JSON.")
+    return data
+
+
+def suggest_layout_for_install(device: str) -> dict | None:
+    """archinstall disk helpers recurse/fail as live; generate layout as root."""
+    if os.geteuid() == 0:
+        return suggest_layout(device)
+    return suggest_layout_via_sudo(device)
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) >= 3 and argv[1] == "--emit-layout":
+        out_path = None
+        if len(argv) >= 5 and argv[3] == "--layout-out":
+            out_path = Path(argv[4])
+        return emit_layout(argv[2], out_path)
+
     src = Path(argv[1]) if len(argv) > 1 else Path(
         "/usr/share/codalinux/install/user_configuration.json"
     )
@@ -314,7 +394,7 @@ def main(argv: list[str]) -> int:
     disk = pick_disk()
     silent = False
     if disk:
-        layout = suggest_layout(disk)
+        layout = suggest_layout_for_install(disk)
         if layout:
             cfg["disk_config"] = layout
             silent = True

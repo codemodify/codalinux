@@ -93,7 +93,7 @@ From a CodaLinux (or Arch) live environment, once the profile is wired up:
 coda-install
 ```
 
-That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). `CODA_INSTALL_DISK=/dev/vda coda-install` builds an ext4 `disk_config` and launches `archinstall --config … --silent` when layout succeeds. Silent still needs credentials: `CODA_INSTALL_CREDS=/path/to/user_credentials.json` or `CODA_INSTALL_USER` + `CODA_INSTALL_PASSWORD` (optional `CODA_INSTALL_ROOT_PASSWORD`). Do not commit passwords. Runtime JSON is `$XDG_RUNTIME_DIR` or `/tmp` (`CODA_ARCHINSTALL_RUNTIME`). archinstall needs root, so the helper `exec sudo -E`. greetd + systemd-networkd + iwd still need the custom profile; see [`install/`](install/README.md).
+That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). `CODA_INSTALL_DISK=/dev/vda coda-install` generates `disk_config` as root (`sudo -E python3 … --emit-layout`; archinstall disk imports recurse as `live`) and launches `archinstall --config … --silent` when layout succeeds. Silent still needs credentials: `CODA_INSTALL_CREDS=/path/to/user_credentials.json` or `CODA_INSTALL_USER` + `CODA_INSTALL_PASSWORD` (optional `CODA_INSTALL_ROOT_PASSWORD`). Do not commit passwords. Runtime JSON is `$XDG_RUNTIME_DIR` or `/tmp` (`CODA_ARCHINSTALL_RUNTIME`). archinstall needs root, so the helper `exec sudo -E`. greetd + systemd-networkd + iwd still need the custom profile; see [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 

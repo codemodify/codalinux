@@ -12,7 +12,7 @@ CodaLinux installs with **archinstall**, not Calamares. This directory is a stub
 
 Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset. With a disk, the helper imports `archinstall.lib.disk.device_handler` and `suggest_single_disk_layout` from `disk_menu` (not the legacy `devicehandler` module) and writes `disk_config` for `--silent`.
 
-`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). archinstall itself needs root, so the helper then `exec sudo -E -- archinstall --config <that path> [--creds …] [--silent]`. Already-root (`sudo coda-install`) skips sudo.
+`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`; override `CODA_ARCHINSTALL_RUNTIME`). It does **not** write `/run/…` (root-only). `disk_config` is generated with `sudo -E python3 … --emit-layout` — as `live`, `import archinstall.lib.disk.device_handler` hits “maximum recursion depth exceeded”. Already-root skips that extra sudo. Then `exec sudo -E -- archinstall --config <that path> [--creds …] [--silent]`.
 
 Credentials must never be committed. Silent install still needs them:
 
