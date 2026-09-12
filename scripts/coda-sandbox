@@ -210,7 +210,6 @@ SigLevel = ${siglevel}
 LocalFileSigLevel = Optional
 DownloadUser = root
 DisableSandbox
-NoConfirm
 
 [core]
 Include = ${mirror}
@@ -244,7 +243,25 @@ pacman_in_root() {
   if [[ -d "${gpgdir}" ]]; then
     args+=(--gpgdir "${gpgdir}")
   fi
-  as_userns_root pacman "${args[@]}" "$@"
+  # --noconfirm still prints "Proceed with installation?" on some pacman
+  # builds, then continues. Feed yes so a future prompt cannot block.
+  # pipefail off: yes exits 141 (SIGPIPE) after pacman closes stdin.
+  set +o pipefail
+  yes | as_userns_root pacman "${args[@]}" "$@"
+  local rc=$?
+  set -o pipefail
+  return "${rc}"
+}
+
+# filesystem ships usr/lib/os-release only. Host /etc/os-release is a
+# systemd-tmpfiles symlink (L /etc/os-release → ../usr/lib/os-release).
+# pacman --root does not run tmpfiles, so create the link ourselves.
+materialize_os_release() {
+  local root="$1"
+  mkdir -p "${root}/etc"
+  if [[ -e "${root}/usr/lib/os-release" && ! -e "${root}/etc/os-release" ]]; then
+    ln -sfn ../usr/lib/os-release "${root}/etc/os-release"
+  fi
 }
 
 # Write a regular file (never a systemd symlink). bwrap cannot bind over
@@ -283,9 +300,9 @@ bootstrap_root() {
   fi
   materialize_resolv_conf "${root}"
   # Pin iptables so libxtables.so does not ask iptables vs iptables-legacy.
-  # --noconfirm is also in pacman_in_root and NoConfirm in the generated conf.
   log "bootstrapping ${root} with pacman --root base iptables (user namespace, cache $(default_cache))"
   pacman_in_root "${root}" -Sy --noconfirm --needed base iptables
+  materialize_os_release "${root}"
 }
 
 cmd_create() {
@@ -408,6 +425,7 @@ bwrap_run() {
   root="$(sandbox_root "${name}")"
   cache="$(default_cache)"
   mkdir -p "${root}/tmp" "${root}/run" "${root}/var/cache/pacman/pkg" "${cache}"
+  materialize_os_release "${root}"
   materialize_resolv_conf "${root}"
 
   local -a bw=(

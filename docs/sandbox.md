@@ -51,7 +51,9 @@ Not `/var/coda/sandbox`, not `/var/lib/coda/…`, and not XDG `~/.local/share/�
 
 `destroy` does `chmod -R u+w` then `rm -rf` (userns root if needed) so mode `555` trees like `etc/ca-certificates/extracted/cadir` go away without sudo.
 
-`create` is unattended: generated `pacman.conf` has `NoConfirm`, CLI passes `--noconfirm --needed`, and bootstrap installs `base iptables` so `libxtables.so` does not ask iptables vs iptables-legacy.
+`create` is unattended: CLI `--noconfirm --needed`, `yes` on pacman stdin (some pacman builds still print `Proceed with installation?` then continue), and bootstrap installs `base iptables` so `libxtables.so` does not ask iptables vs iptables-legacy. Do not put `NoConfirm` in the generated conf — pacman rejects that directive.
+
+After bootstrap, `coda-sandbox` adds `/etc/os-release` → `../usr/lib/os-release`. The `filesystem` package only ships `usr/lib/os-release`; on a real host the `/etc` symlink comes from systemd-tmpfiles (`L /etc/os-release`), which `pacman --root` does not run. enter/run recreate the link if it is still missing.
 
 ## How user-namespace pacman works
 
