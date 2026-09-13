@@ -43,4 +43,6 @@ file_permissions=(
   ["/usr/local/bin/system-config-tui"]="0:0:755"
   ["/usr/local/bin/system-config-gui"]="0:0:755"
   ["/usr/local/lib/codalinux/system-config-apply-launch"]="0:0:755"
+  ["/usr/local/share/codalinux/system-config/guest-smoke.sh"]="0:0:755"
+  ["/usr/local/share/codalinux/system-config/guest-e2e-all.sh"]="0:0:755"
 )

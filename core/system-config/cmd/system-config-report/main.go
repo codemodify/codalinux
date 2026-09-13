@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -18,9 +19,9 @@ func main() {
 	sock := flag.String("socket", sockpath.Report(), "listen socket")
 	dSock := flag.String("daemon-socket", sockpath.Daemon(), "system-configd socket (for --once/--watch push)")
 	once := flag.Bool("once", false, "scan paths, push observed into D, exit")
-	watch := flag.Bool("watch", false, "poll and push observed (udev netlink not wired yet)")
-	interval := flag.Duration("interval", 3*time.Second, "watch poll interval")
-	path := flag.String("path", "", "single path for --once (default: all starter paths)")
+	watch := flag.Bool("watch", false, "push observed on udev netlink + slow L2 poll")
+	interval := flag.Duration("interval", 30*time.Second, "L2 poll interval while watching (udev is event-driven)")
+	path := flag.String("path", "", "single path for --once/--watch (default: all starter paths)")
 	flag.Parse()
 
 	if *once || *watch {
@@ -28,30 +29,24 @@ func main() {
 		if *path != "" {
 			paths = []string{*path}
 		}
-		push := func() {
+		if *once && !*watch {
 			for _, p := range paths {
 				if err := reportd.PushOnce(*dSock, p, nil); err != nil {
 					log.Printf("push %s: %v", p, err)
 				}
 			}
-		}
-		push()
-		if !*watch {
 			return
 		}
-		log.Printf("report watch stub: polling every %s (not udev netlink)", *interval)
-		t := time.NewTicker(*interval)
-		defer t.Stop()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-		for {
-			select {
-			case <-t.C:
-				push()
-			case <-ch:
-				return
-			}
-		}
+		go func() {
+			<-ch
+			cancel()
+		}()
+		reportd.Watch(ctx, *dSock, paths, *interval, nil)
+		return
 	}
 
 	s := reportd.New(*sock)

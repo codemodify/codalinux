@@ -65,8 +65,9 @@ Locked in [architecture.md](../architecture.md#system-config). Code: [`core/syst
 - [x] Greenfield Go module: `system-configd`, apply, report, CLI, TUI stub, uitoolkit GUI.
 - [x] Settings GUI Mail/Settings pattern on uitoolkit `dev` (v0.19.x enough to ship). Remaining gaps in `core/system-config/docs/uitoolkit-gaps.md` — do not block.
 - [x] Wire binaries + systemd units onto the live/install image.
-- [ ] Real udev netlink watch (report `--watch` is a poll stub).
+- [x] Report `--watch` udev netlink (`NETLINK_KOBJECT_UEVENT`); 30s L2 poll remains for Hyprland/PipeWire/timedatectl.
+- [x] Guest e2e: `core/system-config/scripts/guest-e2e-all.sh --guest` (host-refused).
 - [x] Network / audio / bluetooth / input / datetime / locale apply allowlist (plus session lock, power).
 - [x] Persist Hyprland display/input to `~/.config/hypr/coda-system-config.lua`; iwd PSK file + `--passphrase`.
-- [ ] udev watch; BlueZ D-Bus pairing agent. See `core/system-config/docs/ROADMAP.md`.
+- [ ] BlueZ D-Bus pairing agent. See `core/system-config/docs/ROADMAP.md`.
 - [ ] Replace AGS + `coda-settings` (explicitly **not** a migrate in v1).

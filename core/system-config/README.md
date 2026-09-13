@@ -36,8 +36,9 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ./bin/system-config-report &
 ./bin/system-config-apply &
 
-# report can also push once:
+# report can also push once, or watch udev netlink (+ slow L2 poll):
 ./bin/system-config-report --once
+./bin/system-config-report --watch
 
 ./bin/system-config refresh display
 ./bin/system-config get display
@@ -67,6 +68,14 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ```
 
 That starts the three daemons (D + report as the seat user, apply as root with `CODA_SYSTEM_CONFIG_UID`), then `refresh display` (expect `Virtual-1`), `set` scale 2, `apply`, and checks `hyprctl -j monitors` scale.
+
+Full guest e2e (every KnownPath refresh, safe applies only, optional `coda-sandbox` create/exec/destroy):
+
+```bash
+./scripts/guest-e2e-all.sh --guest
+```
+
+Prints a PASS/FAIL table and exits non-zero on any fail. Never suspends/hibernates. ISO copies both scripts to `/usr/local/share/codalinux/system-config/`.
 
 ## Binaries
 
