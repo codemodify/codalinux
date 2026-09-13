@@ -159,6 +159,7 @@ func (s *session) networkPage() uitoolkit.Component {
 		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), dev).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("SSID"), ssid).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("PSK"), psk).WithGap(8),
+		uitoolkit.NewSwitch("Hidden SSID", s.wifiHidden, func(on bool) { s.wifiHidden = on }),
 		uitoolkit.NewButton("Disconnect staged", func() {
 			s.net.WiFi.Disconnect = true
 			s.wifiSSID = ""

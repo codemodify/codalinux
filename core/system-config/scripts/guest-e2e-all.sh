@@ -109,7 +109,10 @@ if [[ ! -S "${runtime}/coda/system-config-apply.sock" ]]; then
     sudo -- env XDG_RUNTIME_DIR="${runtime}" CODA_SYSTEM_CONFIG_UID="${session_uid}" system-config-apply &
   fi
 fi
-wait_sock "${runtime}/coda/system-configd.sock" || true
+if ! wait_sock "${runtime}/coda/system-configd.sock"; then
+  echo "FAIL: system-configd.sock not ready" >&2
+  exit 1
+fi
 wait_sock "${runtime}/coda/system-config-report.sock" || true
 wait_sock "${runtime}/coda/system-config-apply.sock" || true
 
@@ -182,6 +185,24 @@ paths=(
   display network audio bluetooth input datetime locale
   session power devices.summary devices.pci devices.usb hardware.dmi
 )
+
+echo "=== get submodels ==="
+subs="$(cli get submodels 2>&1)" || subs="ERR:${subs}"
+if [[ "${subs}" == ERR:* ]] || ! json_ok "${subs}"; then
+  record FAIL "get submodels" "$(printf '%s' "${subs}" | tr '\n' ' ' | head -c 160)"
+else
+  missing=""
+  for p in "${paths[@]}"; do
+    if ! printf '%s' "${subs}" | grep -q "\"${p}\""; then
+      missing="${missing} ${p}"
+    fi
+  done
+  if [[ -n "${missing}" ]]; then
+    record FAIL "get submodels" "missing:${missing}"
+  else
+    record PASS "get submodels"
+  fi
+fi
 
 echo "=== refresh every KnownPath ==="
 for p in "${paths[@]}"; do
@@ -355,7 +376,15 @@ else
       fi
     }
     as_desktop_sb coda-sandbox destroy "${env_name}" >/dev/null 2>&1 || true
-    if as_desktop_sb coda-sandbox create "${env_name}"; then
+    create_ok=0
+    if command -v timeout >/dev/null 2>&1; then
+      if timeout 180 as_desktop_sb coda-sandbox create "${env_name}"; then
+        create_ok=1
+      fi
+    elif as_desktop_sb coda-sandbox create "${env_name}"; then
+      create_ok=1
+    fi
+    if [[ "${create_ok}" -eq 1 ]]; then
       if as_desktop_sb coda-sandbox exec "${env_name}" true; then
         record PASS "coda-sandbox create/exec"
       else

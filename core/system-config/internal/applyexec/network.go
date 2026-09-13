@@ -102,12 +102,16 @@ func (r *Runner) netWiFiConnect(op protocol.PlanOp) error {
 			return err
 		}
 	}
+	sub := "connect"
+	if op.Hidden {
+		sub = "connect-hidden"
+	}
 	var out string
 	var err error
 	if op.PSK != "" {
-		out, err = r.runHost("iwctl", "--passphrase", op.PSK, "station", op.Device, "connect", op.SSID)
+		out, err = r.runHost("iwctl", "--passphrase", op.PSK, "station", op.Device, sub, op.SSID)
 	} else {
-		out, err = r.runHost("iwctl", "station", op.Device, "connect", op.SSID)
+		out, err = r.runHost("iwctl", "station", op.Device, sub, op.SSID)
 	}
 	if err != nil {
 		return fmt.Errorf("iwctl connect: %w (%s)", err, strings.TrimSpace(out))

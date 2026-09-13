@@ -90,6 +90,16 @@ func TestNetworkWiFiConnectArgv(t *testing.T) {
 	if len(got) != 1 || got[0][0] != "iwctl" || got[0][len(got[0])-1] != "Cafe" {
 		t.Fatalf("%v", got)
 	}
+	got = nil
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetWiFiConnect, Device: "wlan0", SSID: "HiddenNet", PSK: "password1", Hidden: true,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got[0], " ")
+	if !strings.Contains(joined, "connect-hidden") {
+		t.Fatalf("hidden ssid argv %v", got)
+	}
 	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
 		Type: protocol.OpNetWiFiConnect, Device: "wlan0;reboot", SSID: "x",
 	}}}); err == nil {

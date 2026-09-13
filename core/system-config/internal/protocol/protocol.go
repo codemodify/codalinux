@@ -116,6 +116,7 @@ type PlanOp struct {
 	ID        string   `json:"id,omitempty"`
 	Speed     float64  `json:"speed,omitempty"`
 	AddressBT string   `json:"bt_address,omitempty"`
+	Hidden    bool     `json:"hidden,omitempty"`
 }
 
 const (
