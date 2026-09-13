@@ -137,9 +137,15 @@ type session struct {
 	power    protocol.PowerModel
 	bright   float64
 
-	printers protocol.PrintersModel
-	users    protocol.UsersModel
-	storage  protocol.StorageModel
+	printers     protocol.PrintersModel
+	printerName  string
+	printerOn    bool
+	users        protocol.UsersModel
+	userName     string
+	userShell    string
+	storage      protocol.StorageModel
+	storageName  string
+	storageAct   string
 
 	status   *widgets.StatusBar
 	applyBtn *widgets.Button
@@ -285,7 +291,7 @@ func (s *session) dirty() bool {
 	switch s.path() {
 	case protocol.PathDisplay:
 		return s.scale > 0 && abs(s.scale-s.savedScale) > 0.01
-	case protocol.PathDevicesSummary, protocol.PathPrinters, protocol.PathUsers, protocol.PathStorage:
+	case protocol.PathDevicesSummary:
 		return false
 	default:
 		return true
@@ -337,7 +343,7 @@ func (s *session) build() uitoolkit.Component {
 	s.applyBtn = uitoolkit.NewButton("Apply", s.apply)
 	s.applyBtn.Primary = true
 	s.applyBtn.SetEnabled(s.dirty() && s.cli != nil && protocol.Settable(s.path()))
-	hint := uitoolkit.NewLabel("Apply sends staged desired state to system-configd. Observe-only pages have no Apply.")
+	hint := uitoolkit.NewLabel("Apply sends staged desired state to system-configd.")
 	actions := uitoolkit.NewRow(s.applyBtn, hint).WithGap(12).WithPad(8)
 
 	st := "system-configd connected"
@@ -441,6 +447,17 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 		v = protocol.SessionModel{Action: "lock"}
 	case protocol.PathPower:
 		v = protocol.PowerModel{Brightness: int(s.bright), Backlight: s.power.Backlight, Action: s.power.Action, Lid: s.power.Lid}
+	case protocol.PathPrinters:
+		en := s.printerOn
+		p := protocol.PrintersModel{Default: s.printerName}
+		if s.printerName != "" {
+			p.Printers = []protocol.Printer{{Name: s.printerName, Enabled: &en, Default: true}}
+		}
+		v = p
+	case protocol.PathUsers:
+		v = protocol.UsersModel{Users: []protocol.LocalUser{{Name: s.userName, Shell: s.userShell}}}
+	case protocol.PathStorage:
+		v = protocol.StorageModel{Block: []protocol.BlockDev{{Name: s.storageName, Action: s.storageAct}}}
 	default:
 		return nil, fmt.Errorf("nothing to apply")
 	}

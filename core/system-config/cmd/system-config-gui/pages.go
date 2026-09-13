@@ -256,7 +256,7 @@ func (s *session) audioPage() uitoolkit.Component {
 	defaults := fmt.Sprintf("Default sink %s   source %s", s.audio.DefaultSink, s.audio.DefaultSource)
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Audio"),
-		uitoolkit.NewLabel("PipeWire via pw-dump / wpctl (session user). Full names, per-sink volume, default routing for this session."),
+		uitoolkit.NewLabel("PipeWire via pw-dump / wpctl. Default sink/source persist to ~/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf."),
 		uitoolkit.NewLabel(defaults),
 		table, sources, s.volLbl,
 		uitoolkit.NewSlider(0, 100, float32(s.vol*100), func(v float32) {
@@ -329,7 +329,7 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 	}
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Bluetooth"),
-		uitoolkit.NewLabel("BlueZ D-Bus preferred (pairing agent for PIN/passkey). bluetoothctl --timeout fallback."),
+		uitoolkit.NewLabel("BlueZ D-Bus pairing agent. Type the PIN here, Stage pair, then Apply. Apply writes $XDG_RUNTIME_DIR/coda/bluetooth-pin; the agent reads it (or waits up to 12s) when the device asks."),
 		uitoolkit.NewLabel("Adapter "+adapter),
 		uitoolkit.NewSwitch("Adapter power", s.btPower, func(on bool) { s.btPower = on }),
 		uitoolkit.NewSwitch("Scan", s.btScan, func(on bool) { s.btScan = on }),
@@ -509,9 +509,12 @@ func (s *session) powerPage() uitoolkit.Component {
 }
 
 func (s *session) printersPage() uitoolkit.Component {
-	note := "CUPS via lpstat. present=false when cups is missing."
+	note := "CUPS via lpstat / lpadmin. present=false when cups is missing. Apply sets default and enable."
 	if len(s.printers.Printers) == 0 {
 		note += " No printers (or cups not installed)."
+	}
+	if s.printers.Default != "" {
+		note += " Default: " + s.printers.Default
 	}
 	table := uitoolkit.NewTableView([]uitoolkit.TableColumn{
 		{Title: "Printer"}, {Title: "State"},
@@ -523,12 +526,26 @@ func (s *session) printersPage() uitoolkit.Component {
 		if col == 1 {
 			return p.State
 		}
+		if p.Default || p.Name == s.printers.Default {
+			return p.Name + " *"
+		}
 		return p.Name
-	}, nil)
+	}, func(i int) {
+		if i >= 0 && i < len(s.printers.Printers) {
+			s.printerName = s.printers.Printers[i].Name
+			if s.printers.Printers[i].Enabled != nil {
+				s.printerOn = *s.printers.Printers[i].Enabled
+			} else {
+				s.printerOn = true
+			}
+		}
+	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Printers"),
 		uitoolkit.NewLabel(note),
 		table,
+		uitoolkit.NewRow(uitoolkit.NewLabel("Default"), uitoolkit.NewTextField(s.printerName, "printer name", func(v string) { s.printerName = v })).WithGap(8),
+		uitoolkit.NewSwitch("Enabled", s.printerOn, func(on bool) { s.printerOn = on }),
 		s.refreshBtn(protocol.PathPrinters),
 	).WithGap(8)
 }
@@ -551,11 +568,18 @@ func (s *session) usersPage() uitoolkit.Component {
 		default:
 			return u.Name
 		}
-	}, nil)
+	}, func(i int) {
+		if i >= 0 && i < len(s.users.Users) {
+			s.userName = s.users.Users[i].Name
+			s.userShell = s.users.Users[i].Shell
+		}
+	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Users"),
-		uitoolkit.NewLabel("Local accounts from /etc/passwd (uid 0 and >=1000). Observe-only."),
+		uitoolkit.NewLabel("Local accounts from /etc/passwd. Apply changes login shell only (usermod -s). No add/delete/password."),
 		table,
+		uitoolkit.NewRow(uitoolkit.NewLabel("User"), uitoolkit.NewTextField(s.userName, "live", func(v string) { s.userName = v })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Shell"), uitoolkit.NewTextField(s.userShell, "/bin/bash", func(v string) { s.userShell = v })).WithGap(8),
 		s.refreshBtn(protocol.PathUsers),
 	).WithGap(8)
 }
@@ -584,11 +608,20 @@ func (s *session) storagePage() uitoolkit.Component {
 		default:
 			return b.Name
 		}
-	}, nil)
+	}, func(i int) {
+		if i >= 0 && i < len(s.storage.Block) {
+			s.storageName = s.storage.Block[i].Name
+		}
+	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Storage"),
-		uitoolkit.NewLabel(note),
+		uitoolkit.NewLabel(note+" Apply mount/unmount via udisksctl. System mounts (/, /boot, /usr, /home) are refused."),
 		table,
+		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), uitoolkit.NewTextField(s.storageName, "sdb1", func(v string) { s.storageName = v })).WithGap(8),
+		uitoolkit.NewRow(
+			uitoolkit.NewButton("Stage mount", func() { s.storageAct = "mount"; s.note("staged mount " + s.storageName) }),
+			uitoolkit.NewButton("Stage unmount", func() { s.storageAct = "unmount"; s.note("staged unmount " + s.storageName) }),
+		).WithGap(8),
 		s.refreshBtn(protocol.PathStorage),
 	).WithGap(8)
 }

@@ -9,10 +9,12 @@ import (
 	"syscall"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/daemon"
+	"github.com/codemodify/codalinux/core/system-config/internal/rootguard"
 	"github.com/codemodify/codalinux/core/system-config/internal/sockpath"
 )
 
 func main() {
+	rootguard.RefuseRoot("system-configd")
 	sock := flag.String("socket", sockpath.Daemon(), "listen socket")
 	apply := flag.String("apply-socket", sockpath.Apply(), "system-config-apply socket")
 	report := flag.String("report-socket", sockpath.Report(), "system-config-report socket")

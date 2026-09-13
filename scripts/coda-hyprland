@@ -75,7 +75,9 @@ else
   exit 1
 fi
 
-if command -v systemctl >/dev/null 2>&1; then
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo "refusing system-config user daemons as root (would bind /run/user/0)"
+elif command -v systemctl >/dev/null 2>&1; then
   systemctl --user start system-configd.service system-config-report.service >/dev/null 2>&1 || true
 fi
 

@@ -2,6 +2,8 @@ package applyexec
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/bluez"
@@ -62,14 +64,17 @@ func (r *Runner) btDevice(op protocol.PlanOp) error {
 	if err := checkPIN(op.Value); err != nil {
 		return err
 	}
+	pin := op.PIN
+	if pin == "" {
+		pin = op.Value
+	}
+	if pin != "" {
+		_ = r.writePINFile(pin)
+	}
 	if r.useBlueZ() {
 		var err error
 		switch op.Type {
 		case protocol.OpBTPair:
-			pin := op.PIN
-			if pin == "" {
-				pin = op.Value
-			}
 			err = bluez.Pair(addr, pin)
 		case protocol.OpBTConnect:
 			err = bluez.Connect(addr)
@@ -96,4 +101,12 @@ func (r *Runner) btDevice(op protocol.PlanOp) error {
 		return fmt.Errorf("bluetoothctl %s: %w (%s)", sub, err, strings.TrimSpace(out))
 	}
 	return nil
+}
+
+func (r *Runner) writePINFile(pin string) error {
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		return nil
+	}
+	return r.writeFile(filepath.Join(dir, "coda", "bluetooth-pin"), []byte(pin+"\n"), 0o600)
 }

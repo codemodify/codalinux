@@ -97,6 +97,16 @@ func (r *Runner) execOp(op protocol.PlanOp) error {
 		return r.powerBrightness(op)
 	case protocol.OpPowerLid:
 		return r.powerLid(op)
+	case protocol.OpPrinterDefault:
+		return r.printerDefault(op)
+	case protocol.OpPrinterEnable:
+		return r.printerEnable(op)
+	case protocol.OpUserShell:
+		return r.userShell(op)
+	case protocol.OpStorageMount:
+		return r.storageMount(op)
+	case protocol.OpStorageUnmount:
+		return r.storageUnmount(op)
 	default:
 		return fmt.Errorf("refused: unknown op %q", op.Type)
 	}

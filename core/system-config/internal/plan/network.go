@@ -1,6 +1,10 @@
 package plan
 
-import "github.com/codemodify/codalinux/core/system-config/internal/protocol"
+import (
+	"encoding/json"
+
+	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
+)
 
 func FromNetwork(desired, observed []byte) (protocol.Plan, error) {
 	var want, have protocol.NetworkModel
@@ -12,12 +16,12 @@ func FromNetwork(desired, observed []byte) (protocol.Plan, error) {
 		haveBy[l.Name] = l
 	}
 	var ops []protocol.PlanOp
-	for _, w := range want.Links {
+	for i, w := range want.Links {
 		if w.Name == "" {
 			continue
 		}
 		h := haveBy[w.Name]
-		if w.Enabled != h.Enabled {
+		if linkJSONHas(desired, i, "enabled") && w.Enabled != h.Enabled {
 			ops = append(ops, protocol.PlanOp{
 				Type: protocol.OpNetIfaceEnable, Device: w.Name, Enabled: boolPtr(w.Enabled),
 			})
@@ -46,6 +50,19 @@ func FromNetwork(desired, observed []byte) (protocol.Plan, error) {
 		})
 	}
 	return protocol.Plan{Path: protocol.PathNetwork, Ops: ops}, nil
+}
+
+func linkJSONHas(desired []byte, i int, key string) bool {
+	var wrap struct {
+		Links []json.RawMessage `json:"links"`
+	}
+	if json.Unmarshal(desired, &wrap) != nil {
+		return false
+	}
+	if i < 0 || i >= len(wrap.Links) {
+		return false
+	}
+	return jsonHas(wrap.Links[i], key)
 }
 
 func firstAddr(a []string) string {

@@ -22,7 +22,7 @@ type NetworkModel struct {
 	Links    []NetLink `json:"links"`
 	WiFi     WiFiState `json:"wifi"`
 	Routes   []Route   `json:"routes,omitempty"`
-	Airplane bool      `json:"airplane,omitempty"`
+	Airplane bool      `json:"airplane"`
 }
 
 type NetLink struct {
@@ -202,12 +202,16 @@ type PowerModel struct {
 
 type PrintersModel struct {
 	Printers []Printer `json:"printers"`
+	Default  string    `json:"default,omitempty"`
 }
 
 type Printer struct {
-	Name  string `json:"name"`
-	URI   string `json:"uri,omitempty"`
-	State string `json:"state,omitempty"`
+	Name      string `json:"name"`
+	URI       string `json:"uri,omitempty"`
+	State     string `json:"state,omitempty"`
+	Enabled   *bool  `json:"enabled,omitempty"`
+	Accepting *bool  `json:"accepting,omitempty"`
+	Default   bool   `json:"default,omitempty"`
 }
 
 type UsersModel struct {
@@ -227,10 +231,11 @@ type StorageModel struct {
 }
 
 type BlockDev struct {
-	Name  string `json:"name"`
-	Type  string `json:"type,omitempty"`
-	Size  string `json:"size,omitempty"`
-	Mount string `json:"mount,omitempty"`
-	Model string `json:"model,omitempty"`
-	FS    string `json:"fstype,omitempty"`
+	Name   string `json:"name"`
+	Type   string `json:"type,omitempty"`
+	Size   string `json:"size,omitempty"`
+	Mount  string `json:"mount,omitempty"`
+	Model  string `json:"model,omitempty"`
+	FS     string `json:"fstype,omitempty"`
+	Action string `json:"action,omitempty"` // mount | unmount
 }
