@@ -98,7 +98,7 @@ Official-repo packages only:
 
 ### system-config
 
-Locked **greenfield** target. Implementation started in [`core/system-config/`](core/system-config/README.md). Do not add a `coda-settings` compatibility or migrate layer.
+Locked **greenfield** target. Implemented in [`core/system-config/`](core/system-config/README.md) and wired onto the live ISO. Do not add a `coda-settings` compatibility or migrate layer.
 
 | Decision | Choice |
 | --- | --- |

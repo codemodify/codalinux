@@ -5,6 +5,7 @@ enable systemd-networkd.service
 enable systemd-resolved.service
 enable iwd.service
 enable bluetooth.service
+enable system-config-apply.service
 
 disable NetworkManager.service
 disable firewalld.service

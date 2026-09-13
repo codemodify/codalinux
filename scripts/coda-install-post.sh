@@ -126,7 +126,8 @@ EOF
   fi
 
   systemctl --root="${root}" enable greetd.service systemd-networkd.service \
-    systemd-resolved.service iwd.service bluetooth.service || true
+    systemd-resolved.service iwd.service bluetooth.service \
+    system-config-apply.service || true
   systemctl --root="${root}" disable NetworkManager.service 2>/dev/null || true
   systemctl --root="${root}" disable firewalld.service 2>/dev/null || true
   systemctl --root="${root}" disable cups.service 2>/dev/null || true
@@ -167,12 +168,38 @@ if [[ "${same_root}" -eq 0 ]]; then
   local_bin=""
   for local_bin in coda-hyprland coda-ags coda-hypr-ws coda-hyprlock \
                    coda-hyprpaper coda-wallpaper coda-settings coda-sandbox \
-                   coda-sync-desktop-from-host ags astal; do
+                   coda-sync-desktop-from-host ags astal \
+                   system-config system-configd system-config-apply \
+                   system-config-report system-config-tui system-config-gui; do
     copy_if "/usr/local/bin/${local_bin}" "${target}/usr/local/bin/${local_bin}"
   done
   chmod 0755 "${target}/usr/local/bin/"coda-* 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/ags" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/astal" 2>/dev/null || true
+  chmod 0755 "${target}/usr/local/bin/"system-config* 2>/dev/null || true
+  copy_if /usr/local/lib/codalinux/system-config-apply-launch \
+    "${target}/usr/local/lib/codalinux/system-config-apply-launch"
+  chmod 0755 "${target}/usr/local/lib/codalinux/system-config-apply-launch" 2>/dev/null || true
+  copy_if /etc/systemd/system/system-config-apply.service \
+    "${target}/etc/systemd/system/system-config-apply.service"
+  mkdir -p "${target}/etc/systemd/system/graphical.target.wants" \
+    "${target}/etc/systemd/user/default.target.wants"
+  copy_if /etc/systemd/user/system-configd.service \
+    "${target}/etc/systemd/user/system-configd.service"
+  copy_if /etc/systemd/user/system-config-report.service \
+    "${target}/etc/systemd/user/system-config-report.service"
+  if [[ -e "${target}/etc/systemd/system/system-config-apply.service" ]]; then
+    ln -sfn /etc/systemd/system/system-config-apply.service \
+      "${target}/etc/systemd/system/graphical.target.wants/system-config-apply.service"
+  fi
+  if [[ -e "${target}/etc/systemd/user/system-configd.service" ]]; then
+    ln -sfn /etc/systemd/user/system-configd.service \
+      "${target}/etc/systemd/user/default.target.wants/system-configd.service"
+  fi
+  if [[ -e "${target}/etc/systemd/user/system-config-report.service" ]]; then
+    ln -sfn /etc/systemd/user/system-config-report.service \
+      "${target}/etc/systemd/user/default.target.wants/system-config-report.service"
+  fi
 
   copy_tree /usr/local/lib "${target}/usr/local/lib"
   copy_tree /usr/local/share/codalinux "${target}/usr/local/share/codalinux"

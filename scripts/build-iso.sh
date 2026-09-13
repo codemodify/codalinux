@@ -217,6 +217,10 @@ prepare_overlay() {
       exit 1
     fi
   done
+  "${root}/scripts/install-system-config.sh" "${overlay}"
+  install -m 0755 "${root}/scripts/system-config-apply-launch" \
+    "${overlay}/usr/local/lib/codalinux/system-config-apply-launch"
+
   "${root}/scripts/check-wrapper-modes.sh"
 
   mkdir -p "${work}" "${out}"
