@@ -326,8 +326,30 @@ else
   record FAIL "set datetime"
 fi
 
-audio="$(cli get audio 2>/dev/null || true)"
-sinks="$(json_field "${audio}" "sinks")"
+# Wait for PipeWire Dummy Output (fresh live boot often has no sinks yet).
+audio=""
+sinks=""
+n=0
+while [[ "${n}" -lt 60 ]]; do
+  cli refresh audio >/dev/null 2>&1 || true
+  audio="$(cli get audio 2>/dev/null || true)"
+  sinks="$(json_field "${audio}" "sinks")"
+  if [[ -n "${sinks}" && "${sinks}" != "[]" && "${sinks}" != "null" ]]; then
+    break
+  fi
+  if command -v wpctl >/dev/null 2>&1; then
+    if as_session wpctl status 2>/dev/null | grep -qE 'Sinks:|[[:space:]]+[0-9]+\.'; then
+      cli refresh audio >/dev/null 2>&1 || true
+      audio="$(cli get audio 2>/dev/null || true)"
+      sinks="$(json_field "${audio}" "sinks")"
+      if [[ -n "${sinks}" && "${sinks}" != "[]" && "${sinks}" != "null" ]]; then
+        break
+      fi
+    fi
+  fi
+  sleep 0.5
+  n=$((n + 1))
+done
 if [[ -n "${sinks}" && "${sinks}" != "[]" && "${sinks}" != "null" ]]; then
   mute_now="$(json_field "${audio}" "mute")"
   if [[ "${mute_now}" == "True" || "${mute_now}" == "true" ]]; then
