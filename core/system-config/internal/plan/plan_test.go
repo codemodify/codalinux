@@ -80,6 +80,19 @@ func TestFromNetworkHiddenSSID(t *testing.T) {
 	}
 }
 
+func TestFromAudioDefaultSinkIdempotent(t *testing.T) {
+	p, err := FromAudio(
+		[]byte(`{"default_sink":"49"}`),
+		[]byte(`{"default_sink":"49","sinks":[{"id":"49","name":"Dummy Output","default":true}]}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Ops) != 1 || p.Ops[0].Type != protocol.OpAudioDefaultSink || p.Ops[0].ID != "49" {
+		t.Fatalf("want persist op for unchanged default, got %+v", p.Ops)
+	}
+}
+
 func TestFromAudioVolume(t *testing.T) {
 	p, err := FromAudio(
 		[]byte(`{"default_sink":"52","volume":0.4}`),

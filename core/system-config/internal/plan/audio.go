@@ -8,10 +8,12 @@ func FromAudio(desired, observed []byte) (protocol.Plan, error) {
 		return protocol.Plan{}, err
 	}
 	var ops []protocol.PlanOp
-	if want.DefaultSink != "" && want.DefaultSink != have.DefaultSink {
+	// Always re-apply an explicit default so persistAudioDefault writes
+	// WirePlumber conf even when routing already matches (Dummy Output).
+	if jsonHas(desired, "default_sink") && want.DefaultSink != "" {
 		ops = append(ops, protocol.PlanOp{Type: protocol.OpAudioDefaultSink, ID: want.DefaultSink, Name: want.DefaultSink})
 	}
-	if want.DefaultSource != "" && want.DefaultSource != have.DefaultSource {
+	if jsonHas(desired, "default_source") && want.DefaultSource != "" {
 		ops = append(ops, protocol.PlanOp{Type: protocol.OpAudioDefaultSource, ID: want.DefaultSource, Name: want.DefaultSource})
 	}
 	if jsonHas(desired, "volume") && abs(want.Volume-haveDefaultVol(have)) > 0.005 {
