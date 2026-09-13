@@ -63,6 +63,7 @@ Picture: [architecture.md](../architecture.md) (target A/B vs current mutable de
 Locked in [architecture.md](../architecture.md#system-config). Code: [`core/system-config/`](../core/system-config/README.md).
 
 - [x] Greenfield Go module: `system-configd`, apply, report, CLI, TUI stub, uitoolkit GUI.
+- [x] Settings GUI Mail/Settings pattern on uitoolkit `dev` (v0.19.x enough to ship). Remaining gaps in `core/system-config/docs/uitoolkit-gaps.md` — do not block.
 - [ ] Wire binaries onto the live/install image (not in this pass).
 - [ ] Real udev netlink watch (report `--watch` is a poll stub).
 - [ ] Network / audio apply allowlist.
