@@ -47,7 +47,7 @@ func (r *Runner) execOp(op protocol.PlanOp) error {
 		return fmt.Errorf("refused: unknown op %q", op.Type)
 	}
 	switch op.Type {
-	case protocol.OpDisplayScale, protocol.OpDisplayMode:
+	case protocol.OpDisplayScale, protocol.OpDisplayMode, protocol.OpDisplayPosition:
 		return r.hyprMonitor(op)
 	case protocol.OpNetIfaceEnable:
 		return r.netIfaceEnable(op)
@@ -57,6 +57,8 @@ func (r *Runner) execOp(op protocol.PlanOp) error {
 		return r.netWiFiConnect(op)
 	case protocol.OpNetWiFiDisconnect:
 		return r.netWiFiDisconnect(op)
+	case protocol.OpNetAirplane:
+		return r.netAirplane(op)
 	case protocol.OpAudioDefaultSink, protocol.OpAudioDefaultSource:
 		return r.audioDefault(op)
 	case protocol.OpAudioVolume:

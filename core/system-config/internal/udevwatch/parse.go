@@ -67,6 +67,8 @@ func PathsFor(e Event) []string {
 		return []string{protocol.PathDisplay, protocol.PathDevicesSummary}
 	case "sound":
 		return []string{protocol.PathAudio}
+	case "block":
+		return []string{protocol.PathStorage}
 	default:
 		if strings.Contains(e.Devpath, "/net/") {
 			return []string{protocol.PathNetwork}

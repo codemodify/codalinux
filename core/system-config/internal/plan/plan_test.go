@@ -38,6 +38,35 @@ func TestFromNetworkWifiAndIface(t *testing.T) {
 	}
 }
 
+func TestFromNetworkAirplaneAndDNS(t *testing.T) {
+	p, err := FromNetwork(
+		[]byte(`{"airplane":true,"links":[{"name":"enp1s0","method":"static","addresses":["10.0.2.15/24"],"gateway":"10.0.2.2","dns":["1.1.1.1"],"search":["lan"]}]}`),
+		[]byte(`{"airplane":false,"links":[{"name":"enp1s0","method":"dhcp"}]}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Ops) != 2 {
+		t.Fatalf("ops %+v", p.Ops)
+	}
+	if p.Ops[0].Type != protocol.OpNetIfaceMethod || p.Ops[0].Search[0] != "lan" {
+		t.Fatalf("%+v", p.Ops[0])
+	}
+	if p.Ops[1].Type != protocol.OpNetAirplane || p.Ops[1].Enabled == nil || !*p.Ops[1].Enabled {
+		t.Fatalf("%+v", p.Ops[1])
+	}
+}
+
+func TestFromDisplayPosition(t *testing.T) {
+	p, err := FromDisplay(
+		[]byte(`{"outputs":[{"name":"HDMI-A-1","position":"1920x0","scale":1}]}`),
+		[]byte(`{"outputs":[{"name":"HDMI-A-1","position":"0x0","scale":1,"x":0,"y":0}]}`),
+	)
+	if err != nil || len(p.Ops) == 0 || p.Ops[0].Type != protocol.OpDisplayPosition {
+		t.Fatalf("%v %+v", err, p.Ops)
+	}
+}
+
 func TestFromNetworkHiddenSSID(t *testing.T) {
 	p, err := FromNetwork(
 		[]byte(`{"wifi":{"device":"wlan0","connect":"SecretNet","psk":"password1","hidden":true}}`),

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
 )
@@ -32,7 +33,48 @@ func (p *Probe) input() (json.RawMessage, error) {
 	if m.KBLayout == "" {
 		m.KBLayout = m.Keymap
 	}
+	p.fillInputPersist(&m)
 	return rpc.Raw(m), nil
+}
+
+func (p *Probe) fillInputPersist(m *protocol.InputModel) {
+	home := ""
+	if p.Discover != nil {
+		if s, err := p.Discover(); err == nil {
+			home = s.Home
+		}
+	} else if s, err := hyprsession.DiscoverRuntime(); err == nil {
+		home = s.Home
+	}
+	if home == "" {
+		home = os.Getenv("HOME")
+	}
+	if home == "" {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".config", "hypr", "coda-system-config.state.json"))
+	if err != nil {
+		return
+	}
+	var st struct {
+		KBLayout string  `json:"kb_layout"`
+		Speed    float64 `json:"pointer_speed"`
+		Natural  *bool   `json:"natural_scroll"`
+		Tap      *bool   `json:"tap_to_click"`
+	}
+	if json.Unmarshal(b, &st) != nil {
+		return
+	}
+	if st.KBLayout != "" {
+		m.KBLayout = st.KBLayout
+	}
+	m.PointerSpeed = st.Speed
+	if st.Natural != nil {
+		m.NaturalScroll = *st.Natural
+	}
+	if st.Tap != nil {
+		m.TapToClick = *st.Tap
+	}
 }
 
 func (p *Probe) datetime() (json.RawMessage, error) {
@@ -99,7 +141,40 @@ func (p *Probe) session() (json.RawMessage, error) {
 				}
 			}
 		}
+		if idle, err := p.cmd("loginctl", "show-session", s.ID, "-p", "IdleHint"); err == nil && strings.Contains(idle, "yes") {
+			m.IdleHint = true
+		}
 		m.Sessions = append(m.Sessions, s)
+	}
+	if raw, err := p.cmd("loginctl", "list-seats", "--no-legend", "--no-pager"); err == nil {
+		for _, line := range strings.Split(raw, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			seat := protocol.Seat{ID: fields[0]}
+			for _, s := range m.Sessions {
+				if s.Seat == seat.ID {
+					seat.Sessions = append(seat.Sessions, s.ID)
+				}
+			}
+			m.Seats = append(m.Seats, seat)
+		}
+	}
+	if raw, err := p.cmd("systemd-inhibit", "--list", "--no-legend", "--no-pager"); err == nil {
+		for _, line := range strings.Split(raw, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
+				continue
+			}
+			low := strings.ToLower(line)
+			if !strings.Contains(low, "idle") && !strings.Contains(low, "sleep") {
+				continue
+			}
+			m.IdleInhibit = append(m.IdleInhibit, protocol.Inhibit{
+				Who: fields[0], Why: strings.Join(fields[1:], " "), Mode: "idle",
+			})
+		}
 	}
 	return rpc.Raw(m), nil
 }
@@ -118,7 +193,10 @@ func (p *Probe) power() (json.RawMessage, error) {
 		"org.freedesktop.login1.Manager", "CanHibernate"); err == nil && strings.Contains(raw, "yes") {
 		m.CanHibernate = true
 	}
-	m.Lid = readLogind(p.root("etc/systemd/logind.conf"), "HandleLidSwitch")
+	m.Lid = readLogind(p.root("etc/systemd/logind.conf.d/coda-lid.conf"), "HandleLidSwitch")
+	if m.Lid == "" {
+		m.Lid = readLogind(p.root("etc/systemd/logind.conf"), "HandleLidSwitch")
+	}
 	dir := p.root("sys/class/backlight")
 	ents, err := os.ReadDir(dir)
 	if err == nil {

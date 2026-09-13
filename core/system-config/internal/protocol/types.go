@@ -12,13 +12,17 @@ type Output struct {
 	RefreshHz int     `json:"refresh_hz,omitempty"`
 	Scale     float64 `json:"scale,omitempty"`
 	Mode      string  `json:"mode,omitempty"`
+	X         int     `json:"x,omitempty"`
+	Y         int     `json:"y,omitempty"`
+	Position  string  `json:"position,omitempty"` // auto | WxH (hypr "0x0")
 	Focused   bool    `json:"focused,omitempty"`
 }
 
 type NetworkModel struct {
-	Links  []NetLink `json:"links"`
-	WiFi   WiFiState `json:"wifi"`
-	Routes []Route   `json:"routes,omitempty"`
+	Links    []NetLink `json:"links"`
+	WiFi     WiFiState `json:"wifi"`
+	Routes   []Route   `json:"routes,omitempty"`
+	Airplane bool      `json:"airplane,omitempty"`
 }
 
 type NetLink struct {
@@ -30,6 +34,7 @@ type NetLink struct {
 	Addresses []string `json:"addresses,omitempty"`
 	Gateway   string   `json:"gateway,omitempty"`
 	DNS       []string `json:"dns,omitempty"`
+	Search    []string `json:"search,omitempty"`
 }
 
 type WiFiState struct {
@@ -82,6 +87,7 @@ type BluetoothModel struct {
 	Connect    []string   `json:"connect,omitempty"`
 	Disconnect []string   `json:"disconnect,omitempty"`
 	Trust      []string   `json:"trust,omitempty"`
+	PIN        string     `json:"pin,omitempty"`
 }
 
 type BTDevice struct {
@@ -154,8 +160,23 @@ type DMI struct {
 }
 
 type SessionModel struct {
-	Sessions []LoginSession `json:"sessions"`
-	Action   string         `json:"action,omitempty"` // lock
+	Sessions    []LoginSession `json:"sessions"`
+	Seats       []Seat         `json:"seats,omitempty"`
+	IdleInhibit []Inhibit      `json:"idle_inhibit,omitempty"`
+	IdleHint    bool           `json:"idle_hint,omitempty"`
+	Action      string         `json:"action,omitempty"` // lock
+}
+
+type Seat struct {
+	ID       string   `json:"id"`
+	Sessions []string `json:"sessions,omitempty"`
+}
+
+type Inhibit struct {
+	Who  string `json:"who,omitempty"`
+	Why  string `json:"why,omitempty"`
+	Mode string `json:"mode,omitempty"`
+	UID  int    `json:"uid,omitempty"`
 }
 
 type LoginSession struct {
@@ -177,4 +198,39 @@ type PowerModel struct {
 	Lid           string `json:"lid,omitempty"` // ignore | suspend | lock | poweroff
 	CanSuspend    bool   `json:"can_suspend"`
 	CanHibernate  bool   `json:"can_hibernate"`
+}
+
+type PrintersModel struct {
+	Printers []Printer `json:"printers"`
+}
+
+type Printer struct {
+	Name  string `json:"name"`
+	URI   string `json:"uri,omitempty"`
+	State string `json:"state,omitempty"`
+}
+
+type UsersModel struct {
+	Users []LocalUser `json:"users"`
+}
+
+type LocalUser struct {
+	Name  string `json:"name"`
+	UID   int    `json:"uid"`
+	GID   int    `json:"gid,omitempty"`
+	Home  string `json:"home,omitempty"`
+	Shell string `json:"shell,omitempty"`
+}
+
+type StorageModel struct {
+	Block []BlockDev `json:"block"`
+}
+
+type BlockDev struct {
+	Name  string `json:"name"`
+	Type  string `json:"type,omitempty"`
+	Size  string `json:"size,omitempty"`
+	Mount string `json:"mount,omitempty"`
+	Model string `json:"model,omitempty"`
+	FS    string `json:"fstype,omitempty"`
 }

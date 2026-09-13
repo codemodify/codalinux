@@ -37,6 +37,9 @@ const (
 	PathHardwareDMI    = "hardware.dmi"
 	PathSession        = "session"
 	PathPower          = "power"
+	PathPrinters       = "printers"
+	PathUsers          = "users"
+	PathStorage        = "storage"
 	PathSubmodels      = "submodels"
 )
 
@@ -55,6 +58,9 @@ var KnownPaths = []string{
 	PathHardwareDMI,
 	PathSession,
 	PathPower,
+	PathPrinters,
+	PathUsers,
+	PathStorage,
 }
 
 // StarterPaths is the list advertised on get submodels (alias of KnownPaths).
@@ -117,16 +123,21 @@ type PlanOp struct {
 	Speed     float64  `json:"speed,omitempty"`
 	AddressBT string   `json:"bt_address,omitempty"`
 	Hidden    bool     `json:"hidden,omitempty"`
+	Position  string   `json:"position,omitempty"`
+	Search    []string `json:"search,omitempty"`
+	PIN       string   `json:"pin,omitempty"`
 }
 
 const (
-	OpDisplayScale = "display.scale"
-	OpDisplayMode  = "display.mode"
+	OpDisplayScale    = "display.scale"
+	OpDisplayMode     = "display.mode"
+	OpDisplayPosition = "display.position"
 
 	OpNetIfaceEnable    = "network.iface.enable"
 	OpNetIfaceMethod    = "network.iface.method"
 	OpNetWiFiConnect    = "network.wifi.connect"
 	OpNetWiFiDisconnect = "network.wifi.disconnect"
+	OpNetAirplane       = "network.airplane"
 
 	OpAudioDefaultSink   = "audio.default.sink"
 	OpAudioDefaultSource = "audio.default.source"
@@ -163,8 +174,8 @@ const (
 
 // ApplyOps is the closed allowlist executed by system-config-apply.
 var ApplyOps = []string{
-	OpDisplayScale, OpDisplayMode,
-	OpNetIfaceEnable, OpNetIfaceMethod, OpNetWiFiConnect, OpNetWiFiDisconnect,
+	OpDisplayScale, OpDisplayMode, OpDisplayPosition,
+	OpNetIfaceEnable, OpNetIfaceMethod, OpNetWiFiConnect, OpNetWiFiDisconnect, OpNetAirplane,
 	OpAudioDefaultSink, OpAudioDefaultSource, OpAudioVolume, OpAudioMute,
 	OpBTPower, OpBTScan, OpBTPair, OpBTConnect, OpBTDisconnect, OpBTTrust,
 	OpInputKeymap, OpInputKBLayout, OpInputPointerSpeed, OpInputNaturalScroll, OpInputTapToClick,

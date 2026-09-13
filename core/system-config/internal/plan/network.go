@@ -25,9 +25,12 @@ func FromNetwork(desired, observed []byte) (protocol.Plan, error) {
 		if w.Method != "" && (w.Method != h.Method || staticChanged(w, h)) {
 			ops = append(ops, protocol.PlanOp{
 				Type: protocol.OpNetIfaceMethod, Device: w.Name, Method: w.Method,
-				Address: firstAddr(w.Addresses), Gateway: w.Gateway, DNS: w.DNS,
+				Address: firstAddr(w.Addresses), Gateway: w.Gateway, DNS: w.DNS, Search: w.Search,
 			})
 		}
+	}
+	if jsonHas(desired, "airplane") && want.Airplane != have.Airplane {
+		ops = append(ops, protocol.PlanOp{Type: protocol.OpNetAirplane, Enabled: boolPtr(want.Airplane)})
 	}
 	dev := want.WiFi.Device
 	if dev == "" {
@@ -62,5 +65,23 @@ func staticChanged(w, h protocol.NetLink) bool {
 	if a := firstAddr(w.Addresses); a != "" && (len(h.Addresses) == 0 || a != h.Addresses[0]) {
 		return true
 	}
+	if !sameStrings(w.DNS, h.DNS) {
+		return true
+	}
+	if !sameStrings(w.Search, h.Search) {
+		return true
+	}
 	return false
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return len(a) == 0 && len(b) == 0
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

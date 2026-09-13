@@ -192,6 +192,55 @@ func TestLocaleAndDatetime(t *testing.T) {
 	}
 }
 
+func TestNetworkAirplaneRfkill(t *testing.T) {
+	var got []string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		got = append([]string{name}, args...)
+		return "", nil
+	}
+	on := true
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetAirplane, Enabled: &on,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "rfkill" || got[1] != "block" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestNetworkdMergeDropIn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/10-wired.network", []byte("[Match]\nName=enp1s0\n\n[Network]\nDHCP=yes\nIPv6AcceptRA=yes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := New()
+	r.NetworkDir = dir
+	wrote := map[string]string{}
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote[path] = string(data)
+		return nil
+	}
+	r.Run = func(string, ...string) (string, error) { return "", nil }
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetIfaceMethod, Device: "enp1s0", Method: "static",
+		Address: "10.0.2.15/24", Gateway: "10.0.2.2", DNS: []string{"1.1.1.1"}, Search: []string{"lan"},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	// When Run+WriteFile are set, findNetworkdMatch still reads NetworkDir from disk.
+	body := ""
+	for p, b := range wrote {
+		if strings.Contains(p, "50-coda.conf") || strings.Contains(p, "20-coda-") {
+			body = b
+		}
+	}
+	if !strings.Contains(body, "DHCP=no") || !strings.Contains(body, "Domains=lan") {
+		t.Fatalf("wrote %#v", wrote)
+	}
+}
+
 func TestIwdPSKFile(t *testing.T) {
 	dir := t.TempDir()
 	r := New()

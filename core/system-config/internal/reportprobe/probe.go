@@ -54,6 +54,12 @@ func (p *Probe) Collect(path string) (json.RawMessage, error) {
 		return p.session()
 	case protocol.PathPower:
 		return p.power()
+	case protocol.PathPrinters:
+		return p.printers()
+	case protocol.PathUsers:
+		return p.users()
+	case protocol.PathStorage:
+		return p.storage()
 	case "", protocol.PathSubmodels:
 		return rpc.Raw(map[string]any{"paths": protocol.StarterPaths}), nil
 	default:
@@ -80,6 +86,8 @@ func (p *Probe) display() (json.RawMessage, error) {
 		Height      int     `json:"height"`
 		RefreshRate float64 `json:"refreshRate"`
 		Scale       float64 `json:"scale"`
+		X           int     `json:"x"`
+		Y           int     `json:"y"`
 		Focused     bool    `json:"focused"`
 	}
 	if err := json.Unmarshal(raw, &mons); err != nil {
@@ -94,6 +102,7 @@ func (p *Probe) display() (json.RawMessage, error) {
 		out.Outputs = append(out.Outputs, protocol.Output{
 			Name: m.Name, Width: m.Width, Height: m.Height,
 			RefreshHz: hz, Scale: m.Scale, Focused: m.Focused,
+			X: m.X, Y: m.Y, Position: formatPosition(m.X, m.Y),
 			Mode: formatMode(m.Width, m.Height, hz),
 		})
 	}
@@ -137,6 +146,10 @@ func (p *Probe) hyprJSON() ([]byte, error) {
 	}
 	out, err := runcmd.Prepared(2500*time.Millisecond, sess.Command("hyprctl", "-j", "monitors"))
 	return []byte(out), err
+}
+
+func formatPosition(x, y int) string {
+	return strconv.Itoa(x) + "x" + strconv.Itoa(y)
 }
 
 func formatMode(w, h, hz int) string {

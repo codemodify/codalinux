@@ -3,6 +3,7 @@ package reportprobe
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -101,8 +102,141 @@ func (p *Probe) network() (json.RawMessage, error) {
 		}
 	}
 
+	p.fillDNS(&m)
+	p.fillAirplane(&m)
 	p.fillWiFi(&m)
 	return rpc.Raw(m), nil
+}
+
+func (p *Probe) fillDNS(m *protocol.NetworkModel) {
+	resolv := readTrim(p.root("etc/resolv.conf"))
+	var dns, search []string
+	for _, line := range strings.Split(resolv, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		switch fields[0] {
+		case "nameserver":
+			dns = append(dns, fields[1])
+		case "search", "domain":
+			search = append(search, fields[1:]...)
+		}
+	}
+	for i := range m.Links {
+		if len(m.Links[i].DNS) == 0 {
+			m.Links[i].DNS = append([]string(nil), dns...)
+		}
+		if len(m.Links[i].Search) == 0 {
+			m.Links[i].Search = append([]string(nil), search...)
+		}
+	}
+	p.fillNetworkdMethod(m)
+}
+
+func (p *Probe) fillNetworkdMethod(m *protocol.NetworkModel) {
+	dir := p.root("etc/systemd/network")
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	byName := map[string]*protocol.NetLink{}
+	for i := range m.Links {
+		byName[m.Links[i].Name] = &m.Links[i]
+	}
+	for _, e := range ents {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".network") {
+			continue
+		}
+		body := readTrim(filepath.Join(dir, e.Name()))
+		iface, method, addrs, gw, dns, search := parseNetworkdUnit(body)
+		if iface == "" || iface == "*" {
+			continue
+		}
+		l := byName[iface]
+		if l == nil {
+			continue
+		}
+		if method != "" {
+			l.Method = method
+		}
+		if gw != "" && l.Gateway == "" {
+			l.Gateway = gw
+		}
+		if len(addrs) > 0 && len(l.Addresses) == 0 {
+			l.Addresses = addrs
+		}
+		if len(dns) > 0 {
+			l.DNS = dns
+		}
+		if len(search) > 0 {
+			l.Search = search
+		}
+	}
+}
+
+func parseNetworkdUnit(body string) (iface, method string, addrs []string, gw string, dns, search []string) {
+	sec := ""
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") {
+			sec = strings.Trim(line, "[]")
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+		switch {
+		case strings.EqualFold(sec, "Match") && strings.EqualFold(k, "Name"):
+			iface = strings.Fields(v)[0]
+		case strings.EqualFold(sec, "Network") && strings.EqualFold(k, "DHCP"):
+			if strings.EqualFold(v, "no") || v == "0" {
+				method = "static"
+			} else {
+				method = "dhcp"
+			}
+		case strings.EqualFold(sec, "Network") && strings.EqualFold(k, "Address"):
+			addrs = append(addrs, v)
+			if method == "" {
+				method = "static"
+			}
+		case strings.EqualFold(sec, "Network") && strings.EqualFold(k, "Gateway"):
+			gw = v
+		case strings.EqualFold(sec, "Network") && strings.EqualFold(k, "DNS"):
+			dns = append(dns, strings.Fields(v)...)
+		case strings.EqualFold(sec, "Network") && strings.EqualFold(k, "Domains"):
+			search = append(search, strings.Fields(v)...)
+		}
+	}
+	return iface, method, addrs, gw, dns, search
+}
+
+func (p *Probe) fillAirplane(m *protocol.NetworkModel) {
+	dir := p.root("sys/class/rfkill")
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		if raw, err := p.cmd("rfkill", "-J"); err == nil {
+			m.Airplane = strings.Contains(raw, `"soft":"blocked"`) && !strings.Contains(raw, `"soft":"unblocked"`)
+		}
+		return
+	}
+	blocked, seen := 0, 0
+	for _, e := range ents {
+		soft := readTrim(p.root("sys/class/rfkill", e.Name(), "soft"))
+		if soft == "" {
+			continue
+		}
+		seen++
+		if soft == "1" {
+			blocked++
+		}
+	}
+	m.Airplane = seen > 0 && blocked == seen
 }
 
 func (p *Probe) fillWiFi(m *protocol.NetworkModel) {
@@ -172,20 +306,69 @@ func parseIwctlNetworks(raw string) []protocol.SSID {
 		if len(fields) < 1 {
 			continue
 		}
+		sig := 0
 		sec := ""
-		if len(fields) >= 2 {
-			sec = fields[len(fields)-2]
-			if sec != "psk" && sec != "open" && sec != "8021x" {
-				sec = fields[len(fields)-1]
+		nameEnd := len(fields)
+		if last := fields[len(fields)-1]; isSignalToken(last) {
+			sig = signalQuality(last)
+			nameEnd--
+		}
+		if nameEnd > 0 {
+			cand := strings.ToLower(fields[nameEnd-1])
+			if cand == "psk" || cand == "open" || cand == "8021x" || cand == "wep" {
+				sec = cand
+				nameEnd--
 			}
 		}
 		name := fields[0]
-		if len(fields) > 2 {
-			name = strings.Join(fields[:len(fields)-2], " ")
+		if nameEnd > 0 {
+			name = strings.Join(fields[:nameEnd], " ")
 		}
-		out = append(out, protocol.SSID{SSID: name, Security: sec})
+		out = append(out, protocol.SSID{SSID: name, Security: sec, Signal: sig})
 	}
 	return out
+}
+
+func isSignalToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	if strings.Trim(s, "*") == "" {
+		return true
+	}
+	if _, err := strconv.Atoi(strings.TrimSuffix(s, "dBm")); err == nil {
+		return true
+	}
+	return false
+}
+
+func signalQuality(s string) int {
+	if stars := strings.Trim(s, "*"); stars == "" && strings.Contains(s, "*") {
+		n := strings.Count(s, "*") * 20
+		if n > 100 {
+			n = 100
+		}
+		return n
+	}
+	n, err := strconv.Atoi(strings.TrimSuffix(s, "dBm"))
+	if err != nil {
+		return 0
+	}
+	if n < 0 {
+		// dBm typically -30 (good) to -90 (bad)
+		q := 2 * (n + 100)
+		if q < 0 {
+			return 0
+		}
+		if q > 100 {
+			return 100
+		}
+		return q
+	}
+	if n > 100 {
+		return 100
+	}
+	return n
 }
 
 func parseIwctlKnown(raw string) []string {

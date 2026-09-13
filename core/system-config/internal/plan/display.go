@@ -37,6 +37,13 @@ func FromDisplay(desired, observed []byte) (protocol.Plan, error) {
 		if w.Mode != "" && w.Mode != h.Mode && w.Mode != modeFrom(h) {
 			ops = append(ops, protocol.PlanOp{
 				Type: protocol.OpDisplayMode, Output: w.Name, Mode: w.Mode, Scale: orScale(w.Scale, h.Scale),
+				Position: positionOf(w, h),
+			})
+		}
+		if pos := positionWant(w); pos != "" && pos != positionOf(h, h) {
+			ops = append(ops, protocol.PlanOp{
+				Type: protocol.OpDisplayPosition, Output: w.Name, Position: pos,
+				Mode: mode, Scale: orScale(w.Scale, h.Scale),
 			})
 		}
 	}
@@ -55,6 +62,23 @@ func modeFrom(o protocol.Output) string {
 		hz = 60
 	}
 	return fmt.Sprintf("%dx%d@%d", o.Width, o.Height, hz)
+}
+
+func positionWant(o protocol.Output) string {
+	if o.Position != "" {
+		return o.Position
+	}
+	if o.X != 0 || o.Y != 0 {
+		return fmt.Sprintf("%dx%d", o.X, o.Y)
+	}
+	return ""
+}
+
+func positionOf(w, fallback protocol.Output) string {
+	if p := positionWant(w); p != "" {
+		return p
+	}
+	return positionWant(fallback)
 }
 
 func orScale(a, b float64) float64 {

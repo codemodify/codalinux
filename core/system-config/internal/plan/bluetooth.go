@@ -15,7 +15,7 @@ func FromBluetooth(desired, observed []byte) (protocol.Plan, error) {
 		ops = append(ops, protocol.PlanOp{Type: protocol.OpBTScan, Enabled: boolPtr(want.Scanning)})
 	}
 	for _, addr := range want.Pair {
-		ops = append(ops, protocol.PlanOp{Type: protocol.OpBTPair, Device: addr})
+		ops = append(ops, protocol.PlanOp{Type: protocol.OpBTPair, Device: addr, PIN: want.PIN, Value: want.PIN})
 	}
 	for _, addr := range want.Connect {
 		ops = append(ops, protocol.PlanOp{Type: protocol.OpBTConnect, Device: addr})

@@ -34,7 +34,8 @@ func TestPathsUSBAndDRM(t *testing.T) {
 	if len(drm) == 0 || drm[0] != protocol.PathDisplay {
 		t.Fatalf("%v", drm)
 	}
-	if PathsFor(Event{Subsystem: "block"}) != nil {
-		t.Fatal("block should not map")
+	blk := PathsFor(Event{Subsystem: "block"})
+	if len(blk) != 1 || blk[0] != protocol.PathStorage {
+		t.Fatalf("block %v", blk)
 	}
 }

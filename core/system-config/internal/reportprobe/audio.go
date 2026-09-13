@@ -14,8 +14,9 @@ var wpID = regexp.MustCompile(`(?m)^id\s+(\d+)`)
 
 func (p *Probe) audio() (json.RawMessage, error) {
 	m := protocol.AudioModel{}
-	raw, err := p.cmdSession("wpctl", "status")
-	if err == nil {
+	if raw, err := p.cmdSession("pw-dump"); err == nil && parsePwDump(raw, &m) {
+		// full node names from PipeWire
+	} else if raw, err := p.cmdSession("wpctl", "status"); err == nil {
 		parseWpStatus(raw, &m)
 	}
 	if id, name := p.inspectDefault("@DEFAULT_AUDIO_SINK@"); id != "" {
@@ -59,7 +60,67 @@ func (p *Probe) audio() (json.RawMessage, error) {
 			}
 		}
 	}
+	p.fillNodeVolumes(&m.Sinks)
+	p.fillNodeVolumes(&m.Sources)
 	return rpc.Raw(m), nil
+}
+
+func (p *Probe) fillNodeVolumes(nodes *[]protocol.AudioNode) {
+	nfill := 0
+	for i := range *nodes {
+		if nfill >= 8 {
+			break
+		}
+		n := &(*nodes)[i]
+		if n.ID == "" || n.Default {
+			continue
+		}
+		if vol, err := p.cmdSession("wpctl", "get-volume", n.ID); err == nil {
+			v, muted := parseWpVolume(vol)
+			n.Volume = v
+			if muted != nil {
+				n.Mute = *muted
+			}
+			nfill++
+		}
+	}
+}
+
+func parsePwDump(raw string, m *protocol.AudioModel) bool {
+	var objs []struct {
+		ID   int `json:"id"`
+		Info *struct {
+			Props map[string]any `json:"props"`
+		} `json:"info"`
+	}
+	if json.Unmarshal([]byte(raw), &objs) != nil {
+		return false
+	}
+	found := false
+	for _, o := range objs {
+		if o.Info == nil || o.Info.Props == nil {
+			continue
+		}
+		class, _ := o.Info.Props["media.class"].(string)
+		if class != "Audio/Sink" && class != "Audio/Source" {
+			continue
+		}
+		name := ""
+		for _, k := range []string{"node.description", "node.nick", "node.name"} {
+			if v, ok := o.Info.Props[k].(string); ok && v != "" {
+				name = v
+				break
+			}
+		}
+		n := protocol.AudioNode{ID: strconv.Itoa(o.ID), Name: name}
+		if class == "Audio/Sink" {
+			m.Sinks = append(m.Sinks, n)
+		} else {
+			m.Sources = append(m.Sources, n)
+		}
+		found = true
+	}
+	return found
 }
 
 func parseWpStatus(raw string, m *protocol.AudioModel) {

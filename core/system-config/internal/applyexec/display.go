@@ -18,8 +18,15 @@ func (r *Runner) hyprMonitor(op protocol.PlanOp) error {
 	if mode == "" {
 		mode = "preferred"
 	}
+	pos := op.Position
+	if pos == "" {
+		pos = "auto"
+	}
+	if err := checkPosition(pos); err != nil {
+		return err
+	}
 	expr := fmt.Sprintf("hl.monitor({ output = %s, mode = %s, position = %s, scale = %g })",
-		luaString(op.Output), luaString(mode), luaString("auto"), scale)
+		luaString(op.Output), luaString(mode), luaString(pos), scale)
 	out, err := r.runHypr("eval", expr)
 	if e := checkHyprOK(out, err); e != nil {
 		return e

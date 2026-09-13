@@ -11,6 +11,36 @@ func (r *Runner) inputKeymap(op protocol.PlanOp) error {
 	if err := checkKeymap(op.Value); err != nil {
 		return err
 	}
+	path := r.VConsole
+	if path == "" {
+		path = "/etc/vconsole.conf"
+	}
+	body := "KEYMAP=" + op.Value + "\n"
+	if existing := r.readFile(path); existing != "" {
+		var b strings.Builder
+		replaced := false
+		for _, line := range strings.Split(existing, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "KEYMAP=") {
+				if !replaced {
+					b.WriteString("KEYMAP=" + op.Value + "\n")
+					replaced = true
+				}
+				continue
+			}
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			b.WriteString(line)
+			if !strings.HasSuffix(line, "\n") {
+				b.WriteString("\n")
+			}
+		}
+		if !replaced {
+			b.WriteString("KEYMAP=" + op.Value + "\n")
+		}
+		body = b.String()
+	}
+	_ = r.writeFile(path, []byte(body), 0o644)
 	out, err := r.runHost("localectl", "set-keymap", op.Value)
 	if err != nil {
 		return fmt.Errorf("localectl set-keymap: %w (%s)", err, strings.TrimSpace(out))

@@ -59,10 +59,15 @@ func (r *Runner) localeLang(op protocol.PlanOp) error {
 
 func (r *Runner) sessionLock() error {
 	out, err := r.runHost("loginctl", "lock-sessions")
-	if err != nil {
-		return fmt.Errorf("loginctl lock-sessions: %w (%s)", err, strings.TrimSpace(out))
+	if err == nil {
+		return nil
 	}
-	return nil
+	if out2, err2 := r.runSession("coda-hyprlock"); err2 == nil {
+		return nil
+	} else {
+		out += " " + out2
+	}
+	return fmt.Errorf("loginctl lock-sessions: %w (%s)", err, strings.TrimSpace(out))
 }
 
 func (r *Runner) powerAction(action string) error {
