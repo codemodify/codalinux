@@ -9,11 +9,14 @@ on:
       - "archiso/**"
       - "packages/**"
       - "scripts/build-iso.sh"
+      - "scripts/install-system-config.sh"
+      - "scripts/system-config-apply-launch"
       - "scripts/vendor-ags.sh"
       - "scripts/vendor-hyprbars.sh"
       - "scripts/compose-package-lists.sh"
       - "scripts/coda-ags"
       - "scripts/coda-hypr-ws"
+      - "core/system-config/**"
       - "branding/**"
       - "desktop/**"
       - "sessions/**"
@@ -37,7 +40,7 @@ jobs:
           pacman-key --init
           pacman-key --populate archlinux
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -Syu --noconfirm archiso python
+          pacman -Syu --noconfirm archiso python go git
       - name: Build ISO
         env:
           CODA_ISO_INNER: "1"

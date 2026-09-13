@@ -7,7 +7,7 @@ dest="${1:?dest root}"
 mod="${root}/core/system-config"
 
 if ! command -v go >/dev/null 2>&1; then
-  echo "install-system-config: go not found; cannot install binaries" >&2
+  echo "install-system-config: go not found; install Go 1.22+ (Arch: pacman -S --noconfirm --needed go git)" >&2
   exit 1
 fi
 

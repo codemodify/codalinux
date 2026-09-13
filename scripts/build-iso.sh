@@ -11,6 +11,9 @@
 #   ./scripts/build-iso.sh
 #   ./scripts/build-iso.sh /path/to/work /path/to/out
 #
+# system-config binaries are compiled into the overlay (needs Go 1.22+).
+# In the Arch builder: pacman -S --noconfirm --needed go git
+#
 # Environment:
 #   CODA_ISO_INNER=1     already inside the Arch builder (do not re-enter Docker)
 #   CODA_ISO_ENGINE=docker|podman|native
@@ -267,7 +270,7 @@ run_in_arch_container() {
       pacman-key --init
       pacman-key --populate archlinux
       pacman -Sy --noconfirm archlinux-keyring
-      pacman -Syu --noconfirm archiso python
+      pacman -Syu --noconfirm archiso python go git
       # vendor-ags.sh installs the rest of packages/ags-build-deps.txt
       exec ./scripts/build-iso.sh $(printf '%q' "${work}") $(printf '%q' "${out}")
     "
