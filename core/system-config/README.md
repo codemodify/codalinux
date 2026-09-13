@@ -2,7 +2,7 @@
 
 Greenfield Coda **core** settings stack (Go). Architecture: [architecture.md — system-config](../../architecture.md#system-config).
 
-Clients talk to **`system-configd` only**. Report never writes config. Apply only executes D’s allowlisted plans (`display.scale` / `display.mode` via `hyprctl eval 'hl.monitor({...})'`, not `keyword`).
+Clients talk to **`system-configd` only**. Report never writes config. Apply only executes D’s closed allowlist (typed argv, **no** arbitrary shell). Coda stack: systemd-networkd + iwd, PipeWire, BlueZ, Hyprland, greetd.
 
 ## Build
 
@@ -43,9 +43,16 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ./bin/system-config get display
 ./bin/system-config set display '{"outputs":[{"name":"Virtual-1","scale":2}]}'
 ./bin/system-config apply display
-./bin/system-config get devices.summary
-./bin/system-config get devices.pci
+./bin/system-config get network
+./bin/system-config get audio
+./bin/system-config get bluetooth
+./bin/system-config get input
+./bin/system-config get datetime
 ./bin/system-config get locale
+./bin/system-config get devices.usb
+./bin/system-config get hardware.dmi
+./bin/system-config get session
+./bin/system-config get power
 ```
 
 `apply display` needs Hyprland (`hyprctl`). Apply may run as root; it discovers the graphical session (`loginctl` / `/run/user/*/hypr/*`) and runs `hyprctl` as that uid with `XDG_RUNTIME_DIR` + `HYPRLAND_INSTANCE_SIGNATURE` (same env `coda-settings` expects). Report uses the same discovery so `refresh display` fills `observed.outputs`. Eval form is `hl.monitor({ output = "NAME", ... })` — not `name=`, not `keyword`.
@@ -74,4 +81,10 @@ That starts the three daemons (D + report as the seat user, apply as root with `
 
 ## Protocol
 
-JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to the same uid (and root). Ops: `get`, `set`, `watch` (single snapshot stub), `refresh` (ask report), `apply` (ask apply). Submodels: `display`, `devices.summary`, `devices.pci` (lazy walk), `locale`.
+JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to the same uid (and root). Ops: `get`, `set`, `watch` (single snapshot stub), `refresh` (ask report), `apply` (ask apply).
+
+**Paths:** `display` `network` `audio` `bluetooth` `input` `datetime` `locale` `session` `power` `devices.summary` `devices.pci` `devices.usb` `hardware.dmi`
+
+**Apply allowlist:** `display.scale` `display.mode` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid`
+
+Display eval stays `hl.monitor({ output = "NAME", ... })`. Hyprland/PipeWire tools use session discovery (`internal/hyprsession`). Remaining work: [`docs/ROADMAP.md`](docs/ROADMAP.md).

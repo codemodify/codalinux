@@ -128,4 +128,10 @@ printf '%s\n' "${mon}" | grep -E '"scale"[[:space:]]*:[[:space:]]*2' >/dev/null 
   exit 1
 }
 
+echo "=== other domains (observe; do not fail smoke if tools missing) ==="
+for p in network audio bluetooth input datetime locale devices.usb hardware.dmi session power; do
+  as_session system-config refresh "${p}" || true
+  as_session system-config get "${p}" || true
+done
+
 echo "guest smoke ok"

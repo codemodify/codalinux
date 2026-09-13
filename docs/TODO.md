@@ -66,5 +66,6 @@ Locked in [architecture.md](../architecture.md#system-config). Code: [`core/syst
 - [x] Settings GUI Mail/Settings pattern on uitoolkit `dev` (v0.19.x enough to ship). Remaining gaps in `core/system-config/docs/uitoolkit-gaps.md` — do not block.
 - [ ] Wire binaries onto the live/install image (not in this pass).
 - [ ] Real udev netlink watch (report `--watch` is a poll stub).
-- [ ] Network / audio apply allowlist.
+- [x] Network / audio / bluetooth / input / datetime / locale apply allowlist (plus session lock, power).
+- [ ] Persist Hyprland settings beyond runtime eval; udev watch; ISO-wire binaries. See `core/system-config/docs/ROADMAP.md`.
 - [ ] Replace AGS + `coda-settings` (explicitly **not** a migrate in v1).
