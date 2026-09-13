@@ -32,10 +32,7 @@ func (s *Store) Get(path string) (desired, observed json.RawMessage, st protocol
 	observed = append(json.RawMessage(nil), s.observed[path]...)
 	st = s.status[path]
 	if observed != nil {
-		st.Present = true
-		if path == protocol.PathBluetooth && emptyBluetooth(observed) {
-			st.Present = false
-		}
+		st.Present = presentFor(path, observed)
 	}
 	if desired != nil {
 		st.Configured = true
@@ -69,21 +66,38 @@ func (s *Store) PutObserved(path string, data json.RawMessage) error {
 	path = protocol.NormalizePath(path)
 	s.observed[path] = append(json.RawMessage(nil), data...)
 	st := s.status[path]
-	st.Present = true
-	if path == protocol.PathBluetooth && emptyBluetooth(data) {
-		st.Present = false
-	}
+	st.Present = presentFor(path, data)
 	st.Changed = changed(s.desired[path], s.observed[path])
 	s.status[path] = st
 	return nil
 }
 
-func emptyBluetooth(raw json.RawMessage) bool {
-	var m protocol.BluetoothModel
-	if err := json.Unmarshal(raw, &m); err != nil {
+func presentFor(path string, raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	switch path {
+	case protocol.PathBluetooth:
+		var m protocol.BluetoothModel
+		if json.Unmarshal(raw, &m) != nil {
+			return false
+		}
+		return m.Adapter != "" || len(m.Devices) > 0
+	case protocol.PathPrinters:
+		var m protocol.PrintersModel
+		if json.Unmarshal(raw, &m) != nil {
+			return false
+		}
+		return len(m.Printers) > 0
+	case protocol.PathStorage:
+		var m protocol.StorageModel
+		if json.Unmarshal(raw, &m) != nil {
+			return false
+		}
+		return len(m.Block) > 0
+	default:
 		return true
 	}
-	return m.Adapter == "" && len(m.Devices) == 0
 }
 
 func (s *Store) SetApplyError(path, msg string) {

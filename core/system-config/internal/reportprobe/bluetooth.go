@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/codemodify/codalinux/core/system-config/internal/bluez"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
 )
 
 func (p *Probe) bluetooth() (json.RawMessage, error) {
+	if p.Run == nil {
+		if m, ok := bluez.Collect(); ok {
+			return rpc.Raw(m), nil
+		}
+	}
 	// Never call bare `bluetoothctl` (interactive REPL). Always --timeout.
-	// On missing/stuck BlueZ return an empty adapter quickly — do not hang D.
 	m := protocol.BluetoothModel{}
 	raw, err := p.cmd("bluetoothctl", "--timeout", "2", "show")
 	if err != nil {
@@ -36,19 +41,15 @@ func (p *Probe) bluetooth() (json.RawMessage, error) {
 	}
 	connected := map[string]bool{}
 	paired := map[string]bool{}
+	trusted := map[string]bool{}
 	if c, err := p.cmd("bluetoothctl", "--timeout", "2", "devices", "Connected"); err == nil {
-		for _, line := range strings.Split(c, "\n") {
-			if f := strings.Fields(line); len(f) >= 2 && f[0] == "Device" {
-				connected[f[1]] = true
-			}
-		}
+		fillBTSet(c, connected)
 	}
 	if c, err := p.cmd("bluetoothctl", "--timeout", "2", "devices", "Paired"); err == nil {
-		for _, line := range strings.Split(c, "\n") {
-			if f := strings.Fields(line); len(f) >= 2 && f[0] == "Device" {
-				paired[f[1]] = true
-			}
-		}
+		fillBTSet(c, paired)
+	}
+	if c, err := p.cmd("bluetoothctl", "--timeout", "2", "devices", "Trusted"); err == nil {
+		fillBTSet(c, trusted)
 	}
 	for _, line := range strings.Split(devs, "\n") {
 		fields := strings.Fields(line)
@@ -61,7 +62,16 @@ func (p *Probe) bluetooth() (json.RawMessage, error) {
 			Name:      strings.Join(fields[2:], " "),
 			Connected: connected[addr],
 			Paired:    paired[addr],
+			Trusted:   trusted[addr],
 		})
 	}
 	return rpc.Raw(m), nil
+}
+
+func fillBTSet(raw string, dest map[string]bool) {
+	for _, line := range strings.Split(raw, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "Device" {
+			dest[f[1]] = true
+		}
+	}
 }

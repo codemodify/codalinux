@@ -2,6 +2,7 @@ package applyexec
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -41,12 +42,17 @@ func (r *Runner) netIfaceMethod(op protocol.PlanOp) error {
 			return err
 		}
 	}
+	for _, d := range op.Search {
+		if err := checkSearch(d); err != nil {
+			return err
+		}
+	}
 	dir := r.NetworkDir
 	if dir == "" {
 		dir = "/etc/systemd/network"
 	}
-	body := networkdUnit(op)
-	path := filepath.Join(dir, "20-coda-"+op.Device+".network")
+	override := networkdOverride(op)
+	path, body := r.mergeNetworkd(dir, op.Device, override)
 	if err := r.writeFile(path, []byte(body), 0o644); err != nil {
 		return err
 	}
@@ -59,11 +65,82 @@ func (r *Runner) netIfaceMethod(op protocol.PlanOp) error {
 	return nil
 }
 
-func networkdUnit(op protocol.PlanOp) string {
+func (r *Runner) mergeNetworkd(dir, iface, override string) (string, string) {
+	match := r.findNetworkdMatch(dir, iface)
+	if match != "" && !strings.HasPrefix(match, "20-coda-") {
+		drop := filepath.Join(dir, match+".d", "50-coda.conf")
+		return drop, override
+	}
+	path := filepath.Join(dir, "20-coda-"+iface+".network")
+	existing := r.readFile(path)
+	if existing == "" && match != "" {
+		existing = r.readFile(filepath.Join(dir, match))
+	}
+	if existing == "" {
+		return path, "[Match]\nName=" + iface + "\n\n" + override
+	}
+	return path, mergeNetworkdINI(existing, override)
+}
+
+func (r *Runner) findNetworkdMatch(dir, iface string) string {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range ents {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".network") {
+			continue
+		}
+		body := r.readFile(filepath.Join(dir, name))
+		if networkdMatches(body, iface) {
+			return name
+		}
+	}
+	return ""
+}
+
+func (r *Runner) readFile(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func networkdMatches(body, iface string) bool {
+	inMatch := false
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") {
+			inMatch = strings.EqualFold(line, "[Match]")
+			continue
+		}
+		if !inMatch {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(k), "Name") {
+			continue
+		}
+		for _, n := range strings.Fields(v) {
+			if n == iface || n == "*" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func networkdOverride(op protocol.PlanOp) string {
 	var b strings.Builder
-	b.WriteString("[Match]\nName=")
-	b.WriteString(op.Device)
-	b.WriteString("\n\n[Network]\n")
+	b.WriteString("[Network]\n")
 	if op.Method == "static" {
 		b.WriteString("DHCP=no\n")
 		if op.Address != "" {
@@ -76,13 +153,113 @@ func networkdUnit(op protocol.PlanOp) string {
 			b.WriteString(op.Gateway)
 			b.WriteString("\n")
 		}
-		for _, d := range op.DNS {
-			b.WriteString("DNS=")
-			b.WriteString(d)
-			b.WriteString("\n")
-		}
 	} else {
 		b.WriteString("DHCP=yes\n")
+	}
+	for _, d := range op.DNS {
+		b.WriteString("DNS=")
+		b.WriteString(d)
+		b.WriteString("\n")
+	}
+	if len(op.Search) > 0 {
+		b.WriteString("Domains=")
+		b.WriteString(strings.Join(op.Search, " "))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func mergeNetworkdINI(existing, override string) string {
+	over := parseINI(override)
+	cur := parseINI(existing)
+	if cur["Match"] == nil {
+		cur["Match"] = map[string][]string{}
+	}
+	if overNet, ok := over["Network"]; ok {
+		if cur["Network"] == nil {
+			cur["Network"] = map[string][]string{}
+		}
+		for k, vs := range overNet {
+			cur["Network"][k] = vs
+		}
+	}
+	return writeINI(cur, []string{"Match", "Network", "Link", "Route", "DHCP"})
+}
+
+func parseINI(s string) map[string]map[string][]string {
+	out := map[string]map[string][]string{}
+	sec := ""
+	for _, line := range strings.Split(s, "\n") {
+		trim := strings.TrimSpace(line)
+		if trim == "" || strings.HasPrefix(trim, "#") || strings.HasPrefix(trim, ";") {
+			continue
+		}
+		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
+			sec = strings.TrimSuffix(strings.TrimPrefix(trim, "["), "]")
+			if out[sec] == nil {
+				out[sec] = map[string][]string{}
+			}
+			continue
+		}
+		if sec == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(trim, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		out[sec][k] = append(out[sec][k], strings.TrimSpace(v))
+	}
+	return out
+}
+
+func writeINI(m map[string]map[string][]string, order []string) string {
+	var b strings.Builder
+	seen := map[string]bool{}
+	writeSec := func(sec string) {
+		kv := m[sec]
+		if kv == nil {
+			return
+		}
+		if seen[sec] {
+			return
+		}
+		seen[sec] = true
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("[")
+		b.WriteString(sec)
+		b.WriteString("]\n")
+		keys := make([]string, 0, len(kv))
+		pref := []string{"Name", "DHCP", "Address", "Gateway", "DNS", "Domains"}
+		used := map[string]bool{}
+		for _, k := range pref {
+			if _, ok := kv[k]; ok {
+				keys = append(keys, k)
+				used[k] = true
+			}
+		}
+		for k := range kv {
+			if !used[k] {
+				keys = append(keys, k)
+			}
+		}
+		for _, k := range keys {
+			for _, v := range kv[k] {
+				b.WriteString(k)
+				b.WriteString("=")
+				b.WriteString(v)
+				b.WriteString("\n")
+			}
+		}
+	}
+	for _, sec := range order {
+		writeSec(sec)
+	}
+	for sec := range m {
+		writeSec(sec)
 	}
 	return b.String()
 }
@@ -150,6 +327,18 @@ func (r *Runner) netWiFiDisconnect(op protocol.PlanOp) error {
 	out, err := r.runHost("iwctl", "station", op.Device, "disconnect")
 	if err != nil {
 		return fmt.Errorf("iwctl disconnect: %w (%s)", err, strings.TrimSpace(out))
+	}
+	return nil
+}
+
+func (r *Runner) netAirplane(op protocol.PlanOp) error {
+	arg := "unblock"
+	if op.Enabled != nil && *op.Enabled {
+		arg = "block"
+	}
+	out, err := r.runHost("rfkill", arg, "all")
+	if err != nil {
+		return fmt.Errorf("rfkill %s: %w (%s)", arg, err, strings.TrimSpace(out))
 	}
 	return nil
 }

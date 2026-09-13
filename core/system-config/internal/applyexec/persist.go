@@ -10,14 +10,23 @@ import (
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 )
 
-type hyprState struct {
-	Output   string  `json:"output,omitempty"`
+type hyprOutput struct {
+	Output   string  `json:"output"`
 	Mode     string  `json:"mode,omitempty"`
 	Scale    float64 `json:"scale,omitempty"`
-	KBLayout string  `json:"kb_layout,omitempty"`
-	Speed    float64 `json:"pointer_speed"`
-	Natural  *bool   `json:"natural_scroll,omitempty"`
-	Tap      *bool   `json:"tap_to_click,omitempty"`
+	Position string  `json:"position,omitempty"`
+}
+
+type hyprState struct {
+	Outputs  []hyprOutput `json:"outputs,omitempty"`
+	Output   string       `json:"output,omitempty"`
+	Mode     string       `json:"mode,omitempty"`
+	Scale    float64      `json:"scale,omitempty"`
+	Position string       `json:"position,omitempty"`
+	KBLayout string       `json:"kb_layout,omitempty"`
+	Speed    float64      `json:"pointer_speed"`
+	Natural  *bool        `json:"natural_scroll,omitempty"`
+	Tap      *bool        `json:"tap_to_click,omitempty"`
 }
 
 func (r *Runner) persistHypr(op protocol.PlanOp) {
@@ -47,15 +56,15 @@ func (r *Runner) persistHypr(op protocol.PlanOp) {
 	if b, err := os.ReadFile(statePath); err == nil {
 		_ = json.Unmarshal(b, &st)
 	}
+	st.migrate()
 	switch op.Type {
-	case protocol.OpDisplayScale, protocol.OpDisplayMode:
-		st.Output = op.Output
-		if op.Mode != "" {
-			st.Mode = op.Mode
-		}
-		if op.Scale > 0 {
-			st.Scale = op.Scale
-		}
+	case protocol.OpDisplayScale, protocol.OpDisplayMode, protocol.OpDisplayPosition:
+		st.upsertOutput(hyprOutput{
+			Output:   op.Output,
+			Mode:     op.Mode,
+			Scale:    op.Scale,
+			Position: op.Position,
+		})
 	case protocol.OpInputKBLayout:
 		st.KBLayout = op.Value
 	case protocol.OpInputPointerSpeed:
@@ -70,19 +79,74 @@ func (r *Runner) persistHypr(op protocol.PlanOp) {
 	_ = r.writeFile(luaPath, []byte(st.lua()), 0o644)
 }
 
+func (s *hyprState) migrate() {
+	if len(s.Outputs) > 0 {
+		return
+	}
+	if s.Output == "" {
+		return
+	}
+	s.Outputs = []hyprOutput{{
+		Output: s.Output, Mode: s.Mode, Scale: s.Scale, Position: s.Position,
+	}}
+}
+
+func (s *hyprState) upsertOutput(o hyprOutput) {
+	if o.Output == "" {
+		return
+	}
+	for i := range s.Outputs {
+		if s.Outputs[i].Output != o.Output {
+			continue
+		}
+		if o.Mode != "" {
+			s.Outputs[i].Mode = o.Mode
+		}
+		if o.Scale > 0 {
+			s.Outputs[i].Scale = o.Scale
+		}
+		if o.Position != "" {
+			s.Outputs[i].Position = o.Position
+		}
+		s.syncLegacy()
+		return
+	}
+	s.Outputs = append(s.Outputs, o)
+	s.syncLegacy()
+}
+
+func (s *hyprState) syncLegacy() {
+	if len(s.Outputs) == 0 {
+		return
+	}
+	cur := s.Outputs[len(s.Outputs)-1]
+	s.Output, s.Mode, s.Scale, s.Position = cur.Output, cur.Mode, cur.Scale, cur.Position
+}
+
 func (s hyprState) lua() string {
 	out := "-- written by system-config-apply; loaded from hyprland.lua\n"
-	if s.Output != "" && (s.Scale > 0 || s.Mode != "") {
-		mode := s.Mode
+	outs := s.Outputs
+	if len(outs) == 0 && s.Output != "" {
+		outs = []hyprOutput{{Output: s.Output, Mode: s.Mode, Scale: s.Scale, Position: s.Position}}
+	}
+	for _, o := range outs {
+		if o.Output == "" || (o.Scale <= 0 && o.Mode == "" && o.Position == "") {
+			continue
+		}
+		mode := o.Mode
 		if mode == "" {
 			mode = "preferred"
 		}
-		scale := s.Scale
+		scale := o.Scale
 		if scale <= 0 {
 			scale = 1
 		}
-		out += fmt.Sprintf("hl.monitor({ output = %s, mode = %s, position = \"auto\", scale = %g })\n",
-			luaString(s.Output), luaString(mode), scale)
+		pos := o.Position
+		if pos == "" {
+			pos = "auto"
+		}
+		out += fmt.Sprintf("hl.monitor({ output = %s, mode = %s, position = %s, scale = %g })\n",
+			luaString(o.Output), luaString(mode), luaString(pos), scale)
 	}
 	var parts []string
 	if s.KBLayout != "" {

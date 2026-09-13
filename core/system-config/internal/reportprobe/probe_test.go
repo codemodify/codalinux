@@ -144,7 +144,7 @@ func TestUSBAndDMI(t *testing.T) {
 
 func TestParseIwctlAndWpctl(t *testing.T) {
 	nets := parseIwctlNetworks("Network name Security Signal\n----\nCafe psk ****\n")
-	if len(nets) != 1 || nets[0].SSID != "Cafe" {
+	if len(nets) != 1 || nets[0].SSID != "Cafe" || nets[0].Security != "psk" || nets[0].Signal != 80 {
 		t.Fatalf("%+v", nets)
 	}
 	v, m := parseWpVolume("Volume: 0.40 [MUTED]\n")
@@ -176,6 +176,47 @@ func TestPowerFromSysfs(t *testing.T) {
 	}
 	if pw.Backlight != "acpi_video0" || pw.Brightness != 80 || !pw.CanSuspend || !pw.CanHibernate {
 		t.Fatalf("%+v", pw)
+	}
+}
+
+func TestUsersPrintersStorage(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "etc/passwd"), "root:x:0:0:root:/root:/bin/bash\nnobody:x:65534:65534:n:/:/usr/bin/nologin\nlive:x:1000:1000:Live:/home/live:/bin/bash\n")
+	p := &Probe{Root: root, Run: func(name string, args ...string) (string, error) {
+		if name == "lpstat" {
+			return "", errStr("no cups")
+		}
+		if name == "lsblk" {
+			return `{"blockdevices":[{"name":"vda","type":"disk","size":"8G","mountpoint":"","model":"QEMU","children":[{"name":"vda1","type":"part","size":"8G","mountpoint":"/"}]}]}`, nil
+		}
+		return "", errStr("no")
+	}}
+	raw, err := p.Collect(protocol.PathUsers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var u protocol.UsersModel
+	if err := json.Unmarshal(raw, &u); err != nil {
+		t.Fatal(err)
+	}
+	if len(u.Users) != 2 || u.Users[1].Name != "live" {
+		t.Fatalf("%+v", u)
+	}
+	raw, err = p.Collect(protocol.PathPrinters)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pr protocol.PrintersModel
+	if err := json.Unmarshal(raw, &pr); err != nil || len(pr.Printers) != 0 {
+		t.Fatalf("%v %+v", err, pr)
+	}
+	raw, err = p.Collect(protocol.PathStorage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st protocol.StorageModel
+	if err := json.Unmarshal(raw, &st); err != nil || len(st.Block) != 2 {
+		t.Fatalf("%v %+v", err, st)
 	}
 }
 

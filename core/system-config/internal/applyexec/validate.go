@@ -19,6 +19,8 @@ var (
 	reNodeID    = regexp.MustCompile(`^[0-9]{1,8}$`)
 	reBacklight = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,64}$`)
 	reLid       = regexp.MustCompile(`^(ignore|suspend|lock|poweroff|hibernate)$`)
+	reSearch    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,253}$`)
+	rePosition  = regexp.MustCompile(`^(auto|-?[0-9]{1,6}x-?[0-9]{1,6})$`)
 )
 
 func checkIface(s string) error {
@@ -98,6 +100,21 @@ func checkBT(s string) error {
 	return nil
 }
 
+func checkPIN(s string) error {
+	if s == "" {
+		return nil
+	}
+	if len(s) > 16 {
+		return fmt.Errorf("invalid pin")
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("invalid pin")
+		}
+	}
+	return nil
+}
+
 func checkLang(s string) error {
 	if s != "C" && s != "C.UTF-8" && s != "POSIX" && !reLang.MatchString(s) {
 		return fmt.Errorf("invalid lang %q", s)
@@ -139,6 +156,26 @@ func checkNodeID(s string) error {
 		return nil
 	}
 	return fmt.Errorf("invalid node id")
+}
+
+func checkSearch(s string) error {
+	if s == "" {
+		return nil
+	}
+	if !reSearch.MatchString(s) || strings.Contains(s, "..") {
+		return fmt.Errorf("invalid search domain %q", s)
+	}
+	return nil
+}
+
+func checkPosition(s string) error {
+	if s == "" {
+		return nil
+	}
+	if !rePosition.MatchString(s) {
+		return fmt.Errorf("invalid position %q", s)
+	}
+	return nil
 }
 
 func checkTime(s string) error {
