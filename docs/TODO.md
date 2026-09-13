@@ -54,6 +54,6 @@ Picture: [architecture.md](../architecture.md) (target A/B vs current mutable de
 - [ ] Read-only **A/B** core slots and gated host `pacman` / OS updates. Documented in DESIGN.md; **not implemented**.
 - [ ] Optional Distrobox / Podman **alongside** `coda-sandbox`, not as a replacement.
 - [ ] Flatpak alongside bwrap (still official-repo / documented policy only).
-- [ ] GUI entry from the AGS Settings hub (list / enter / destroy).
-- [x] User-owned create/install/destroy via `unshare --map-root-user` (no sudo). Store: `~/.coda/sandbox/<name>` (one name = many packages).
+- [ ] GUI entry from the AGS Settings hub (list / shell / destroy).
+- [x] User-owned create/install/destroy via `unshare --map-root-user` (no sudo). Store: `~/.coda/sandbox/<env>` (one env = many packages).
 - [ ] Confirm `coda-sandbox create` on a live ISO with network (`pacman --root base` in a user namespace).

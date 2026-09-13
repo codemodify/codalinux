@@ -100,14 +100,15 @@ That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (
 Do not `pacman -S` experimental apps onto the host. Create a throwaway Arch root and run it with upstream `bwrap`:
 
 ```bash
-coda-sandbox create dev
-coda-sandbox install dev postgresql
-coda-sandbox install dev redis git
-coda-sandbox enter dev
-coda-sandbox destroy dev --force
+coda-sandbox create <env>
+coda-sandbox install <env> postgresql
+coda-sandbox install <env> redis git
+coda-sandbox shell <env>
+coda-sandbox exec <env> postgres --version
+coda-sandbox destroy <env>
 ```
 
-Trees live under `~/.coda/sandbox/<name>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
+Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
 See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
