@@ -1,12 +1,12 @@
 # CodaLinux architecture
 
-Canonical picture of **how the entire system looks**: partitions → layers → `/` folders → sandboxes → updates.
+Canonical picture of **how the entire system looks**: partitions → layers → `/` folders → sandboxes → **system-config** → updates.
 
 - **Target** is the locked product intent. Do not treat it as shipped until the installer and A/B slots exist.
 - **Current tree** is what this repository actually builds today.
-- Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md).
+- Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md). `system-config` is locked here as **greenfield target**, not implemented.
 
-Do **not** claim A/B partitions, a read-only core, or a core-only ISO work until those are built.
+Do **not** claim A/B partitions, a read-only core, a core-only ISO, or `system-config` daemons work until those are built.
 
 ## Target vs current (read this first)
 
@@ -19,8 +19,9 @@ Do **not** claim A/B partitions, a read-only core, or a core-only ISO work until
 | Host `pacman` | Core / OS only; gated; writes the **inactive** slot | Ordinary rolling pacman on the mutable root (not gated) |
 | Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | `coda-install` preseeds Bozeman defaults; custom profile still incomplete |
 | Updates | OS slot swap; apps via sandbox `pacman` | ISO rebuild cadence; sandbox helper is in-tree |
+| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | AGS control center + `coda-settings`. **No** `system-config*` daemons. |
 
-Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`. Not shipped: A/B RO slots, core-only image, installer partition layout.
+Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`. Not shipped: A/B RO slots, core-only image, installer partition layout, **`system-config`**.
 
 ## Partitions (target)
 
@@ -121,6 +122,88 @@ coda-sandbox destroy <env>
 
 Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for the first `create`, `bubblewrap`, and unprivileged user namespaces. Details: [docs/sandbox.md](docs/sandbox.md).
 
+## system-config
+
+**Target — not implemented.** Greenfield control plane for machine settings. **No migrate path** from `coda-settings` and **no compatibility layer** in v1. Current tree keeps AGS + `coda-settings` until this is built. Do not claim the daemons or clients exist.
+
+Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section is the canonical architecture.
+
+### Daemons
+
+| Daemon | Privilege | Role |
+| --- | --- | --- |
+| `system-configd` | unprivileged | Control plane. Owns the JSON model (**desired** + **observed**). **Only** API clients talk to it. Submodel get / set / watch. Asks **report** to refresh observed; asks **apply** to execute plans. |
+| `system-config-apply` | root | Typed, allowlisted executor. Runs **plans from D only**. No model. No client API. |
+| `system-config-report` | mostly unprivileged (root only when a probe needs it) | Hardware / stack inventory + observers. YaST / hwinfo *classed probe* idea; modern *udev event* style. Pushes or pulls **observed** into D. **Never** applies config. |
+
+### Clients (talk to D only)
+
+| Client | Role |
+| --- | --- |
+| `system-config` | CLI |
+| `system-config-tui` | TUI |
+| `system-config-gui` | Settings UI built with **uitoolkit**, part of CodaLinux desktop tooling |
+
+Clients never call report or apply. They query **submodels**, not the entire model by default.
+
+### Flow
+
+```mermaid
+flowchart LR
+  hw[hardware / OS]
+  report[system-config-report]
+  d[system-configd]
+  clients[GUI / TUI / CLI]
+  apply[system-config-apply]
+  os[OS]
+
+  hw --> report
+  report -->|"observed"| d
+  clients -->|"get / set / watch"| d
+  d -->|"plans"| apply
+  apply --> os
+```
+
+```
+hardware / OS → system-config-report → observed → system-configd ← GUI/TUI/CLI
+                                                    │ plans
+                                                    ▼
+                                            system-config-apply → OS
+```
+
+### Detection layers
+
+| Layer | What | When |
+| --- | --- | --- |
+| **L0 inventory** | udev + sysfs + DMI; enrich with systemd hwdb | Always-on baseline. Stable device ids. Event-driven (udev), not Kudzu-style boot prompts. |
+| **L1 deep probe** | Optional hwinfo / lshw-class scans | On demand / support. **Not** the live heartbeat. Lazy — do not block settings domains on a full PCI walk. |
+| **L2 runtime domains** | Live stacks: Hyprland, iwd / networkd, PipeWire, BlueZ, logind | Map to display / network / audio / bluetooth / session. |
+| **L3 status flags** | YaST-inspired: `present` / `configured` / `changed` / `apply_error` | Per submodel object, from observed vs desired and apply results. |
+
+### Submodels (starter)
+
+Clients ask D for one of these (or a child path), not a dump of the whole tree:
+
+| Submodel | Typical L2 / L0 source |
+| --- | --- |
+| `display` | Hyprland (outputs, modes, scale) |
+| `network` | iwd + systemd-networkd |
+| `audio` | PipeWire |
+| `bluetooth` | BlueZ |
+| `session` | logind (users, seats, idle) |
+| `devices.pci` | udev / sysfs (deep walk is L1, lazy) |
+| `devices.usb` | udev |
+| `hardware.dmi` | DMI + hwdb |
+
+Add further submodels the same way: one domain, one path, observed + desired + L3 flags.
+
+### Rules
+
+1. Clients never call report or apply directly — **only D**.
+2. Report never writes system config.
+3. Apply never invents policy — it only executes D’s plan (closed allowlist, **no** arbitrary shell).
+4. From scratch — **no** deprecation or migrate tooling in v1.
+
 ## Update model (target)
 
 | What | How |
@@ -142,4 +225,4 @@ Do not rebuild the ISO just to read this document. The desktop image already inc
 
 Live boot: systemd-boot `timeout 1`. `pacman-init` is **off the greeter critical path** (timer after `graphical.target`, not `WantedBy=multi-user.target`). `ldconfig.service` must not rebuild the linker cache on every live boot: squashfs already has `/etc/ld.so.cache`. The drop-in resets stock `Condition*` (empty assignment clears **all** of them), then requires `ConditionFileNotEmpty=!/etc/ld.so.cache` so a non-empty cache skips the unit. See [DESIGN.md](DESIGN.md#service-enablement).
 
-A/B partition layouts, RO core mounts, and gated host pacman are **future work** ([docs/TODO.md](docs/TODO.md) §5).
+A/B partition layouts, RO core mounts, gated host pacman, and **system-config** are **future work** ([docs/TODO.md](docs/TODO.md) §5). `system-config` is locked in [the section above](#system-config); there is nothing to try yet.
