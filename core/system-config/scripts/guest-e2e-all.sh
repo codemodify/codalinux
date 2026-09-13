@@ -369,7 +369,7 @@ if [[ -n "${sink_id}" && "${sink_id}" != "null" ]]; then
   if [[ -n "${livehome}" && -f "${persist}" ]]; then
     record PASS "audio persist file" "${persist}"
   else
-    record SKIP "audio persist file" "no ${persist} (wpctl inspect may lack node.name)"
+    record FAIL "audio persist file" "missing ${persist} after default-sink apply"
   fi
 else
   record SKIP "apply audio default sink persist" "no sink id"
