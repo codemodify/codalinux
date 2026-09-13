@@ -57,3 +57,13 @@ Picture: [architecture.md](../architecture.md) (target A/B vs current mutable de
 - [ ] GUI entry from the AGS Settings hub (list / shell / destroy).
 - [x] User-owned create/install/destroy via `unshare --map-root-user` (no sudo). Store: `~/.coda/sandbox/<env>` (one env = many packages).
 - [ ] Confirm `coda-sandbox create` on a live ISO with network (`pacman --root base` in a user namespace).
+
+## 6. system-config (Go core)
+
+Locked in [architecture.md](../architecture.md#system-config). Code: [`core/system-config/`](../core/system-config/README.md).
+
+- [x] Greenfield Go module: `system-configd`, apply, report, CLI, TUI stub, uitoolkit GUI.
+- [ ] Wire binaries onto the live/install image (not in this pass).
+- [ ] Real udev netlink watch (report `--watch` is a poll stub).
+- [ ] Network / audio apply allowlist.
+- [ ] Replace AGS + `coda-settings` (explicitly **not** a migrate in v1).

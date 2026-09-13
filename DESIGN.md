@@ -107,7 +107,7 @@ Locked **greenfield** target (not implemented). Do not add a `coda-settings` com
 | Report | `system-config-report` inventory / observers → observed. Never writes config. |
 | Clients | `system-config` (CLI), `system-config-tui`, `system-config-gui` (uitoolkit). All talk to D only. |
 
-Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [architecture.md — system-config](architecture.md#system-config).
+Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [architecture.md — system-config](architecture.md#system-config). Implementation (Go): [`core/system-config/`](core/system-config/README.md).
 
 ### Delivery
 
