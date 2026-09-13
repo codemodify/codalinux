@@ -106,6 +106,10 @@ func (p *Probe) session() (json.RawMessage, error) {
 
 func (p *Probe) power() (json.RawMessage, error) {
 	m := protocol.PowerModel{}
+	if st := readTrim(p.root("sys/power/state")); st != "" {
+		m.CanSuspend = strings.Contains(st, "mem") || strings.Contains(st, "freeze")
+		m.CanHibernate = strings.Contains(st, "disk")
+	}
 	if raw, err := p.cmd("busctl", "get-property", "org.freedesktop.login1", "/org/freedesktop/login1",
 		"org.freedesktop.login1.Manager", "CanSuspend"); err == nil && strings.Contains(raw, "yes") {
 		m.CanSuspend = true
@@ -114,12 +118,14 @@ func (p *Probe) power() (json.RawMessage, error) {
 		"org.freedesktop.login1.Manager", "CanHibernate"); err == nil && strings.Contains(raw, "yes") {
 		m.CanHibernate = true
 	}
-	lid := readLogind(p.root("etc/systemd/logind.conf"), "HandleLidSwitch")
-	m.Lid = lid
+	m.Lid = readLogind(p.root("etc/systemd/logind.conf"), "HandleLidSwitch")
 	dir := p.root("sys/class/backlight")
 	ents, err := os.ReadDir(dir)
 	if err == nil {
 		for _, e := range ents {
+			if e.Name() == "." || e.Name() == ".." {
+				continue
+			}
 			m.Backlight = e.Name()
 			if n, err := strconv.Atoi(readTrim(filepath.Join(dir, e.Name(), "brightness"))); err == nil {
 				m.Brightness = n

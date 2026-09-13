@@ -173,6 +173,10 @@ var ApplyOps = []string{
 	OpPowerSuspend, OpPowerHibernate, OpPowerBrightness, OpPowerLid,
 }
 
+func ApplyOpsLog() string {
+	return strings.Join(ApplyOps, " ")
+}
+
 func AllowedOp(t string) bool {
 	for _, a := range ApplyOps {
 		if a == t {

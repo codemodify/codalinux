@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/codemodify/codalinux/core/system-config/internal/runcmd"
 )
 
 // Session is one Hyprland instance (typically the seat0 graphical user).
@@ -287,7 +290,7 @@ func (f *Finder) preferUID() (uint32, bool) {
 }
 
 func loginCtlUID() (uint32, bool) {
-	out, err := exec.Command("loginctl", "list-sessions", "--no-legend", "--no-pager").Output()
+	out, err := runcmd.Run(1500*time.Millisecond, "loginctl", "list-sessions", "--no-legend", "--no-pager")
 	if err != nil {
 		return 0, false
 	}
@@ -325,7 +328,7 @@ func loginCtlUID() (uint32, bool) {
 }
 
 func showSession(id string) (typ, class, remote string, uid uint32) {
-	out, err := exec.Command("loginctl", "show-session", id, "-p", "Type", "-p", "Class", "-p", "Remote", "-p", "UID").Output()
+	out, err := runcmd.Run(1500*time.Millisecond, "loginctl", "show-session", id, "-p", "Type", "-p", "Class", "-p", "Remote", "-p", "UID")
 	if err != nil {
 		return "", "", "", 0
 	}

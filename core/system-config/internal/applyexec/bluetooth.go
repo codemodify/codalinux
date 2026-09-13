@@ -8,7 +8,7 @@ import (
 )
 
 func (r *Runner) btPower(op protocol.PlanOp) error {
-	out, err := r.runHost("bluetoothctl", "power", onOff(op.Enabled))
+	out, err := r.runHost("bluetoothctl", "--timeout", "4", "power", onOff(op.Enabled))
 	if err != nil {
 		return fmt.Errorf("bluetoothctl power: %w (%s)", err, strings.TrimSpace(out))
 	}
@@ -22,7 +22,7 @@ func (r *Runner) btScan(op protocol.PlanOp) error {
 	if arg == "on" {
 		out, err = r.runHost("bluetoothctl", "--timeout", "8", "scan", "on")
 	} else {
-		out, err = r.runHost("bluetoothctl", "scan", "off")
+		out, err = r.runHost("bluetoothctl", "--timeout", "2", "scan", "off")
 	}
 	if err != nil {
 		return fmt.Errorf("bluetoothctl scan: %w (%s)", err, strings.TrimSpace(out))
@@ -47,7 +47,7 @@ func (r *Runner) btDevice(op protocol.PlanOp) error {
 	if sub == "" {
 		return fmt.Errorf("unknown bluetooth op")
 	}
-	out, err := r.runHost("bluetoothctl", sub, addr)
+	out, err := r.runHost("bluetoothctl", "--timeout", "10", sub, addr)
 	if err != nil {
 		return fmt.Errorf("bluetoothctl %s: %w (%s)", sub, err, strings.TrimSpace(out))
 	}

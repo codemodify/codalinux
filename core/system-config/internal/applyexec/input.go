@@ -27,7 +27,11 @@ func (r *Runner) inputKBLayout(op protocol.PlanOp) error {
 	}
 	expr := fmt.Sprintf("hl.input({ kb_layout = %s })", luaString(op.Value))
 	out, err := r.runHypr("eval", expr)
-	return checkHyprOK(out, err)
+	if e := checkHyprOK(out, err); e != nil {
+		return e
+	}
+	r.persistHypr(op)
+	return nil
 }
 
 func (r *Runner) inputHypr(op protocol.PlanOp) error {
@@ -52,5 +56,9 @@ func (r *Runner) inputHypr(op protocol.PlanOp) error {
 		return fmt.Errorf("unknown input op")
 	}
 	out, err := r.runHypr("eval", expr)
-	return checkHyprOK(out, err)
+	if e := checkHyprOK(out, err); e != nil {
+		return e
+	}
+	r.persistHypr(op)
+	return nil
 }

@@ -149,8 +149,11 @@ func TestBluetoothPair(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	if got[0] != "bluetoothctl" || got[1] != "pair" {
+	if got[0] != "bluetoothctl" || got[len(got)-2] != "pair" {
 		t.Fatalf("%v", got)
+	}
+	if !strings.Contains(strings.Join(got, " "), "--timeout") {
+		t.Fatalf("bluetoothctl must pass --timeout, got %v", got)
 	}
 	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
 		Type: protocol.OpBTPair, Device: "not-an-addr",
@@ -176,6 +179,50 @@ func TestLocaleAndDatetime(t *testing.T) {
 	}
 	if len(cmds) < 3 {
 		t.Fatalf("%v", cmds)
+	}
+}
+
+func TestIwdPSKFile(t *testing.T) {
+	dir := t.TempDir()
+	r := New()
+	r.IwdDir = dir
+	wrote := map[string]string{}
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote[path] = string(data)
+		return nil
+	}
+	r.Run = func(string, ...string) (string, error) { return "", nil }
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetWiFiConnect, Device: "wlan0", SSID: "Cafe", PSK: "password1",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	body := wrote[dir+"/Cafe.psk"]
+	if !strings.Contains(body, "[Security]") || !strings.Contains(body, "Passphrase=password1") {
+		t.Fatalf("psk file %q", body)
+	}
+}
+
+func TestPersistHyprLua(t *testing.T) {
+	home := t.TempDir()
+	r := New()
+	r.Discover = func() (hyprsession.Session, error) {
+		return hyprsession.Session{Home: home}, nil
+	}
+	wrote := map[string]string{}
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote[path] = string(data)
+		return nil
+	}
+	r.Run = func(string, ...string) (string, error) { return "ok\n", nil }
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpDisplayScale, Output: "Virtual-1", Scale: 2, Mode: "1920x1080@60",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	lua := wrote[home+"/.config/hypr/coda-system-config.lua"]
+	if !strings.Contains(lua, `output = "Virtual-1"`) || !strings.Contains(lua, "scale = 2") {
+		t.Fatalf("lua %q", lua)
 	}
 }
 

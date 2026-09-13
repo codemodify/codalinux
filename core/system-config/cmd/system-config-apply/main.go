@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/applyd"
+	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/sockpath"
 )
 
@@ -20,7 +21,8 @@ func main() {
 	if err := s.Listen(); err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("system-config-apply listening on %s (uid %d); allowlist display.scale display.mode", *sock, os.Getuid())
+	log.Printf("system-config-apply listening on %s (uid %d); allowlist (%d): %s",
+		*sock, os.Getuid(), len(protocol.ApplyOps), protocol.ApplyOpsLog())
 	go func() {
 		if err := s.Serve(); err != nil {
 			log.Printf("serve: %v", err)

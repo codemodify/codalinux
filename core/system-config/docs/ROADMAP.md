@@ -1,13 +1,11 @@
 # system-config remaining work
 
-Shipped in-tree (not on the ISO): display, network, audio, bluetooth, input, datetime, locale apply, devices (summary/pci/usb), hardware.dmi, session lock, power (brightness/lid/suspend/hibernate). CLI + GUI TreeView pages for each.
+Shipped on the live ISO: display, network, audio, bluetooth, input, datetime, locale apply, devices (summary/pci/usb), hardware.dmi, session lock, power (backlight + logind CanSuspend/CanHibernate). CLI + GUI TreeView pages for each. External probes (`bluetoothctl`/`iwctl`/`wpctl`/…) have hard timeouts so D’s accept loop cannot hang. Hyprland display/input apply persists to `~/.config/hypr/coda-system-config.lua` (dofile from `hyprland.lua`). iwd connect writes `/var/lib/iwd/<ssid>.psk` then `iwctl --passphrase`.
 
 Still open:
 
-- Wire binaries onto the live/install image.
 - Real udev netlink watch (report `--watch` is a poll stub).
-- Persist Hyprland input/display beyond runtime `hyprctl eval` (hyprland.lua rewrite is out of scope).
-- iwd scan quality / hidden SSIDs; networkd drop-in merge with existing `*.network` files.
+- Hidden SSIDs / iwd scan quality; networkd drop-in merge with existing `*.network` files.
 - PipeWire node names vs numeric ids when wpctl status format changes.
 - BlueZ D-Bus instead of `bluetoothctl` text; pairing agent for interactive PIN.
 - Session idle inhibit; reboot/poweroff remain **not** allowlisted.

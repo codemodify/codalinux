@@ -151,6 +151,49 @@ func TestParseIwctlAndWpctl(t *testing.T) {
 	if v != 0.4 || m == nil || !*m {
 		t.Fatalf("%v %v", v, m)
 	}
+	var audio protocol.AudioModel
+	parseWpStatus("Audio\n ├─ Sinks:\n │  *   52. Built-in Audio Analog Stereo [vol: 0.50]\n ├─ Sources:\n │      53. Mic [vol: 0.20]\n", &audio)
+	if audio.DefaultSink != "52" || len(audio.Sinks) != 1 || audio.Sources[0].ID != "53" {
+		t.Fatalf("%+v", audio)
+	}
+}
+
+func TestPowerFromSysfs(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "sys/class/backlight/acpi_video0/brightness"), "80\n")
+	mustWrite(t, filepath.Join(root, "sys/class/backlight/acpi_video0/max_brightness"), "100\n")
+	mustWrite(t, filepath.Join(root, "sys/power/state"), "freeze mem disk\n")
+	p := &Probe{Root: root, Run: func(string, ...string) (string, error) {
+		return "", errStr("no busctl")
+	}}
+	raw, err := p.Collect(protocol.PathPower)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pw protocol.PowerModel
+	if err := json.Unmarshal(raw, &pw); err != nil {
+		t.Fatal(err)
+	}
+	if pw.Backlight != "acpi_video0" || pw.Brightness != 80 || !pw.CanSuspend || !pw.CanHibernate {
+		t.Fatalf("%+v", pw)
+	}
+}
+
+func TestBluetoothEmptyOnTimeout(t *testing.T) {
+	p := &Probe{Run: func(name string, args ...string) (string, error) {
+		return "", errStr("timeout after 2.5s running bluetoothctl")
+	}}
+	raw, err := p.Collect(protocol.PathBluetooth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bt protocol.BluetoothModel
+	if err := json.Unmarshal(raw, &bt); err != nil {
+		t.Fatal(err)
+	}
+	if bt.Adapter != "" || len(bt.Devices) != 0 {
+		t.Fatalf("%+v", bt)
+	}
 }
 
 func mustWrite(t *testing.T, path, body string) {

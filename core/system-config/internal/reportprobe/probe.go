@@ -8,9 +8,12 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
+	"github.com/codemodify/codalinux/core/system-config/internal/runcmd"
 )
 
 type Probe struct {
@@ -117,8 +120,7 @@ func (p *Probe) cmdSession(name string, args ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b, err := sess.Command(name, args...).Output()
-	return string(b), err
+	return runcmd.Prepared(2500*time.Millisecond, sess.Command(name, args...))
 }
 
 func (p *Probe) hyprJSON() ([]byte, error) {
@@ -133,8 +135,8 @@ func (p *Probe) hyprJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := sess.Command("hyprctl", "-j", "monitors")
-	return cmd.Output()
+	out, err := runcmd.Prepared(2500*time.Millisecond, sess.Command("hyprctl", "-j", "monitors"))
+	return []byte(out), err
 }
 
 func formatMode(w, h, hz int) string {

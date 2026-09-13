@@ -97,6 +97,11 @@ func (r *Runner) netWiFiConnect(op protocol.PlanOp) error {
 	if err := checkPSK(op.PSK); err != nil {
 		return err
 	}
+	if op.PSK != "" {
+		if err := r.writeIwdPSK(op.SSID, op.PSK); err != nil {
+			return err
+		}
+	}
 	var out string
 	var err error
 	if op.PSK != "" {
@@ -108,6 +113,30 @@ func (r *Runner) netWiFiConnect(op protocol.PlanOp) error {
 		return fmt.Errorf("iwctl connect: %w (%s)", err, strings.TrimSpace(out))
 	}
 	return nil
+}
+
+func (r *Runner) writeIwdPSK(ssid, psk string) error {
+	dir := r.IwdDir
+	if dir == "" {
+		dir = "/var/lib/iwd"
+	}
+	name := iwdFilename(ssid)
+	body := "[Security]\nPassphrase=" + psk + "\n"
+	return r.writeFile(filepath.Join(dir, name), []byte(body), 0o600)
+}
+
+func iwdFilename(ssid string) string {
+	for _, r := range ssid {
+		ok := (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
+		if !ok {
+			var b strings.Builder
+			for _, c := range []byte(ssid) {
+				fmt.Fprintf(&b, "%02x", c)
+			}
+			return b.String() + ".psk"
+		}
+	}
+	return ssid + ".psk"
 }
 
 func (r *Runner) netWiFiDisconnect(op protocol.PlanOp) error {

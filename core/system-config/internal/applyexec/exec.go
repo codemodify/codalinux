@@ -3,14 +3,15 @@
 package applyexec
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
+	"github.com/codemodify/codalinux/core/system-config/internal/runcmd"
 )
 
 type Runner struct {
@@ -24,6 +25,8 @@ type Runner struct {
 	VConsole      string
 	LogindDrop    string
 	BacklightRoot string
+	IwdDir        string
+	Timeout       time.Duration
 }
 
 func New() *Runner {
@@ -120,13 +123,20 @@ func (r *Runner) runWith(session, needHypr bool, name string, args ...string) (s
 	if r.Run != nil {
 		return r.Run(name, args...)
 	}
+	d := r.Timeout
+	if d <= 0 {
+		d = 4 * time.Second
+	}
+	if name == "bluetoothctl" && d < 10*time.Second {
+		for _, a := range args {
+			if a == "pair" || a == "scan" || a == "connect" {
+				d = 10 * time.Second
+				break
+			}
+		}
+	}
 	if !session {
-		cmd := exec.Command(name, args...)
-		var buf bytes.Buffer
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		err := cmd.Run()
-		return buf.String(), err
+		return runcmd.Run(d, name, args...)
 	}
 	var sess hyprsession.Session
 	var err error
@@ -141,19 +151,20 @@ func (r *Runner) runWith(session, needHypr bool, name string, args ...string) (s
 		return "", fmt.Errorf("session: %w", err)
 	}
 	cmd := sess.Command(name, args...)
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	err = cmd.Run()
+	out, err := runcmd.Prepared(d, cmd)
 	if err != nil {
-		return buf.String(), fmt.Errorf("%w [%s]", err, sess.String())
+		return out, fmt.Errorf("%w [%s]", err, sess.String())
 	}
-	return buf.String(), nil
+	return out, nil
 }
 
 func (r *Runner) writeFile(path string, data []byte, perm os.FileMode) error {
 	if r.WriteFile != nil {
 		return r.WriteFile(path, data, perm)
+	}
+	// Command-spy tests set Run but not WriteFile — never touch the host.
+	if r.Run != nil {
+		return nil
 	}
 	if err := os.MkdirAll(parentDir(path), 0o755); err != nil {
 		return err

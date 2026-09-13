@@ -174,6 +174,6 @@ type PowerModel struct {
 	MaxBrightness int    `json:"max_brightness,omitempty"`
 	Backlight     string `json:"backlight,omitempty"`
 	Lid           string `json:"lid,omitempty"` // ignore | suspend | lock | poweroff
-	CanSuspend    bool   `json:"can_suspend,omitempty"`
-	CanHibernate  bool   `json:"can_hibernate,omitempty"`
+	CanSuspend    bool   `json:"can_suspend"`
+	CanHibernate  bool   `json:"can_hibernate"`
 }

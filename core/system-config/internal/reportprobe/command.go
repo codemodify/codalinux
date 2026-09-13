@@ -1,7 +1,12 @@
 package reportprobe
 
-import "os/exec"
+import (
+	"time"
+
+	"github.com/codemodify/codalinux/core/system-config/internal/runcmd"
+)
 
 func execCommand(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).Output()
+	out, err := runcmd.Run(2500*time.Millisecond, name, args...)
+	return []byte(out), err
 }

@@ -97,9 +97,14 @@ type session struct {
 	vol   float64
 	mute  bool
 
-	bt      protocol.BluetoothModel
-	btAddr  string
-	btPower bool
+	bt           protocol.BluetoothModel
+	btAddr       string
+	btPower      bool
+	btScan       bool
+	btPair       []string
+	btConnect    []string
+	btDisconnect []string
+	btTrust      []string
 
 	input protocol.InputModel
 	dt    protocol.DateTimeModel
@@ -179,6 +184,8 @@ func (s *session) reload() {
 	if raw := refresh(protocol.PathBluetooth); len(raw) > 0 {
 		_ = json.Unmarshal(raw, &s.bt)
 		s.btPower = s.bt.Powered
+		s.btScan = s.bt.Scanning
+		s.btPair, s.btConnect, s.btDisconnect, s.btTrust = nil, nil, nil, nil
 	}
 	if raw := refresh(protocol.PathInput); len(raw) > 0 {
 		_ = json.Unmarshal(raw, &s.input)
@@ -349,11 +356,14 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 		m := s.mute
 		v = protocol.AudioModel{DefaultSink: s.audio.DefaultSink, Volume: s.vol, Mute: &m}
 	case protocol.PathBluetooth:
-		bt := protocol.BluetoothModel{Powered: s.btPower}
-		if s.btAddr != "" {
-			bt.Connect = []string{s.btAddr}
+		v = protocol.BluetoothModel{
+			Powered:    s.btPower,
+			Scanning:   s.btScan,
+			Pair:       s.btPair,
+			Connect:    s.btConnect,
+			Disconnect: s.btDisconnect,
+			Trust:      s.btTrust,
 		}
-		v = bt
 	case protocol.PathInput:
 		v = s.input
 	case protocol.PathDateTime:
