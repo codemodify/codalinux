@@ -4,18 +4,19 @@ package reportprobe
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
 )
 
 type Probe struct {
-	Root    string // default /
-	Hyprctl func() ([]byte, error)
+	Root     string // default /
+	Hyprctl  func() ([]byte, error)
+	Discover func() (hyprsession.Session, error)
 }
 
 func New() *Probe { return &Probe{Root: "/"} }
@@ -81,7 +82,15 @@ func (p *Probe) hyprJSON() ([]byte, error) {
 	if p.Hyprctl != nil {
 		return p.Hyprctl()
 	}
-	cmd := exec.Command("hyprctl", "-j", "monitors")
+	discover := p.Discover
+	if discover == nil {
+		discover = hyprsession.Discover
+	}
+	sess, err := discover()
+	if err != nil {
+		return nil, err
+	}
+	cmd := sess.Command("hyprctl", "-j", "monitors")
 	return cmd.Output()
 }
 

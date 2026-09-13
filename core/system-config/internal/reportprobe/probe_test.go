@@ -2,10 +2,12 @@ package reportprobe
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 )
 
@@ -54,6 +56,23 @@ func TestDisplayFromHyprctl(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(d.Outputs) != 1 || d.Outputs[0].Scale != 2 || d.Outputs[0].Mode != "1920x1080@60" {
+		t.Fatalf("%+v", d)
+	}
+}
+
+func TestDisplayEmptyWithoutSession(t *testing.T) {
+	p := &Probe{Discover: func() (hyprsession.Session, error) {
+		return hyprsession.Session{}, errors.New("HYPRLAND_INSTANCE_SIGNATURE not set")
+	}}
+	raw, err := p.Collect(protocol.PathDisplay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d protocol.DisplayModel
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Outputs) != 0 {
 		t.Fatalf("%+v", d)
 	}
 }

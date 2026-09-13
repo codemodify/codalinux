@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/codemodify/codalinux/core/system-config/internal/hyprsession"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 )
 
@@ -15,6 +16,7 @@ type Runner struct {
 	Hyprctl  string
 	LookPath func(string) (string, error)
 	Run      func(name string, args ...string) (string, error)
+	Discover func() (hyprsession.Session, error)
 }
 
 func New() *Runner {
@@ -51,6 +53,7 @@ func (r *Runner) hyprMonitor(op protocol.PlanOp) error {
 	if mode == "" {
 		mode = "preferred"
 	}
+	// Same table as scripts/coda-settings: output= (not name=).
 	expr := fmt.Sprintf("hl.monitor({ output = %s, mode = %s, position = %s, scale = %g })",
 		luaString(op.Output), luaString(mode), luaString("auto"), scale)
 	out, err := r.run(r.hyprctlBin(), "eval", expr)
@@ -78,12 +81,23 @@ func (r *Runner) run(name string, args ...string) (string, error) {
 	if r.Run != nil {
 		return r.Run(name, args...)
 	}
-	cmd := exec.Command(name, args...)
+	discover := r.Discover
+	if discover == nil {
+		discover = hyprsession.Discover
+	}
+	sess, err := discover()
+	if err != nil {
+		return "", fmt.Errorf("hyprland session: %w", err)
+	}
+	cmd := sess.Command(name, args...)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	err := cmd.Run()
-	return buf.String(), err
+	err = cmd.Run()
+	if err != nil {
+		return buf.String(), fmt.Errorf("%w [%s]", err, sess.String())
+	}
+	return buf.String(), nil
 }
 
 func luaString(s string) string {
