@@ -181,7 +181,68 @@ func (r *Runner) writeFile(path string, data []byte, perm os.FileMode) error {
 	if err := os.MkdirAll(parentDir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, perm)
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return err
+	}
+	r.chownSession(parentDir(path), path)
+	return nil
+}
+
+func (r *Runner) sessionOwner() (uid, gid int, ok bool) {
+	take := func(s hyprsession.Session) (int, int, bool) {
+		if s.UID == 0 {
+			return 0, 0, false
+		}
+		g := int(s.GID)
+		if g == 0 {
+			g = int(s.UID)
+		}
+		return int(s.UID), g, true
+	}
+	if r.Discover != nil {
+		if s, err := r.Discover(); err == nil {
+			if uid, gid, ok = take(s); ok {
+				return uid, gid, true
+			}
+		}
+	}
+	if r.Run != nil {
+		return 0, 0, false
+	}
+	if s, err := hyprsession.DiscoverRuntime(); err == nil {
+		if uid, gid, ok = take(s); ok {
+			return uid, gid, true
+		}
+	}
+	if v := os.Getenv("CODA_SYSTEM_CONFIG_UID"); v != "" {
+		n := 0
+		for _, c := range v {
+			if c < '0' || c > '9' {
+				return 0, 0, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		if n > 0 {
+			return n, n, true
+		}
+	}
+	return 0, 0, false
+}
+
+func (r *Runner) chownSession(paths ...string) {
+	if os.Getuid() != 0 {
+		return
+	}
+	uid, gid, ok := r.sessionOwner()
+	if !ok {
+		return
+	}
+	for _, p := range paths {
+		if p == "" || p == "." || p == "/" {
+			continue
+		}
+		_ = os.Chown(p, uid, gid)
+	}
 }
 
 func parentDir(path string) string {

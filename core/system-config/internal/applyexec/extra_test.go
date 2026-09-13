@@ -129,6 +129,17 @@ func TestBluetoothPINFile(t *testing.T) {
 	}
 }
 
+func TestSessionOwnerFromDiscover(t *testing.T) {
+	r := New()
+	r.Discover = func() (hyprsession.Session, error) {
+		return hyprsession.Session{UID: 1000, GID: 1000, Home: "/home/live"}, nil
+	}
+	uid, gid, ok := r.sessionOwner()
+	if !ok || uid != 1000 || gid != 1000 {
+		t.Fatalf("sessionOwner %d %d %v", uid, gid, ok)
+	}
+}
+
 func TestCheckBlockNames(t *testing.T) {
 	for _, ok := range []string{"sda", "sdb1", "vda2", "nvme0n1", "nvme0n1p2", "mmcblk0p1"} {
 		if err := checkBlock(ok); err != nil {

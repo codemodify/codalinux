@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/codemodify/uitoolkit"
+	"github.com/codemodify/uitoolkit/widget"
 	"github.com/codemodify/uitoolkit/widgets"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
@@ -313,7 +314,8 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 		}
 		switch kind {
 		case "pair":
-			s.btPair = []string{s.btAddr}
+			s.showPINDialog()
+			return
 		case "connect":
 			s.btConnect = []string{s.btAddr}
 		case "disconnect":
@@ -329,21 +331,71 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 	}
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Bluetooth"),
-		uitoolkit.NewLabel("BlueZ D-Bus pairing agent. Type the PIN here, Stage pair, then Apply. Apply writes $XDG_RUNTIME_DIR/coda/bluetooth-pin; the agent reads it (or waits up to 12s) when the device asks."),
+		uitoolkit.NewLabel("BlueZ D-Bus pairing agent. Pair opens a PIN dialog; Apply writes $XDG_RUNTIME_DIR/coda/bluetooth-pin and the agent reads it (or waits up to 12s)."),
 		uitoolkit.NewLabel("Adapter "+adapter),
 		uitoolkit.NewSwitch("Adapter power", s.btPower, func(on bool) { s.btPower = on }),
 		uitoolkit.NewSwitch("Scan", s.btScan, func(on bool) { s.btScan = on }),
 		table,
 		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), addr).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("PIN"), uitoolkit.NewTextField(s.btPIN, "pairing PIN/passkey", func(v string) { s.btPIN = v })).WithGap(8),
 		uitoolkit.NewRow(
-			uitoolkit.NewButton("Stage pair", func() { stageAddr("pair") }),
+			uitoolkit.NewButton("Pair…", func() { stageAddr("pair") }),
 			uitoolkit.NewButton("Stage connect", func() { stageAddr("connect") }),
 			uitoolkit.NewButton("Stage disconnect", func() { stageAddr("disconnect") }),
 			uitoolkit.NewButton("Stage trust", func() { stageAddr("trust") }),
 		).WithGap(8),
 		s.refreshBtn(protocol.PathBluetooth),
 	).WithGap(8)
+}
+
+func (s *session) showPINDialog() {
+	if s.btAddr == "" {
+		s.note("pick a device first")
+		return
+	}
+	host := widget.Component(nil)
+	if s.win != nil {
+		host = s.win.Content()
+	}
+	if host == nil {
+		s.btPair = []string{s.btAddr}
+		s.note("staged pair " + s.btAddr + " (no window for PIN dialog)")
+		return
+	}
+	pin := s.btPIN
+	field := uitoolkit.NewPasswordField("PIN / passkey", func(v string) { pin = v })
+	if s.btPIN != "" {
+		field.SetText(s.btPIN)
+	}
+	var overlay *widgets.Overlay
+	finish := func(ok bool) {
+		if overlay != nil {
+			widget.DismissOverlay(overlay)
+		}
+		if !ok {
+			s.note("pair cancelled")
+			return
+		}
+		s.btPIN = pin
+		s.btPair = []string{s.btAddr}
+		s.note("pairing " + s.btAddr)
+		s.apply()
+	}
+	cancel := uitoolkit.NewButton("Cancel", func() { finish(false) })
+	pair := uitoolkit.NewButton("Pair", func() { finish(true) })
+	pair.Primary = true
+	field.OnSubmit = func(string) { finish(true) }
+	card := uitoolkit.NewPanel("Bluetooth PIN",
+		uitoolkit.NewLabel("Enter the PIN or passkey for "+s.btAddr+". Pair stages the device and applies through system-configd."),
+		field,
+		uitoolkit.NewRow(cancel, pair).WithGap(8),
+	)
+	card.Raised = true
+	overlay = uitoolkit.NewOverlay(card)
+	overlay.MinCardH = 180
+	if !widget.ShowOverlay(host, overlay) {
+		s.btPair = []string{s.btAddr}
+		s.note("staged pair " + s.btAddr + " (overlay failed)")
+	}
 }
 
 func (s *session) inputPage() uitoolkit.Component {

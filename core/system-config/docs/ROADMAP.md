@@ -1,6 +1,6 @@
 # system-config remaining work
 
-Shipped on the live ISO and this pass: display (scale/mode/position, multi-monitor persist), network (iwd scan quality + security, networkd drop-in merge, static IP/DNS/search that survives reboot, airplane/rfkill), audio (full sink/source names via `pw-dump`, per-node volume, default routing persisted to `~/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf`), bluetooth (BlueZ D-Bus + pairing agent with GUI PIN field + `$XDG_RUNTIME_DIR/coda/bluetooth-pin`; `bluetoothctl --timeout` fallback), input (hypr persist + localectl/vconsole), datetime/locale, session (lock, seats, idle inhibit observe), power (backlight + logind lid; suspend/hibernate gated; **no** reboot/poweroff), printers/users/storage **apply** (`lpadmin`/`cupsenable`, `usermod -s`, `udisksctl` mount/unmount; system mounts refused). CLI + GUI TreeView pages for each.
+Shipped on the live ISO and this pass: display (scale/mode/position, multi-monitor persist), network (iwd scan quality + security, networkd drop-in merge, static IP/DNS/search that survives reboot, airplane/rfkill), audio (full sink/source names via `pw-dump`, per-node volume, default routing persisted to `~/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf`; root apply chowns that file to the seat user), bluetooth (BlueZ D-Bus + pairing agent; **PIN overlay dialog** in system-config-gui; `$XDG_RUNTIME_DIR/coda/bluetooth-pin`; `bluetoothctl --timeout` fallback), input (hypr persist + localectl/vconsole), datetime/locale, session (lock, seats, idle inhibit observe), power (backlight + logind lid; suspend/hibernate gated; **no** reboot/poweroff), printers/users/storage **apply** (`lpadmin`/`cupsenable`, `usermod -s`, `udisksctl` mount/unmount; system mounts refused). CLI + GUI TreeView pages for each.
 
 **Desktop Settings:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `system-config-gui.desktop` launch **`system-config-gui` only**. Session chrome (wallpaper, workspaces, GTK, hypr gaps) calls `coda-wallpaper` / `coda-hypr-ws` / `nwg-look` / `thunar` / `hyprctl` directly. `coda-settings` stays on the image as a hidden helper binary (`NoDisplay=true`); it is not a Settings app. Documented in [`architecture.md`](../../../architecture.md#system-config).
 
@@ -12,5 +12,5 @@ External probes have hard timeouts so D’s accept loop cannot hang. Hyprland di
 
 ## Later work (intentional; not incomplete product code)
 
-- uitoolkit gaps: [`uitoolkit-gaps.md`](uitoolkit-gaps.md) — compose existing widgets; do not block on PrefsPage / modal dialogs. Bluetooth PIN is the GUI TextField + pin file (no toolkit dialog widget).
-- Parent ISO rebuild + guest e2e after this coding pass (live smoke, not a missing feature).
+- uitoolkit gaps: [`uitoolkit-gaps.md`](uitoolkit-gaps.md) — PrefsPage / NavRail still composed from TreeView + Splitter. Bluetooth PIN is a real Overlay dialog (`Pair…`).
+- Parent ISO rebuild + guest e2e after this coding pass (live smoke, not a missing feature). This guest verification used hot-pushed `6d3a62c` bins; tip after this pass needs a fresh ISO.
