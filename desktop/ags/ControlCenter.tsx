@@ -289,6 +289,9 @@ function DisplayPanel({ hide }: { hide: () => void }) {
         <button hexpand onClicked={() => launch("display", "scale", "1.25")}>
           <label label="125%" />
         </button>
+        <button hexpand onClicked={() => launch("display", "scale", "2")}>
+          <label label="200%" />
+        </button>
       </box>
       <SkipNote
         title="Night Color"

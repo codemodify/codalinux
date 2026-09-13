@@ -121,7 +121,7 @@ show_display() {
   echo "No KWin compositor / Night Color KCM. Hyprland blur stays off on VMs."
   echo "Apply: coda-settings display apply 1920x1080@60"
   echo "       coda-settings display apply 1280x720@60"
-  echo "       coda-settings display scale 1|1.25"
+  echo "       coda-settings display scale 1|1.25|2   (100% / 125% / 200%)"
   echo "       coda-settings display apply preferred [OUTPUT]  (avoid on QEMU)"
 }
 
