@@ -142,7 +142,7 @@ Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section i
 | --- | --- |
 | `system-config` | CLI |
 | `system-config-tui` | TUI |
-| `system-config-gui` | Settings UI built with **uitoolkit**, part of CodaLinux desktop tooling |
+| `system-config-gui` | Settings UI on **uitoolkit `dev` (v0.19.x)** — Mail dogfood pattern (splitter + TreeView, pinned Apply, app-level socket client). Enough to ship; remaining gaps in [`core/system-config/docs/uitoolkit-gaps.md`](core/system-config/docs/uitoolkit-gaps.md) do not block. |
 
 Clients never call report or apply. They query **submodels**, not the entire model by default.
 

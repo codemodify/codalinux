@@ -1,28 +1,20 @@
 # uitoolkit gaps (Coda Settings)
 
-`system-config-gui` is built only with [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit). No second UI stack.
+`system-config-gui` ships on uitoolkit `dev` (v0.19.x) by composing existing widgets — same pattern as the Mail dogfood app. No second UI stack. Do not block the GUI on the items below.
 
-## What we used (present)
+## Remaining gaps
 
-- `New` / `NewWindow` / `Run` / `WritePNG` (headless)
-- `NewTitleBar`, `NewStatusBar`, `NewColumn`, `NewRow`, `NewPad`, `NewSplitter`
-- `NewListView` (sidebar)
-- `NewTableView` (display outputs, PCI table)
-- `NewTitle`, `NewLabel`, `NewButton`
+- No PrefsPage / NavRail framework
+- TableView weak for large sort/filter/column resize
+- No shared daemon RPC client in toolkit
+- No Form/Grid layout helper
 
-That is enough for a two-page Settings shell (Display + Devices).
+## How we compose instead
 
-## Gaps that would make Settings more complete
-
-None of these blocked a first GUI. They are the next toolkit asks:
-
-1. **Live data binding / invalidate-from-goroutine** — pages rebuild with `SetContent` after Refresh/Apply. A `Invalidate`/`Rebuild` helper that is safe from a `watch` callback would avoid tearing down the sidebar selection.
-2. **Table cell widgets** — `TableView` is string-only. Scale as in-cell radio/combo would need buttons below the table (what we do) or cells that host `Component`s.
-3. **Nav rail / settings category widget** — we compose `ListView` + `Splitter`. A dedicated nav with icons + sections would match a desktop Settings app more closely.
-4. **Form / property grid** — locale and future network pages are key/value forms; today that is labels + fields stacked in a column.
-5. **Watch / event source** — protocol `watch` is a one-shot snapshot. Toolkit does not need this, but a timer or fd-watch helper on the app loop would make udev-driven Devices updates cleaner than rebuild-on-button.
-
-## Not a toolkit gap
-
-- TUI is `system-config-tui` (text stub). uitoolkit is the GUI toolkit, not a terminal widget set.
-- Display apply still needs Hyprland + `system-config-apply`; the GUI only talks to D.
+| Need | What we use |
+| --- | --- |
+| Unix socket + JSON-RPC NDJSON | App-level client (`internal/client` + `internal/rpc`). Not a toolkit Socket API. |
+| Two-pane Settings + pinned Apply | `Splitter` + `Column.AddFlex` + Primary `Apply` row (Settings dogfood). |
+| Sidebar | `Splitter` + `TreeView` (Mail) / `ListView` (Settings). No first-class NavRail. |
+| Devices / PCI | `TableView` (alpha: cap huge lists; no toolkit sort/filter). |
+| Display scale | `Slider` + `NumberField` + Apply. No built-in scale page. |

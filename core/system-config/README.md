@@ -16,7 +16,7 @@ CGO_ENABLED=0 go build -o bin/ ./cmd/system-configd ./cmd/system-config-apply \
   ./cmd/system-config-gui
 ```
 
-`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit). Headless:
+`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit) (v0.19.x is enough). Mail/Settings pattern: app-level Unix socket + JSON-lines client, two-pane `Splitter` + `TreeView`, pinned Apply, `TableView` for devices (capped), `Slider`/`NumberField` for display scale. Gaps: [`docs/uitoolkit-gaps.md`](docs/uitoolkit-gaps.md). Headless:
 
 ```bash
 go run ./cmd/system-config-gui -headless
@@ -59,7 +59,7 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 | `system-config-report` | Inventory → observed (udev/sysfs/DMI + `hyprctl -j monitors`) |
 | `system-config` | CLI → D |
 | `system-config-tui` | Minimal TUI stub → D |
-| `system-config-gui` | Settings GUI (uitoolkit) → D |
+| `system-config-gui` | Settings GUI (uitoolkit Mail pattern) → D |
 
 ## Protocol
 
