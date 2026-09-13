@@ -47,7 +47,29 @@ func Report() string {
 }
 
 func EnsureDir(socket string) error {
-	return os.MkdirAll(filepath.Dir(socket), 0o700)
+	dir := filepath.Dir(socket)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	return chownSeat(dir, 0o750)
+}
+
+// FixupSocket makes a listening Unix socket usable by the seat uid.
+// Root apply creates the inode as root:root; D (unprivileged) must be able
+// to connect. Mode 0660 + chown seat:seat when CODA_SYSTEM_CONFIG_UID is set.
+func FixupSocket(socket string) error {
+	return chownSeat(socket, 0o660)
+}
+
+func chownSeat(path string, mode os.FileMode) error {
+	if err := os.Chmod(path, mode); err != nil {
+		return err
+	}
+	uid := UID()
+	if os.Getuid() != 0 || uid <= 0 {
+		return nil
+	}
+	return os.Chown(path, uid, uid)
 }
 
 func UID() int {

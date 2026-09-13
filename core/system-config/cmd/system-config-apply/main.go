@@ -21,8 +21,8 @@ func main() {
 	if err := s.Listen(); err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("system-config-apply listening on %s (uid %d); allowlist (%d): %s",
-		*sock, os.Getuid(), len(protocol.ApplyOps), protocol.ApplyOpsLog())
+	log.Printf("system-config-apply listening on %s (euid %d seat %d); allowlist (%d): %s",
+		*sock, os.Getuid(), sockpath.UID(), len(protocol.ApplyOps), protocol.ApplyOpsLog())
 	go func() {
 		if err := s.Serve(); err != nil {
 			log.Printf("serve: %v", err)

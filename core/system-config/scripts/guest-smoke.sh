@@ -43,12 +43,16 @@ if command -v loginctl >/dev/null 2>&1; then
     fi
   done < <(loginctl list-sessions --no-legend --no-pager 2>/dev/null | awk '{print $1}')
 fi
-if [[ -z "${session_uid}" ]]; then
+if [[ -z "${session_uid}" || "${session_uid}" == "0" ]]; then
   if id live >/dev/null 2>&1; then
     session_uid="$(id -u live)"
-  else
+  elif [[ "$(id -u)" != "0" ]]; then
     session_uid="$(id -u)"
   fi
+fi
+if [[ -z "${session_uid}" || "${session_uid}" == "0" ]]; then
+  echo "FAIL: no seat user (refusing to start D/report as root)" >&2
+  exit 1
 fi
 session_user="$(id -nu "${session_uid}")"
 
