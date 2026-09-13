@@ -21,8 +21,11 @@ func TestNormalizeAndKnownPath(t *testing.T) {
 	if !KnownPath("printers") || !KnownPath("users") || !KnownPath("storage") {
 		t.Fatal("printers/users/storage must be known")
 	}
-	if Settable("printers") || Settable("users") || Settable("storage") {
-		t.Fatal("printers/users/storage are observe-only")
+	if !Settable("printers") || !Settable("users") || !Settable("storage") {
+		t.Fatal("printers/users/storage must be settable")
+	}
+	if !AllowedOp(OpPrinterDefault) || !AllowedOp(OpUserShell) || !AllowedOp(OpStorageMount) {
+		t.Fatal("printers/users/storage apply ops")
 	}
 	if !AllowedOp(OpDisplayPosition) || !AllowedOp(OpNetAirplane) {
 		t.Fatal("new apply ops")

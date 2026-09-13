@@ -22,7 +22,22 @@ func (p *Probe) printers() (json.RawMessage, error) {
 			continue
 		}
 		pr := protocol.Printer{Name: fields[0], State: strings.Join(fields[1:], " ")}
+		low := strings.ToLower(pr.State)
+		en := !strings.Contains(low, "not accepting") && !strings.Contains(low, "disabled")
+		pr.Enabled = &en
 		m.Printers = append(m.Printers, pr)
+	}
+	if d, err := p.cmd("lpstat", "-d"); err == nil {
+		for _, line := range strings.Split(d, "\n") {
+			if i := strings.LastIndex(line, ":"); i >= 0 {
+				m.Default = strings.TrimSpace(line[i+1:])
+			}
+		}
+		for i := range m.Printers {
+			if m.Printers[i].Name == m.Default {
+				m.Printers[i].Default = true
+			}
+		}
 	}
 	return rpc.Raw(m), nil
 }

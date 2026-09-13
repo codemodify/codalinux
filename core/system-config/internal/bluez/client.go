@@ -4,6 +4,8 @@ package bluez
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -209,25 +211,52 @@ type agent struct {
 func (a *agent) Release() *dbus.Error { return nil }
 
 func (a *agent) RequestPinCode(_ dbus.ObjectPath) (string, *dbus.Error) {
-	if a.pin != "" {
-		return a.pin, nil
+	if p := a.resolvePIN(); p != "" {
+		return p, nil
 	}
 	return "0000", nil
+}
+
+func (a *agent) resolvePIN() string {
+	if a.pin != "" {
+		return a.pin
+	}
+	if p := readPINFile(); p != "" {
+		return p
+	}
+	deadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+		if p := readPINFile(); p != "" {
+			return p
+		}
+	}
+	return ""
+}
+
+func readPINFile() string {
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		return ""
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "coda", "bluetooth-pin"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 func (a *agent) DisplayPinCode(_ dbus.ObjectPath, _ string) *dbus.Error { return nil }
 
 func (a *agent) RequestPasskey(_ dbus.ObjectPath) (uint32, *dbus.Error) {
-	if a.pin != "" {
-		var n uint32
-		for _, r := range a.pin {
-			if r >= '0' && r <= '9' {
-				n = n*10 + uint32(r-'0')
-			}
+	pin := a.resolvePIN()
+	var n uint32
+	for _, r := range pin {
+		if r >= '0' && r <= '9' {
+			n = n*10 + uint32(r-'0')
 		}
-		return n, nil
 	}
-	return 0, nil
+	return n, nil
 }
 
 func (a *agent) DisplayPasskey(_ dbus.ObjectPath, _ uint32, _ uint16) *dbus.Error {

@@ -21,6 +21,10 @@ var (
 	reLid       = regexp.MustCompile(`^(ignore|suspend|lock|poweroff|hibernate)$`)
 	reSearch    = regexp.MustCompile(`^[A-Za-z0-9._-]{1,253}$`)
 	rePosition  = regexp.MustCompile(`^(auto|-?[0-9]{1,6}x-?[0-9]{1,6})$`)
+	rePrinter   = regexp.MustCompile(`^[A-Za-z0-9._@-]{1,127}$`)
+	reUser      = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+	reBlock     = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]{0,31}(p?[0-9]{1,3})?$`)
+	reShell     = regexp.MustCompile(`^(/usr)?/bin/[A-Za-z0-9._+-]{1,32}$`)
 )
 
 func checkIface(s string) error {
@@ -96,6 +100,41 @@ func checkIP(s string) error {
 func checkBT(s string) error {
 	if !reBT.MatchString(s) {
 		return fmt.Errorf("invalid bluetooth address")
+	}
+	return nil
+}
+
+func checkPrinter(s string) error {
+	if !rePrinter.MatchString(s) {
+		return fmt.Errorf("invalid printer %q", s)
+	}
+	return nil
+}
+
+func checkUser(s string) error {
+	if !reUser.MatchString(s) {
+		return fmt.Errorf("invalid user %q", s)
+	}
+	return nil
+}
+
+func checkShell(s string) error {
+	if s != "/usr/sbin/nologin" && s != "/sbin/nologin" && !reShell.MatchString(s) {
+		return fmt.Errorf("invalid shell %q", s)
+	}
+	if strings.Contains(s, "..") {
+		return fmt.Errorf("invalid shell")
+	}
+	return nil
+}
+
+func checkBlock(s string) error {
+	if strings.Contains(s, "/") || strings.Contains(s, "..") {
+		return fmt.Errorf("invalid block device")
+	}
+	if !reBlock.MatchString(s) && !regexp.MustCompile(`^nvme[0-9]+n[0-9]+(p[0-9]+)?$`).MatchString(s) &&
+		!regexp.MustCompile(`^(vd|sd|hd|mmcblk)[a-z0-9]+$`).MatchString(s) {
+		return fmt.Errorf("invalid block device %q", s)
 	}
 	return nil
 }

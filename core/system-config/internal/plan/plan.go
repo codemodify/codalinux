@@ -33,6 +33,12 @@ func Build(path string, desired, observed json.RawMessage) (protocol.Plan, error
 		p, err = FromSession(desired, observed)
 	case protocol.PathPower:
 		p, err = FromPower(desired, observed)
+	case protocol.PathPrinters:
+		p, err = FromPrinters(desired, observed)
+	case protocol.PathUsers:
+		p, err = FromUsers(desired, observed)
+	case protocol.PathStorage:
+		p, err = FromStorage(desired, observed)
 	default:
 		return protocol.Plan{}, fmt.Errorf("no apply plan for %s", path)
 	}

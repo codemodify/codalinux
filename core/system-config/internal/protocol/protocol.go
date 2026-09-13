@@ -170,6 +170,14 @@ const (
 	OpPowerHibernate  = "power.hibernate"
 	OpPowerBrightness = "power.brightness"
 	OpPowerLid        = "power.lid"
+
+	OpPrinterDefault = "printers.default"
+	OpPrinterEnable  = "printers.enable"
+
+	OpUserShell = "users.shell"
+
+	OpStorageMount   = "storage.mount"
+	OpStorageUnmount = "storage.unmount"
 )
 
 // ApplyOps is the closed allowlist executed by system-config-apply.
@@ -183,6 +191,9 @@ var ApplyOps = []string{
 	OpLocaleLang, OpLocaleKeymap,
 	OpSessionLock,
 	OpPowerSuspend, OpPowerHibernate, OpPowerBrightness, OpPowerLid,
+	OpPrinterDefault, OpPrinterEnable,
+	OpUserShell,
+	OpStorageMount, OpStorageUnmount,
 }
 
 func ApplyOpsLog() string {
@@ -220,7 +231,8 @@ func KnownPath(p string) bool {
 func Settable(p string) bool {
 	switch NormalizePath(p) {
 	case PathDisplay, PathNetwork, PathAudio, PathBluetooth, PathInput,
-		PathDateTime, PathLocale, PathSession, PathPower:
+		PathDateTime, PathLocale, PathSession, PathPower,
+		PathPrinters, PathUsers, PathStorage:
 		return true
 	default:
 		return false

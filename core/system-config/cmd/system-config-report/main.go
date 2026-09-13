@@ -12,10 +12,12 @@ import (
 
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/reportd"
+	"github.com/codemodify/codalinux/core/system-config/internal/rootguard"
 	"github.com/codemodify/codalinux/core/system-config/internal/sockpath"
 )
 
 func main() {
+	rootguard.RefuseRoot("system-config-report")
 	sock := flag.String("socket", sockpath.Report(), "listen socket")
 	dSock := flag.String("daemon-socket", sockpath.Daemon(), "system-configd socket (for --once/--watch push)")
 	once := flag.Bool("once", false, "scan paths, push observed into D, exit")

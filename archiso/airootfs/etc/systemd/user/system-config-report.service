@@ -3,6 +3,7 @@ Description=Coda system-config-report (observed inventory)
 After=system-configd.service
 Wants=system-configd.service
 PartOf=graphical-session.target
+ConditionUser=!root
 
 [Service]
 ExecStart=/usr/local/bin/system-config-report
@@ -11,4 +12,3 @@ RestartSec=2
 
 [Install]
 WantedBy=graphical-session.target
-WantedBy=default.target
