@@ -36,24 +36,38 @@ install -m 0644 "${mod}/README.md" "${docdir}/README.md"
 install -m 0755 "${mod}/scripts/guest-smoke.sh" "${docdir}/guest-smoke.sh"
 install -m 0755 "${mod}/scripts/guest-e2e-all.sh" "${docdir}/guest-e2e-all.sh"
 
+# build-iso.sh DEST is archiso/airootfs — units already live there.
+# GNU install errors on same-inode src/dest. Only copy when dest differs.
+install_if_different() {
+  local mode="$1" src="$2" destf="$3"
+  [[ -e "${src}" ]] || return 0
+  mkdir -p "$(dirname "${destf}")"
+  if [[ -e "${destf}" ]]; then
+    if [[ "$(stat -c '%d:%i' "${src}" 2>/dev/null || true)" == "$(stat -c '%d:%i' "${destf}" 2>/dev/null || true)" ]]; then
+      return 0
+    fi
+  fi
+  install -m "${mode}" "${src}" "${destf}"
+}
+
 unit_user="${root}/archiso/airootfs/etc/systemd/user"
 unit_sys="${root}/archiso/airootfs/etc/systemd/system"
 install -d "${dest}/etc/systemd/user/graphical-session.target.wants" \
   "${dest}/etc/systemd/system/graphical.target.wants"
 if [[ -f "${unit_user}/system-configd.service" ]]; then
-  install -m 0644 "${unit_user}/system-configd.service" \
+  install_if_different 0644 "${unit_user}/system-configd.service" \
     "${dest}/etc/systemd/user/system-configd.service"
   ln -sfn /etc/systemd/user/system-configd.service \
     "${dest}/etc/systemd/user/graphical-session.target.wants/system-configd.service"
 fi
 if [[ -f "${unit_user}/system-config-report.service" ]]; then
-  install -m 0644 "${unit_user}/system-config-report.service" \
+  install_if_different 0644 "${unit_user}/system-config-report.service" \
     "${dest}/etc/systemd/user/system-config-report.service"
   ln -sfn /etc/systemd/user/system-config-report.service \
     "${dest}/etc/systemd/user/graphical-session.target.wants/system-config-report.service"
 fi
 if [[ -f "${unit_sys}/system-config-apply.service" ]]; then
-  install -m 0644 "${unit_sys}/system-config-apply.service" \
+  install_if_different 0644 "${unit_sys}/system-config-apply.service" \
     "${dest}/etc/systemd/system/system-config-apply.service"
   ln -sfn /etc/systemd/system/system-config-apply.service \
     "${dest}/etc/systemd/system/graphical.target.wants/system-config-apply.service"
