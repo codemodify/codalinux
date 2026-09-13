@@ -404,15 +404,107 @@ else
   record SKIP "apply bluetooth pair" "adapter ${adapter} present; e2e does not pair"
 fi
 
-# Observe-only domains users expect in a settings app.
+# Printers / users / storage: refresh + get (apply only when a no-op is safe).
 for p in printers users storage; do
-  out="$(cli get "${p}" 2>/dev/null || true)"
-  if json_ok "${out}"; then
+  out="$(cli refresh "${p}" 2>&1)" || out="ERR:${out}"
+  if [[ "${out}" == ERR:* ]] || ! json_ok "${out}"; then
+    record FAIL "refresh ${p} (explicit)" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+  else
+    record PASS "refresh ${p} (explicit)"
+  fi
+  got="$(cli get "${p}" 2>/dev/null || true)"
+  if json_ok "${got}"; then
     record PASS "get ${p}"
   else
     record FAIL "get ${p}"
   fi
 done
+
+# Same-shell apply is a no-op (never add/delete/password).
+user_json="$(cli get users 2>/dev/null || true)"
+e2e_user="$(json_field "${user_json}" "users.0.name")"
+e2e_shell="$(json_field "${user_json}" "users.0.shell")"
+if [[ -n "${e2e_user}" && -n "${e2e_shell}" ]]; then
+  if out="$(cli set users "{\"users\":[{\"name\":\"${e2e_user}\",\"shell\":\"${e2e_shell}\"}]}" 2>&1)" && json_ok "${out}"; then
+    if out="$(cli apply users 2>&1)" && json_ok "${out}"; then
+      record PASS "apply users shell no-op" "${e2e_user} ${e2e_shell}"
+    else
+      record FAIL "apply users shell no-op" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+    fi
+  else
+    record FAIL "set users shell no-op"
+  fi
+else
+  record SKIP "apply users shell no-op" "no local user observed"
+fi
+
+# rfkill / airplane observe only — never rfkill block in e2e.
+net="$(cli get network 2>/dev/null || true)"
+airplane="$(json_field "${net}" "airplane")"
+if [[ "${airplane}" == "true" || "${airplane}" == "false" ]]; then
+  record PASS "observe network airplane/rfkill" "airplane=${airplane}"
+else
+  record FAIL "observe network airplane/rfkill" "airplane field missing (got ${airplane:-<empty>})"
+fi
+
+# Static IP dry-apply: rewrite the current CIDR as static, then restore dhcp.
+# Only when a non-loopback address exists so QEMU slirp stays reachable.
+dry_iface=""
+dry_addr=""
+dry_gw=""
+dry_method=""
+for i in 0 1 2 3 4; do
+  n="$(json_field "${net}" "links.${i}.name")"
+  [[ -n "${n}" && "${n}" != "lo" ]] || continue
+  a="$(json_field "${net}" "links.${i}.addresses.0")"
+  [[ -n "${a}" && "${a}" != "null" ]] || continue
+  dry_iface="${n}"
+  dry_addr="${a}"
+  dry_gw="$(json_field "${net}" "links.${i}.gateway")"
+  dry_method="$(json_field "${net}" "links.${i}.method")"
+  break
+done
+if [[ -z "${dry_iface}" || -z "${dry_addr}" ]]; then
+  record SKIP "apply network static dry" "no non-loopback address"
+else
+  if [[ -z "${dry_gw}" || "${dry_gw}" == "null" ]]; then
+    dry_gw="10.0.2.2"
+  fi
+  static_json="{\"links\":[{\"name\":\"${dry_iface}\",\"enabled\":true,\"method\":\"static\",\"addresses\":[\"${dry_addr}\"],\"gateway\":\"${dry_gw}\"}]}"
+  if out="$(cli set network "${static_json}" 2>&1)" && json_ok "${out}"; then
+    if out="$(cli apply network 2>&1)" && json_ok "${out}"; then
+      record PASS "apply network static dry" "${dry_iface} ${dry_addr}"
+    else
+      record FAIL "apply network static dry" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+    fi
+  else
+    record FAIL "set network static dry"
+  fi
+  restore="${dry_method:-dhcp}"
+  if [[ "${restore}" != "dhcp" && "${restore}" != "static" ]]; then
+    restore="dhcp"
+  fi
+  restore_json="{\"links\":[{\"name\":\"${dry_iface}\",\"enabled\":true,\"method\":\"${restore}\"}]}"
+  if [[ "${restore}" == "static" ]]; then
+    restore_json="{\"links\":[{\"name\":\"${dry_iface}\",\"enabled\":true,\"method\":\"static\",\"addresses\":[\"${dry_addr}\"],\"gateway\":\"${dry_gw}\"}]}"
+  fi
+  if out="$(cli set network "${restore_json}" 2>&1)" && json_ok "${out}"; then
+    if out="$(cli apply network 2>&1)" && json_ok "${out}"; then
+      record PASS "apply network restore ${restore}" "${dry_iface}"
+    else
+      record FAIL "apply network restore ${restore}" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+    fi
+  else
+    record FAIL "set network restore ${restore}"
+  fi
+fi
+
+# Root D/report must not have bound /run/user/0 (duplicate control plane).
+if [[ -S /run/user/0/coda/system-configd.sock || -S /run/user/0/coda/system-config-report.sock ]]; then
+  record FAIL "no root D/report under /run/user/0" "$(ls -l /run/user/0/coda/ 2>/dev/null | tr '\n' ' ')"
+else
+  record PASS "no root D/report under /run/user/0"
+fi
 
 # Never lock/suspend/hibernate/poweroff/reboot in e2e.
 record SKIP "apply session.lock" "would lock the live session"

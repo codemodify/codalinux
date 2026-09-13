@@ -24,8 +24,8 @@ type TaskItem = {
 /** Last regular workspace id per client, so minimized windows stay on that workspace's bar. */
 const lastRegularWs = new Map<string, number>()
 
-function launch(tool: string) {
-  execAsync(["coda-settings", tool]).catch(console.error)
+function launchSystemConfig() {
+  execAsync(["system-config-gui"]).catch(console.error)
 }
 
 function toggle(name: string) {
@@ -403,7 +403,7 @@ function Audio() {
   const speaker = wp?.defaultSpeaker
   if (!speaker) {
     return (
-      <button class="audio" onClicked={() => launch("audio")}>
+      <button class="audio" onClicked={() => launchSystemConfig()}>
         <image iconName="audio-volume-high-symbolic" pixelSize={16} />
       </button>
     )
@@ -415,7 +415,7 @@ function Audio() {
   const muted = createBinding(speaker, "mute")
 
   return (
-    <button class="audio" onClicked={() => launch("audio")}>
+    <button class="audio" onClicked={() => launchSystemConfig()}>
       <box spacing={6}>
         <image
           iconName={muted((m) =>
@@ -433,8 +433,8 @@ function Wifi() {
   return (
     <button
       class="wifi"
-      tooltipText="Wi-Fi (iwd / impala)"
-      onClicked={() => launch("wifi")}
+      tooltipText="Wi-Fi (system-config)"
+      onClicked={() => launchSystemConfig()}
     >
       <image iconName="network-wireless-symbolic" pixelSize={16} />
     </button>
@@ -454,7 +454,7 @@ function Bluetooth() {
     <button
       class="bluetooth"
       tooltipText="Bluetooth"
-      onClicked={() => launch("bluetooth")}
+      onClicked={() => launchSystemConfig()}
     >
       <image iconName={icon} pixelSize={16} />
     </button>

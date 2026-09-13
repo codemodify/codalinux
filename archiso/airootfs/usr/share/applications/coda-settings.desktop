@@ -1,10 +1,11 @@
 [Desktop Entry]
-Name=Settings
-Comment=System Settings — display, sound, Wi-Fi, appearance, workspace
+Name=Session chrome
+Comment=Hidden helper — Settings is system-config-gui
 Exec=coda-settings
 TryExec=coda-settings
-Icon=preferences-system
+Icon=preferences-desktop-theme
 Terminal=false
 Type=Application
 Categories=Settings;DesktopSettings;
 StartupNotify=true
+NoDisplay=true

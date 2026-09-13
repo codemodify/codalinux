@@ -98,8 +98,8 @@ JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to th
 
 **Paths:** `display` `network` `audio` `bluetooth` `input` `datetime` `locale` `session` `power` `printers` `users` `storage` `devices.summary` `devices.pci` `devices.usb` `hardware.dmi`
 
-**Apply allowlist:** `display.scale` `display.mode` `display.position` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `network.airplane` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid`
+**Apply allowlist:** `display.scale` `display.mode` `display.position` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `network.airplane` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid` `printers.default` `printers.enable` `users.shell` `storage.mount` `storage.unmount`
 
-Reboot/poweroff are **not** allowlisted. Desktop Settings / AGS hardware pages launch `system-config-gui` (not `coda-settings`).
+Reboot/poweroff are **not** allowlisted. Desktop Settings is `system-config-gui` only (`coda-settings` is hidden). D/report refuse uid 0.
 
 Display eval stays `hl.monitor({ output = "NAME", ... })`. Hyprland/PipeWire tools use session discovery (`internal/hyprsession`). Remaining work: [`docs/ROADMAP.md`](docs/ROADMAP.md).

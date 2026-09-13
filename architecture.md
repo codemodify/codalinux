@@ -19,7 +19,7 @@ Do **not** claim A/B partitions, a read-only core, a core-only ISO, or `system-c
 | Host `pacman` | Core / OS only; gated; writes the **inactive** slot | Ordinary rolling pacman on the mutable root (not gated) |
 | Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | `coda-install` preseeds Bozeman defaults; custom profile still incomplete |
 | Updates | OS slot swap; apps via sandbox `pacman` | ISO rebuild cadence; sandbox helper is in-tree |
-| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). **Desktop Settings / ControlCenter / bar hardware launch `system-config-gui`.** `coda-settings` remains only as optional session-chrome (wallpaper, workspaces, appearance). No migrate. |
+| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). **Desktop Settings is `system-config-gui` only.** AGS session chrome calls `coda-wallpaper` / `coda-hypr-ws` / `nwg-look` / `hyprctl` directly. `coda-settings` is a hidden helper, not a Settings app. No migrate. |
 
 Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`, **`system-config`** daemons/clients on the live ISO. Not shipped: A/B RO slots, core-only image, installer partition layout.
 
@@ -126,7 +126,7 @@ Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for th
 
 **Implemented** (Go) in [`core/system-config/`](core/system-config/README.md) and **wired onto the live ISO** (`/usr/local/bin/system-config*` plus user `system-configd`/`system-config-report` and root `system-config-apply`). Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1.
 
-**Desktop cutover:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `/usr/share/applications/system-config-gui.desktop` launch **`system-config-gui`**. That client talks to `system-configd` only. `coda-settings` is a thin optional fallback for Hyprland **session chrome** (wallpaper, workspaces, GTK appearance, gaps/animations) — not the hardware/system path. Do not treat `coda-settings` as the primary Settings app.
+**Desktop cutover:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `/usr/share/applications/system-config-gui.desktop` launch **`system-config-gui`**. That client talks to `system-configd` only. Session chrome (wallpaper, workspaces, GTK, gaps) uses the dedicated helpers, not `coda-settings`. `coda-settings` remains on the image as `NoDisplay=true` for scripts; it is not a Settings app.
 
 Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section is the canonical architecture.
 
@@ -197,9 +197,9 @@ Clients ask D for one of these (or a child path), not a dump of the whole tree. 
 | `locale` | locale.conf / localectl | yes |
 | `session` | logind (sessions, seats, idle inhibit) | lock only |
 | `power` | logind + backlight sysfs | suspend/hibernate, brightness, lid. **Not** reboot/poweroff |
-| `printers` | CUPS (`lpstat`) when present | observe (`present=false` if no cups) |
-| `users` | `/etc/passwd` local accounts | observe |
-| `storage` | lsblk / udisks / sysfs block | observe (`present=false` if none) |
+| `printers` | CUPS (`lpstat` / `lpadmin`) when present | default + enable (`present=false` if no cups) |
+| `users` | `/etc/passwd` local accounts | login shell only (`usermod -s`) |
+| `storage` | lsblk / udisks / sysfs block | mount/unmount via `udisksctl` (`present=false` if none; system mounts refused) |
 | `devices.summary` | DMI + sysfs counts | observe |
 | `devices.pci` | sysfs (L1, lazy) | observe |
 | `devices.usb` | sysfs | observe |

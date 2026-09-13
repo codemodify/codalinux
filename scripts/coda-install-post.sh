@@ -183,7 +183,7 @@ if [[ "${same_root}" -eq 0 ]]; then
   copy_if /etc/systemd/system/system-config-apply.service \
     "${target}/etc/systemd/system/system-config-apply.service"
   mkdir -p "${target}/etc/systemd/system/graphical.target.wants" \
-    "${target}/etc/systemd/user/default.target.wants"
+    "${target}/etc/systemd/user/graphical-session.target.wants"
   copy_if /etc/systemd/user/system-configd.service \
     "${target}/etc/systemd/user/system-configd.service"
   copy_if /etc/systemd/user/system-config-report.service \
@@ -194,12 +194,18 @@ if [[ "${same_root}" -eq 0 ]]; then
   fi
   if [[ -e "${target}/etc/systemd/user/system-configd.service" ]]; then
     ln -sfn /etc/systemd/user/system-configd.service \
-      "${target}/etc/systemd/user/default.target.wants/system-configd.service"
+      "${target}/etc/systemd/user/graphical-session.target.wants/system-configd.service"
   fi
   if [[ -e "${target}/etc/systemd/user/system-config-report.service" ]]; then
     ln -sfn /etc/systemd/user/system-config-report.service \
-      "${target}/etc/systemd/user/default.target.wants/system-config-report.service"
+      "${target}/etc/systemd/user/graphical-session.target.wants/system-config-report.service"
   fi
+  copy_if /usr/share/applications/system-config-gui.desktop \
+    "${target}/usr/share/applications/system-config-gui.desktop"
+  copy_if /usr/share/applications/coda-settings.desktop \
+    "${target}/usr/share/applications/coda-settings.desktop"
+  rm -f "${target}/etc/systemd/user/default.target.wants/system-configd.service" \
+    "${target}/etc/systemd/user/default.target.wants/system-config-report.service"
 
   copy_tree /usr/local/lib "${target}/usr/local/lib"
   copy_tree /usr/local/share/codalinux "${target}/usr/local/share/codalinux"
@@ -241,6 +247,28 @@ configure_target "${target}"
 
 if [[ ! -x "${target}/usr/local/bin/coda-hyprland" ]]; then
   echo "coda-install-post: ${target}/usr/local/bin/coda-hyprland missing after copy" >&2
+  exit 1
+fi
+for sc in system-config system-configd system-config-apply system-config-report system-config-gui; do
+  if [[ ! -x "${target}/usr/local/bin/${sc}" ]]; then
+    echo "coda-install-post: ${target}/usr/local/bin/${sc} missing (must ship like live)" >&2
+    exit 1
+  fi
+done
+if [[ ! -e "${target}/etc/systemd/system/system-config-apply.service" ]]; then
+  echo "coda-install-post: system-config-apply.service missing on target" >&2
+  exit 1
+fi
+if [[ ! -e "${target}/etc/systemd/user/system-configd.service" ]]; then
+  echo "coda-install-post: system-configd.service missing on target" >&2
+  exit 1
+fi
+if [[ ! -e "${target}/usr/share/applications/system-config-gui.desktop" ]]; then
+  echo "coda-install-post: system-config-gui.desktop missing (Settings must ship like live)" >&2
+  exit 1
+fi
+if [[ ! -e "${target}/etc/systemd/user/graphical-session.target.wants/system-configd.service" ]]; then
+  echo "coda-install-post: system-configd not wanted by graphical-session.target" >&2
   exit 1
 fi
 if ! grep -q "user = \"${user}\"" "${target}/etc/greetd/config.toml"; then

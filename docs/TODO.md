@@ -69,5 +69,5 @@ Locked in [architecture.md](../architecture.md#system-config). Code: [`core/syst
 - [x] Guest e2e: `core/system-config/scripts/guest-e2e-all.sh --guest` (host-refused).
 - [x] Network / audio / bluetooth / input / datetime / locale apply allowlist (plus session lock, power).
 - [x] Persist Hyprland display/input to `~/.config/hypr/coda-system-config.lua`; iwd PSK file + `--passphrase`.
-- [ ] BlueZ D-Bus pairing agent. See `core/system-config/docs/ROADMAP.md`.
-- [ ] Replace AGS + `coda-settings` (explicitly **not** a migrate in v1).
+- [x] BlueZ D-Bus pairing agent + GUI PIN field / `$XDG_RUNTIME_DIR/coda/bluetooth-pin`. See `core/system-config/docs/ROADMAP.md`.
+- [x] Desktop Settings is `system-config-gui` only (not a migrate from `coda-settings`).

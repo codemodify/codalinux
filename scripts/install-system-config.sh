@@ -36,4 +36,40 @@ install -m 0644 "${mod}/README.md" "${docdir}/README.md"
 install -m 0755 "${mod}/scripts/guest-smoke.sh" "${docdir}/guest-smoke.sh"
 install -m 0755 "${mod}/scripts/guest-e2e-all.sh" "${docdir}/guest-e2e-all.sh"
 
+unit_user="${root}/archiso/airootfs/etc/systemd/user"
+unit_sys="${root}/archiso/airootfs/etc/systemd/system"
+install -d "${dest}/etc/systemd/user/graphical-session.target.wants" \
+  "${dest}/etc/systemd/system/graphical.target.wants"
+if [[ -f "${unit_user}/system-configd.service" ]]; then
+  install -m 0644 "${unit_user}/system-configd.service" \
+    "${dest}/etc/systemd/user/system-configd.service"
+  ln -sfn /etc/systemd/user/system-configd.service \
+    "${dest}/etc/systemd/user/graphical-session.target.wants/system-configd.service"
+fi
+if [[ -f "${unit_user}/system-config-report.service" ]]; then
+  install -m 0644 "${unit_user}/system-config-report.service" \
+    "${dest}/etc/systemd/user/system-config-report.service"
+  ln -sfn /etc/systemd/user/system-config-report.service \
+    "${dest}/etc/systemd/user/graphical-session.target.wants/system-config-report.service"
+fi
+if [[ -f "${unit_sys}/system-config-apply.service" ]]; then
+  install -m 0644 "${unit_sys}/system-config-apply.service" \
+    "${dest}/etc/systemd/system/system-config-apply.service"
+  ln -sfn /etc/systemd/system/system-config-apply.service \
+    "${dest}/etc/systemd/system/graphical.target.wants/system-config-apply.service"
+fi
+
+if [[ -f "${root}/desktop/applications/system-config-gui.desktop" ]]; then
+  install -d "${dest}/usr/share/applications"
+  install -m 0644 "${root}/desktop/applications/system-config-gui.desktop" \
+    "${dest}/usr/share/applications/system-config-gui.desktop"
+fi
+if [[ -f "${root}/desktop/applications/coda-settings.desktop" ]]; then
+  install -d "${dest}/usr/share/applications"
+  install -m 0644 "${root}/desktop/applications/coda-settings.desktop" \
+    "${dest}/usr/share/applications/coda-settings.desktop"
+fi
+rm -f "${dest}/etc/systemd/user/default.target.wants/system-configd.service" \
+  "${dest}/etc/systemd/user/default.target.wants/system-config-report.service"
+
 echo "install-system-config: installed to ${bindir}"
