@@ -512,6 +512,8 @@ Guest 9p shares (copy configs / drop logs; do not rebuild the ISO)
   # Preferred: helper from the share (always the host copy)
   ${guest_mount}/scripts/coda-sync-desktop-from-host.sh ${guest_mount}
   # After the next ISO rebuild this is also: coda-sync-desktop-from-host
+  # system-config binaries/units ship on the ISO; sync also copies
+  # ${guest_mount}/core/system-config/bin/* if you built them on the host.
 
   # Or copy by hand, then restart from a Hyprland terminal:
   install -m 0755 ${guest_mount}/scripts/coda-wallpaper /usr/local/bin/coda-wallpaper

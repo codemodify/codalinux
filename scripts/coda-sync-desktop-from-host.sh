@@ -100,6 +100,30 @@ if [[ -n "${scripts_src}" ]]; then
   fi
 fi
 
+# Optional host-built system-config (ISO already ships these after rebuild).
+sc_bin=""
+for sc_bin in \
+  "${share}/core/system-config/bin" \
+  "${share}/bin"; do
+  [[ -d "${sc_bin}" ]] || continue
+  install -d /usr/local/bin /usr/local/lib/codalinux
+  local_bin=""
+  for local_bin in system-config system-configd system-config-apply \
+                   system-config-report system-config-tui system-config-gui; do
+    if [[ -x "${sc_bin}/${local_bin}" ]]; then
+      install -m 0755 "${sc_bin}/${local_bin}" "/usr/local/bin/${local_bin}"
+      log "system-config → /usr/local/bin/${local_bin}"
+    fi
+  done
+  break
+done
+if [[ -x "${share}/scripts/system-config-apply-launch" ]]; then
+  install -d /usr/local/lib/codalinux
+  install -m 0755 "${share}/scripts/system-config-apply-launch" \
+    /usr/local/lib/codalinux/system-config-apply-launch
+  log "helper → /usr/local/lib/codalinux/system-config-apply-launch"
+fi
+
 desktop_user() {
   if id live >/dev/null 2>&1; then
     printf '%s' live

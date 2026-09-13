@@ -36,4 +36,11 @@ file_permissions=(
   ["/usr/local/bin/coda-wallpaper"]="0:0:755"
   ["/usr/local/bin/coda-sync-desktop-from-host"]="0:0:755"
   ["/usr/local/bin/ags"]="0:0:755"
+  ["/usr/local/bin/system-config"]="0:0:755"
+  ["/usr/local/bin/system-configd"]="0:0:755"
+  ["/usr/local/bin/system-config-apply"]="0:0:755"
+  ["/usr/local/bin/system-config-report"]="0:0:755"
+  ["/usr/local/bin/system-config-tui"]="0:0:755"
+  ["/usr/local/bin/system-config-gui"]="0:0:755"
+  ["/usr/local/lib/codalinux/system-config-apply-launch"]="0:0:755"
 )

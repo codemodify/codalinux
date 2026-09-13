@@ -1,0 +1,12 @@
+[Unit]
+Description=Coda system-config-apply (allowlisted executor)
+After=systemd-user-sessions.service graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/codalinux/system-config-apply-launch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target

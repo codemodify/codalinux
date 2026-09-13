@@ -4,7 +4,7 @@ Canonical picture of **how the entire system looks**: partitions → layers → 
 
 - **Target** is the locked product intent. Do not treat it as shipped until the installer and A/B slots exist.
 - **Current tree** is what this repository actually builds today.
-- Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md). `system-config` is locked here as **greenfield target**, not implemented.
+- Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md). `system-config` is locked here as **greenfield**; the Go daemons/clients are implemented and ISO-wired.
 
 Do **not** claim A/B partitions, a read-only core, a core-only ISO, or `system-config` daemons work until those are built.
 
@@ -19,9 +19,9 @@ Do **not** claim A/B partitions, a read-only core, a core-only ISO, or `system-c
 | Host `pacman` | Core / OS only; gated; writes the **inactive** slot | Ordinary rolling pacman on the mutable root (not gated) |
 | Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | `coda-install` preseeds Bozeman defaults; custom profile still incomplete |
 | Updates | OS slot swap; apps via sandbox `pacman` | ISO rebuild cadence; sandbox helper is in-tree |
-| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Started:** Go module `core/system-config/` (not ISO-wired). Live session still AGS + `coda-settings`. |
+| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). Live session still also has AGS + `coda-settings` (no migrate). |
 
-Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`. Not shipped: A/B RO slots, core-only image, installer partition layout. **`system-config` Go binaries exist in-tree; not installed on the ISO.**
+Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`, **`system-config`** daemons/clients on the live ISO. Not shipped: A/B RO slots, core-only image, installer partition layout.
 
 ## Partitions (target)
 
@@ -124,7 +124,7 @@ Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for th
 
 ## system-config
 
-**Implementation started** (Go) in [`core/system-config/`](core/system-config/README.md). Not on the live ISO yet. Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1. Current desktop still uses AGS + `coda-settings`.
+**Implemented** (Go) in [`core/system-config/`](core/system-config/README.md) and **wired onto the live ISO** (`/usr/local/bin/system-config*` plus user `system-configd`/`system-config-report` and root `system-config-apply`). Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1. Current desktop still also uses AGS + `coda-settings`.
 
 Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section is the canonical architecture.
 
@@ -227,8 +227,8 @@ Do not rebuild the ISO just to read this document. The desktop image already inc
 1. **Desktop UX** (Hyprland / AGS): `./scripts/qemu-desktop-dev.sh` — 9p share; `coda-sync-desktop-from-host.sh` copies wrappers including `coda-sandbox`.
 2. **Sandbox helper** (on a live/Arch session with network): the commands in [Sandboxes](#sandboxes-implemented). First `create` bootstraps `base` and needs `pacman` on the host. This is **not** an A/B disk test.
 3. **ISO smoke**: `./scripts/qemu-boot-test.sh` after `./scripts/build-iso.sh`. Confirms the mutable desktop live image, not OS-A/OS-B.
-4. **system-config (Go, not on the ISO):** `cd core/system-config && CGO_ENABLED=0 go test ./...`. Run order: [core/system-config/README.md](core/system-config/README.md). Guest QEMU smoke: `core/system-config/scripts/guest-smoke.sh --guest`.
+4. **system-config (Go, on the live ISO):** `cd core/system-config && CGO_ENABLED=0 go test ./...`. Run order: [core/system-config/README.md](core/system-config/README.md). Guest QEMU smoke: `core/system-config/scripts/guest-smoke.sh --guest` (refuses unless `--guest` and `ID=codalinux`).
 
 Live boot: systemd-boot `timeout 1`. `pacman-init` is **off the greeter critical path** (timer after `graphical.target`, not `WantedBy=multi-user.target`). `ldconfig.service` must not rebuild the linker cache on every live boot: squashfs already has `/etc/ld.so.cache`. The drop-in resets stock `Condition*` (empty assignment clears **all** of them), then requires `ConditionFileNotEmpty=!/etc/ld.so.cache` so a non-empty cache skips the unit. See [DESIGN.md](DESIGN.md#service-enablement).
 
-A/B partition layouts, RO core mounts, and gated host pacman are **future work** ([docs/TODO.md](docs/TODO.md) §5). `system-config` is implemented in-tree (not ISO-wired); try it via [core/system-config/README.md](core/system-config/README.md).
+A/B partition layouts, RO core mounts, and gated host pacman are **future work** ([docs/TODO.md](docs/TODO.md) §5). `system-config` is implemented in-tree and ISO-wired; try it via [core/system-config/README.md](core/system-config/README.md).
