@@ -33,5 +33,7 @@ chmod 0755 "${bindir}/system-config"*
 docdir="${dest}/usr/local/share/codalinux/system-config"
 install -d "${docdir}"
 install -m 0644 "${mod}/README.md" "${docdir}/README.md"
+install -m 0755 "${mod}/scripts/guest-smoke.sh" "${docdir}/guest-smoke.sh"
+install -m 0755 "${mod}/scripts/guest-e2e-all.sh" "${docdir}/guest-e2e-all.sh"
 
 echo "install-system-config: installed to ${bindir}"
