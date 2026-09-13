@@ -19,6 +19,24 @@ func TestSetGetObserved(t *testing.T) {
 	}
 }
 
+func TestBluetoothEmptyAdapterNotPresent(t *testing.T) {
+	s := New()
+	if err := s.PutObserved("bluetooth", []byte(`{"powered":false}`)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, st := s.Get("bluetooth")
+	if st.Present {
+		t.Fatalf("empty adapter should be present=false: %+v", st)
+	}
+	if err := s.PutObserved("bluetooth", []byte(`{"powered":true,"adapter":"AA:BB:CC:DD:EE:FF"}`)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, st = s.Get("bluetooth")
+	if !st.Present {
+		t.Fatal("adapter should be present")
+	}
+}
+
 func TestChangedWhenDesiredDiffers(t *testing.T) {
 	s := New()
 	_ = s.PutObserved("display", []byte(`{"outputs":[{"name":"a","scale":1}]}`))

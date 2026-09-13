@@ -22,7 +22,7 @@ CGO_ENABLED=0 go build -o bin/ ./cmd/system-configd ./cmd/system-config-apply \
 go run ./cmd/system-config-gui -headless
 ```
 
-Not on the live ISO yet.
+Live/install ISO ships the six binaries under `/usr/local/bin` plus systemd user units (`system-configd`, `system-config-report`) and the root `system-config-apply` unit. `coda-hyprland` also starts the user daemons. Guest smoke stays host-refused (`--guest` + `ID=codalinux`).
 
 ## Run order (user session)
 

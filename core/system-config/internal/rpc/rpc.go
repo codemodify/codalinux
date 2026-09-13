@@ -118,7 +118,7 @@ type Client struct {
 }
 
 func Dial(socket string) (*Client, error) {
-	c := &Client{Socket: socket, Timeout: 8 * time.Second}
+	c := &Client{Socket: socket, Timeout: 12 * time.Second}
 	if err := c.ensure(); err != nil {
 		return nil, err
 	}

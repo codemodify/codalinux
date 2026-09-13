@@ -196,9 +196,11 @@ func (s *session) audioPage() uitoolkit.Component {
 		}
 	})
 	s.volLbl = uitoolkit.NewLabel(fmt.Sprintf("Volume  %.0f%%", s.vol*100))
+	defaults := fmt.Sprintf("Default sink %s   source %s", s.audio.DefaultSink, s.audio.DefaultSource)
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Audio"),
 		uitoolkit.NewLabel("PipeWire via wpctl (session user). Default sink, volume, mute."),
+		uitoolkit.NewLabel(defaults),
 		table, s.volLbl,
 		uitoolkit.NewSlider(0, 100, float32(s.vol*100), func(v float32) {
 			s.vol = float64(v) / 100
@@ -242,12 +244,41 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 		}
 	})
 	addr := uitoolkit.NewTextField(s.btAddr, "AA:BB:CC:DD:EE:FF", func(v string) { s.btAddr = v })
+	stageAddr := func(kind string) {
+		if s.btAddr == "" {
+			s.note("pick a device first")
+			return
+		}
+		switch kind {
+		case "pair":
+			s.btPair = []string{s.btAddr}
+		case "connect":
+			s.btConnect = []string{s.btAddr}
+		case "disconnect":
+			s.btDisconnect = []string{s.btAddr}
+		case "trust":
+			s.btTrust = []string{s.btAddr}
+		}
+		s.note("staged " + kind + " " + s.btAddr)
+	}
+	adapter := s.bt.Adapter
+	if adapter == "" {
+		adapter = "(none — BlueZ missing or stuck; refresh must not hang)"
+	}
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Bluetooth"),
-		uitoolkit.NewLabel("BlueZ via bluetoothctl. Power, scan, pair/connect/disconnect, trust."),
+		uitoolkit.NewLabel("BlueZ via bluetoothctl --timeout. Power, scan, pair/connect/disconnect, trust."),
+		uitoolkit.NewLabel("Adapter "+adapter),
 		uitoolkit.NewSwitch("Adapter power", s.btPower, func(on bool) { s.btPower = on }),
+		uitoolkit.NewSwitch("Scan", s.btScan, func(on bool) { s.btScan = on }),
 		table,
 		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), addr).WithGap(8),
+		uitoolkit.NewRow(
+			uitoolkit.NewButton("Stage pair", func() { stageAddr("pair") }),
+			uitoolkit.NewButton("Stage connect", func() { stageAddr("connect") }),
+			uitoolkit.NewButton("Stage disconnect", func() { stageAddr("disconnect") }),
+			uitoolkit.NewButton("Stage trust", func() { stageAddr("trust") }),
+		).WithGap(8),
 		s.refreshBtn(protocol.PathBluetooth),
 	).WithGap(8)
 }
@@ -384,6 +415,7 @@ func (s *session) powerPage() uitoolkit.Component {
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Power"),
 		uitoolkit.NewLabel("Brightness (sysfs), lid (logind drop-in), suspend/hibernate actions."),
+		uitoolkit.NewLabel(fmt.Sprintf("CanSuspend %v   CanHibernate %v", s.power.CanSuspend, s.power.CanHibernate)),
 		uitoolkit.NewLabel(fmt.Sprintf("Backlight %s  %d / %d", s.power.Backlight, int(s.bright), s.power.MaxBrightness)),
 		uitoolkit.NewSlider(0, max, cur, func(v float32) { s.bright = float64(v) }),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Lid"), lid).WithGap(8),

@@ -1,6 +1,9 @@
 package protocol
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeAndKnownPath(t *testing.T) {
 	if NormalizePath(" /Display/ ") != PathDisplay {
@@ -20,6 +23,13 @@ func TestNormalizeAndKnownPath(t *testing.T) {
 	}
 	if !AllowedOp(OpNetWiFiConnect) || AllowedOp("shell") {
 		t.Fatal("apply allowlist")
+	}
+	log := ApplyOpsLog()
+	if !strings.Contains(log, OpDisplayScale) || !strings.Contains(log, OpBTPair) || !strings.Contains(log, OpPowerBrightness) {
+		t.Fatalf("allowlist log %q", log)
+	}
+	if len(ApplyOps) < 20 {
+		t.Fatalf("allowlist too small: %d", len(ApplyOps))
 	}
 }
 

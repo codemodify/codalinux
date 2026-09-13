@@ -33,6 +33,9 @@ func (s *Store) Get(path string) (desired, observed json.RawMessage, st protocol
 	st = s.status[path]
 	if observed != nil {
 		st.Present = true
+		if path == protocol.PathBluetooth && emptyBluetooth(observed) {
+			st.Present = false
+		}
 	}
 	if desired != nil {
 		st.Configured = true
@@ -67,9 +70,20 @@ func (s *Store) PutObserved(path string, data json.RawMessage) error {
 	s.observed[path] = append(json.RawMessage(nil), data...)
 	st := s.status[path]
 	st.Present = true
+	if path == protocol.PathBluetooth && emptyBluetooth(data) {
+		st.Present = false
+	}
 	st.Changed = changed(s.desired[path], s.observed[path])
 	s.status[path] = st
 	return nil
+}
+
+func emptyBluetooth(raw json.RawMessage) bool {
+	var m protocol.BluetoothModel
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return true
+	}
+	return m.Adapter == "" && len(m.Devices) == 0
 }
 
 func (s *Store) SetApplyError(path, msg string) {

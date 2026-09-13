@@ -30,6 +30,11 @@ hl.monitor({
     scale    = 1,
 })
 
+-- system-config-apply persists runtime display/input here.
+pcall(function()
+    dofile((os.getenv("HOME") or "") .. "/.config/hypr/coda-system-config.lua")
+end)
+
 hl.env("XCURSOR_SIZE", "24")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")

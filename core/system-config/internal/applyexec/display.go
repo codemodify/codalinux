@@ -21,5 +21,9 @@ func (r *Runner) hyprMonitor(op protocol.PlanOp) error {
 	expr := fmt.Sprintf("hl.monitor({ output = %s, mode = %s, position = %s, scale = %g })",
 		luaString(op.Output), luaString(mode), luaString("auto"), scale)
 	out, err := r.runHypr("eval", expr)
-	return checkHyprOK(out, err)
+	if e := checkHyprOK(out, err); e != nil {
+		return e
+	}
+	r.persistHypr(op)
+	return nil
 }
