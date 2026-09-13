@@ -34,14 +34,21 @@ type Page =
   | "input"
   | "power"
   | "storage"
+  | "printers"
   | "about"
+
+function launchSystemConfig() {
+  execAsync(["system-config-gui"]).catch((err) =>
+    console.error("failed to launch system-config-gui", err),
+  )
+}
 
 function launch(tool: string, ...args: string[]) {
   execAsync(["coda-settings", tool, ...args]).catch(console.error)
 }
 
-function applyDisplay(mode: string) {
-  launch("display", "apply", mode)
+function applyDisplay(_mode: string) {
+  launchSystemConfig()
 }
 
 function Volume() {
@@ -56,7 +63,7 @@ function Volume() {
           xalign={0}
           label="Audio — open Mixer to configure PipeWire"
         />
-        <button onClicked={() => launch("audio")}>
+        <button onClicked={() => launchSystemConfig()}>
           <label label="Mixer" />
         </button>
       </box>
@@ -92,7 +99,7 @@ function Volume() {
       >
         <label label="Mute" />
       </button>
-      <button onClicked={() => launch("audio")}>
+      <button onClicked={() => launchSystemConfig()}>
         <label label="Mixer" />
       </button>
     </box>
@@ -104,9 +111,9 @@ function NetworkStatus() {
     try {
       const out = exec(["networkctl", "is-online"]).trim().toLowerCase()
       if (out.includes("online")) return "Online — systemd-networkd + iwd"
-      return "Offline — open Wi-Fi (impala) to join a network"
+      return "Offline — open system-config to join a network"
     } catch {
-      return "Offline — open Wi-Fi (impala) to join a network"
+      return "Offline — open system-config to join a network"
     }
   })
 
@@ -114,7 +121,7 @@ function NetworkStatus() {
     <box class="status-row" spacing={10} hexpand>
       <image iconName="network-wireless-symbolic" pixelSize={18} />
       <label hexpand xalign={0} wrap label={status} />
-      <button onClicked={() => launch("wifi")}>
+      <button onClicked={() => launchSystemConfig()}>
         <label label="Wi-Fi" />
       </button>
     </box>
@@ -138,7 +145,7 @@ function BluetoothStatus() {
     <box class="status-row" spacing={10} hexpand>
       <image iconName={icon} pixelSize={18} />
       <label hexpand xalign={0} label={text} />
-      <button onClicked={() => launch("bluetooth")}>
+      <button onClicked={() => launchSystemConfig()}>
         <label label="Devices" />
       </button>
     </box>
@@ -174,6 +181,32 @@ function LaunchRow({
       onClicked={() => {
         hide()
         launch(tool, ...args)
+      }}
+    >
+      <box spacing={10} hexpand>
+        <label hexpand xalign={0} label={label} />
+        <label class="hint" label={hint} />
+      </box>
+    </button>
+  )
+}
+
+function SystemConfigRow({
+  label,
+  hint = "system-config-gui",
+  hide,
+}: {
+  label: string
+  hint?: string
+  hide: () => void
+}) {
+  return (
+    <button
+      hexpand
+      class="launch-row"
+      onClicked={() => {
+        hide()
+        launchSystemConfig()
       }}
     >
       <box spacing={10} hexpand>
@@ -283,13 +316,13 @@ function DisplayPanel({ hide }: { hide: () => void }) {
       </button>
       <label class="section" xalign={0} label="Scale" />
       <box spacing={8}>
-        <button hexpand onClicked={() => launch("display", "scale", "1")}>
+        <button hexpand onClicked={() => launchSystemConfig()}>
           <label label="100%" />
         </button>
-        <button hexpand onClicked={() => launch("display", "scale", "1.25")}>
+        <button hexpand onClicked={() => launchSystemConfig()}>
           <label label="125%" />
         </button>
-        <button hexpand onClicked={() => launch("display", "scale", "2")}>
+        <button hexpand onClicked={() => launchSystemConfig()}>
           <label label="200%" />
         </button>
       </box>
@@ -297,10 +330,9 @@ function DisplayPanel({ hide }: { hide: () => void }) {
         title="Night Color"
         reason="No hyprsunset / wlsunset / Plasma Night Color"
       />
-      <LaunchRow
-        label="Monitor details…"
-        hint="hyprctl"
-        tool="display"
+      <SystemConfigRow
+        label="Open system configuration (displays)"
+        hint="system-config-gui"
         hide={hide}
       />
     </box>
@@ -413,7 +445,7 @@ export default function ControlCenter() {
               class="control-sub"
               xalign={0}
               wrap
-              label="System Settings — Hyprland + AGS"
+              label="Hardware via system-config-gui; session chrome via coda-settings"
             />
             <NavItem id="overview" label="Overview" icon="preferences-system-symbolic" />
 
@@ -447,6 +479,7 @@ export default function ControlCenter() {
             <NavItem id="input" label="Input Devices" icon="input-mouse-symbolic" />
             <NavItem id="power" label="Power Management" icon="battery-symbolic" />
             <NavItem id="storage" label="Removable Storage" icon="drive-harddisk-symbolic" />
+            <NavItem id="printers" label="Printers" icon="printer-symbolic" />
 
             <label class="nav-group" xalign={0} label="System Administration" />
             <NavItem id="about" label="About" icon="dialog-information-symbolic" />
@@ -650,6 +683,10 @@ export default function ControlCenter() {
                 tool="lock"
                 hide={hide}
               />
+              <SystemConfigRow
+                label="Open system configuration (session lock)"
+                hide={hide}
+              />
               <label
                 class="display-info"
                 wrap
@@ -754,9 +791,13 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Regional Settings"
-                body="Bozeman, Montana defaults. Locale, timezone, and keymap are not asked at install and are not changed here."
+                body="Timezone, locale, and keymap via system-config (timedatectl / localectl). Bozeman defaults until you apply a change."
               />
               <PollInfo cmd={["coda-settings", "region", "print"]} interval={15000} />
+              <SystemConfigRow
+                label="Open system configuration (locale / time)"
+                hide={hide}
+              />
             </box>
 
             <box
@@ -767,8 +808,9 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Users"
-                body="Live ISO autologins user live. There is no Plasma Users KCM."
+                body="Local accounts are observed by system-config. Live ISO autologins user live. No Plasma Users KCM."
               />
+              <SystemConfigRow label="Open system configuration (users)" hide={hide} />
               <PollInfo cmd={["coda-settings", "users", "print"]} interval={15000} />
               <SkipNote
                 title="KDE Wallet / Online Accounts / Feedback"
@@ -823,14 +865,11 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Connections"
-                body="systemd-networkd + iwd. There is no NetworkManager, plasma-nm, or proxy KCM. Join Wi-Fi with impala."
+                body="systemd-networkd + iwd via system-config. There is no NetworkManager or plasma-nm."
               />
               <NetworkStatus />
-              <LaunchRow label="Wi-Fi" hint="impala" tool="wifi" hide={hide} />
-              <LaunchRow
-                label="Network details"
-                hint="networkctl"
-                tool="netstatus"
+              <SystemConfigRow
+                label="Wi-Fi, wired, DNS, airplane mode"
                 hide={hide}
               />
             </box>
@@ -847,13 +886,11 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Audio"
-                body="PipeWire volume here; pavucontrol for devices, ports, and applications."
+                body="PipeWire volume here; sinks, sources, and default routing in system-config."
               />
               <Volume />
-              <LaunchRow
-                label="Open volume control"
-                hint="pavucontrol"
-                tool="audio"
+              <SystemConfigRow
+                label="Open system configuration (audio)"
                 hide={hide}
               />
             </box>
@@ -866,13 +903,11 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Bluetooth"
-                body="Pair and connect devices with blueman."
+                body="Pair, connect, and trust devices with system-config (BlueZ)."
               />
               <BluetoothStatus />
-              <LaunchRow
-                label="Bluetooth devices"
-                hint="blueman-manager"
-                tool="bluetooth"
+              <SystemConfigRow
+                label="Open system configuration (bluetooth)"
                 hide={hide}
               />
             </box>
@@ -893,10 +928,8 @@ export default function ControlCenter() {
                 xalign={0}
                 label={"Keyboard: us (Bozeman default)\nMouse: follow_mouse, border resize\nTouchpad: natural_scroll, tap_to_click"}
               />
-              <LaunchRow
-                label="Full keyboard and touchpad help"
-                hint="shortcuts"
-                tool="input"
+              <SystemConfigRow
+                label="Open system configuration (keyboard, pointer, touchpad)"
                 hide={hide}
               />
               <LaunchRow
@@ -927,14 +960,10 @@ export default function ControlCenter() {
                 <label hexpand xalign={0} label={battPct ? battPct : "No battery"} />
               </box>
               <PollInfo cmd={["coda-settings", "power", "print"]} interval={8000} />
-              <box spacing={8}>
-                <button hexpand onClicked={() => launch("power", "brightness", "down")}>
-                  <label label="Brightness −" />
-                </button>
-                <button hexpand onClicked={() => launch("power", "brightness", "up")}>
-                  <label label="Brightness +" />
-                </button>
-              </box>
+              <SystemConfigRow
+                label="Open system configuration (brightness, lid)"
+                hide={hide}
+              />
             </box>
 
             <box
@@ -945,7 +974,11 @@ export default function ControlCenter() {
             >
               <PageHeader
                 title="Removable Storage"
-                body="udisks + Thunar. No Plasma Device Notifier."
+                body="Block devices via system-config (udisks/lsblk). Thunar still opens folders."
+              />
+              <SystemConfigRow
+                label="Open system configuration (storage)"
+                hide={hide}
               />
               <PollInfo cmd={["coda-settings", "storage", "print"]} interval={8000} />
               <LaunchRow
@@ -959,6 +992,22 @@ export default function ControlCenter() {
                 label="Webcam"
                 hint="snapshot"
                 tool="webcam"
+                hide={hide}
+              />
+            </box>
+
+            <box
+              visible={page((p) => p === "printers")}
+              orientation={Gtk.Orientation.VERTICAL}
+              spacing={10}
+              hexpand
+            >
+              <PageHeader
+                title="Printers"
+                body="CUPS printers when cups is installed. system-config reports present=false if the stack is missing."
+              />
+              <SystemConfigRow
+                label="Open system configuration (printers)"
                 hide={hide}
               />
             </box>

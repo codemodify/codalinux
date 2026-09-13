@@ -19,7 +19,7 @@ Do **not** claim A/B partitions, a read-only core, a core-only ISO, or `system-c
 | Host `pacman` | Core / OS only; gated; writes the **inactive** slot | Ordinary rolling pacman on the mutable root (not gated) |
 | Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | `coda-install` preseeds Bozeman defaults; custom profile still incomplete |
 | Updates | OS slot swap; apps via sandbox `pacman` | ISO rebuild cadence; sandbox helper is in-tree |
-| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). Live session still also has AGS + `coda-settings` (no migrate). |
+| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). **Desktop Settings / ControlCenter / bar hardware launch `system-config-gui`.** `coda-settings` remains only as optional session-chrome (wallpaper, workspaces, appearance). No migrate. |
 
 Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`, **`system-config`** daemons/clients on the live ISO. Not shipped: A/B RO slots, core-only image, installer partition layout.
 
@@ -124,7 +124,9 @@ Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for th
 
 ## system-config
 
-**Implemented** (Go) in [`core/system-config/`](core/system-config/README.md) and **wired onto the live ISO** (`/usr/local/bin/system-config*` plus user `system-configd`/`system-config-report` and root `system-config-apply`). Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1. Current desktop still also uses AGS + `coda-settings`.
+**Implemented** (Go) in [`core/system-config/`](core/system-config/README.md) and **wired onto the live ISO** (`/usr/local/bin/system-config*` plus user `system-configd`/`system-config-report` and root `system-config-apply`). Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1.
+
+**Desktop cutover:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `/usr/share/applications/system-config-gui.desktop` launch **`system-config-gui`**. That client talks to `system-configd` only. `coda-settings` is a thin optional fallback for Hyprland **session chrome** (wallpaper, workspaces, GTK appearance, gaps/animations) — not the hardware/system path. Do not treat `coda-settings` as the primary Settings app.
 
 Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section is the canonical architecture.
 
@@ -186,15 +188,18 @@ Clients ask D for one of these (or a child path), not a dump of the whole tree. 
 
 | Submodel | Typical L2 / L0 source | Set / apply |
 | --- | --- | --- |
-| `display` | Hyprland (outputs, modes, scale) | yes |
-| `network` | iwd + systemd-networkd (no NetworkManager) | yes |
-| `audio` | PipeWire (`wpctl`) | yes |
-| `bluetooth` | BlueZ (`bluetoothctl`) | yes |
-| `input` | localectl / XKB + Hyprland `hl.input` | yes |
+| `display` | Hyprland (outputs, modes, scale, position) | yes |
+| `network` | iwd + systemd-networkd (scan quality, DNS/search, airplane/rfkill; no NetworkManager) | yes |
+| `audio` | PipeWire (`pw-dump` / `wpctl`) full sink/source names | yes |
+| `bluetooth` | BlueZ **D-Bus** (pairing agent); `bluetoothctl --timeout` fallback | yes |
+| `input` | localectl / vconsole + Hyprland `hl.input` (persisted) | yes |
 | `datetime` | timedatectl (timezone, NTP, time) | yes |
 | `locale` | locale.conf / localectl | yes |
-| `session` | logind (users, seats) | lock only |
-| `power` | logind + backlight sysfs | suspend/hibernate, brightness, lid |
+| `session` | logind (sessions, seats, idle inhibit) | lock only |
+| `power` | logind + backlight sysfs | suspend/hibernate, brightness, lid. **Not** reboot/poweroff |
+| `printers` | CUPS (`lpstat`) when present | observe (`present=false` if no cups) |
+| `users` | `/etc/passwd` local accounts | observe |
+| `storage` | lsblk / udisks / sysfs block | observe (`present=false` if none) |
 | `devices.summary` | DMI + sysfs counts | observe |
 | `devices.pci` | sysfs (L1, lazy) | observe |
 | `devices.usb` | sysfs | observe |
