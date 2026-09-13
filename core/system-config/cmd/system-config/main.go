@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/client"
+	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 	"github.com/codemodify/codalinux/core/system-config/internal/sockpath"
 )
 
@@ -19,21 +21,28 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(`Usage: system-config <get|set|refresh|apply|watch> [path] [json]
+		fmt.Printf(`Usage: system-config <get|set|refresh|apply|watch> [path] [json]
 
 Talks to system-configd only (never report or apply).
 
-  system-config get display
-  system-config get devices.summary
-  system-config get devices.pci
-  system-config get locale
-  system-config set display '{"outputs":[{"name":"Virtual-1","scale":2}]}'
+Paths:
+  %s
+
+Set/apply: display network audio bluetooth input datetime locale session power
+Observe-only: devices.summary devices.pci devices.usb hardware.dmi
+
+  system-config get network
+  system-config set network '{"wifi":{"device":"wlan0","connect":"SSID","psk":"secret"}}'
+  system-config apply network
+  system-config set audio '{"volume":0.5,"mute":false}'
+  system-config set bluetooth '{"powered":true,"connect":["AA:BB:CC:DD:EE:FF"]}'
+  system-config set input '{"kb_layout":"us","natural_scroll":true}'
+  system-config set datetime '{"timezone":"America/Denver","ntp":true}'
+  system-config set locale '{"lang":"en_US.UTF-8","keymap":"us"}'
   system-config refresh display
-  system-config apply display
-  system-config watch display
 
 Socket: $CODA_SYSTEM_CONFIG_SOCKET or $XDG_RUNTIME_DIR/coda/system-configd.sock
-`)
+`, strings.Join(protocol.KnownPaths, " "))
 		return nil
 	}
 	sock := sockpath.Daemon()

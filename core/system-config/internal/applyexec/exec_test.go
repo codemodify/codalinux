@@ -2,6 +2,7 @@ package applyexec
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -70,5 +71,129 @@ func TestHyprctlErrorPropagates(t *testing.T) {
 	}}})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestNetworkWiFiConnectArgv(t *testing.T) {
+	var got [][]string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		got = append(got, append([]string{name}, args...))
+		return "", nil
+	}
+	err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetWiFiConnect, Device: "wlan0", SSID: "Cafe", PSK: "password1",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0][0] != "iwctl" || got[0][len(got[0])-1] != "Cafe" {
+		t.Fatalf("%v", got)
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetWiFiConnect, Device: "wlan0;reboot", SSID: "x",
+	}}}); err == nil {
+		t.Fatal("bad iface")
+	}
+}
+
+func TestNetworkdUnitWrite(t *testing.T) {
+	r := New()
+	r.NetworkDir = t.TempDir()
+	var wrote string
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote = string(data)
+		return nil
+	}
+	r.Run = func(string, ...string) (string, error) { return "", nil }
+	err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpNetIfaceMethod, Device: "enp1s0", Method: "static",
+		Address: "10.0.2.15/24", Gateway: "10.0.2.2", DNS: []string{"1.1.1.1"},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(wrote, "DHCP=no") || !strings.Contains(wrote, "Address=10.0.2.15/24") {
+		t.Fatalf("unit %q", wrote)
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+func TestAudioWpctl(t *testing.T) {
+	var got []string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		got = append([]string{name}, args...)
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpAudioVolume, ID: "52", Volume: 0.4,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "wpctl" || got[1] != "set-volume" || got[2] != "52" {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestBluetoothPair(t *testing.T) {
+	var got []string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		got = append([]string{name}, args...)
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpBTPair, Device: "AA:BB:CC:DD:EE:FF",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != "bluetoothctl" || got[1] != "pair" {
+		t.Fatalf("%v", got)
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpBTPair, Device: "not-an-addr",
+	}}}); err == nil {
+		t.Fatal("bad addr")
+	}
+}
+
+func TestLocaleAndDatetime(t *testing.T) {
+	r := New()
+	r.LocaleConf = t.TempDir() + "/locale.conf"
+	var cmds [][]string
+	r.Run = func(name string, args ...string) (string, error) {
+		cmds = append(cmds, append([]string{name}, args...))
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{
+		{Type: protocol.OpLocaleLang, Value: "en_US.UTF-8"},
+		{Type: protocol.OpDateTimeTimezone, Value: "America/Denver"},
+		{Type: protocol.OpDateTimeNTP, Enabled: boolPtr(true)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(cmds) < 3 {
+		t.Fatalf("%v", cmds)
+	}
+}
+
+func TestInputHyprEval(t *testing.T) {
+	var expr string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		if len(args) > 1 {
+			expr = args[1]
+		}
+		return "ok\n", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpInputKBLayout, Value: "us",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(expr, "kb_layout") {
+		t.Fatalf("%s", expr)
 	}
 }

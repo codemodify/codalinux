@@ -77,6 +77,82 @@ func TestDisplayEmptyWithoutSession(t *testing.T) {
 	}
 }
 
+func TestNetworkFromSysfsAndIP(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "sys/class/net/wlan0/operstate"), "up\n")
+	if err := os.MkdirAll(filepath.Join(root, "sys/class/net/wlan0/wireless"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := &Probe{Root: root, Run: func(name string, args ...string) (string, error) {
+		if name == "ip" && len(args) >= 2 && args[1] == "addr" {
+			return `[{"ifname":"wlan0","operstate":"UP","addr_info":[{"local":"10.0.0.5","prefixlen":24,"family":"inet"}]}]`, nil
+		}
+		if name == "ip" && len(args) >= 2 && args[1] == "route" {
+			return `[{"dst":"default","gateway":"10.0.0.1","dev":"wlan0"}]`, nil
+		}
+		if name == "iwctl" && len(args) >= 2 && args[1] == "wlan0" && args[2] == "show" {
+			return "Connected network     Cafe\n", nil
+		}
+		if name == "iwctl" && len(args) >= 1 && args[0] == "device" {
+			return "Name\n----\nwlan0  aa:bb  on\n", nil
+		}
+		return "", nil
+	}}
+	raw, err := p.Collect(protocol.PathNetwork)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n protocol.NetworkModel
+	if err := json.Unmarshal(raw, &n); err != nil {
+		t.Fatal(err)
+	}
+	if len(n.Links) != 1 || n.Links[0].Name != "wlan0" || n.WiFi.Connected != "Cafe" {
+		t.Fatalf("%+v", n)
+	}
+}
+
+func TestUSBAndDMI(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "sys/bus/usb/devices/1-1/idVendor"), "1d6b\n")
+	mustWrite(t, filepath.Join(root, "sys/bus/usb/devices/1-1:1.0/bInterfaceClass"), "09\n")
+	mustWrite(t, filepath.Join(root, "sys/class/dmi/id/sys_vendor"), "QEMU\n")
+	mustWrite(t, filepath.Join(root, "sys/class/dmi/id/product_name"), "Standard PC\n")
+	p := &Probe{Root: root}
+	raw, err := p.Collect(protocol.PathDevicesUSB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list protocol.USBList
+	if err := json.Unmarshal(raw, &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Devices) != 1 || list.Devices[0].Vendor != "1d6b" {
+		t.Fatalf("%+v", list)
+	}
+	raw, err = p.Collect(protocol.PathHardwareDMI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d protocol.DMI
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.Vendor != "QEMU" {
+		t.Fatalf("%+v", d)
+	}
+}
+
+func TestParseIwctlAndWpctl(t *testing.T) {
+	nets := parseIwctlNetworks("Network name Security Signal\n----\nCafe psk ****\n")
+	if len(nets) != 1 || nets[0].SSID != "Cafe" {
+		t.Fatalf("%+v", nets)
+	}
+	v, m := parseWpVolume("Volume: 0.40 [MUTED]\n")
+	if v != 0.4 || m == nil || !*m {
+		t.Fatalf("%v %v", v, m)
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

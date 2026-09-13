@@ -17,6 +17,7 @@ type Probe struct {
 	Root     string // default /
 	Hyprctl  func() ([]byte, error)
 	Discover func() (hyprsession.Session, error)
+	Run      func(name string, args ...string) (string, error)
 }
 
 func New() *Probe { return &Probe{Root: "/"} }
@@ -26,12 +27,30 @@ func (p *Probe) Collect(path string) (json.RawMessage, error) {
 	switch path {
 	case protocol.PathDisplay:
 		return p.display()
+	case protocol.PathNetwork:
+		return p.network()
+	case protocol.PathAudio:
+		return p.audio()
+	case protocol.PathBluetooth:
+		return p.bluetooth()
+	case protocol.PathInput:
+		return p.input()
+	case protocol.PathDateTime:
+		return p.datetime()
+	case protocol.PathLocale:
+		return p.locale()
 	case protocol.PathDevicesSummary:
 		return p.devicesSummary()
 	case protocol.PathDevicesPCI:
 		return p.devicesPCI()
-	case protocol.PathLocale:
-		return p.locale()
+	case protocol.PathDevicesUSB:
+		return p.devicesUSB()
+	case protocol.PathHardwareDMI:
+		return p.hardwareDMI()
+	case protocol.PathSession:
+		return p.session()
+	case protocol.PathPower:
+		return p.power()
 	case "", protocol.PathSubmodels:
 		return rpc.Raw(map[string]any{"paths": protocol.StarterPaths}), nil
 	default:
@@ -76,6 +95,30 @@ func (p *Probe) display() (json.RawMessage, error) {
 		})
 	}
 	return rpc.Raw(out), nil
+}
+
+func (p *Probe) cmd(name string, args ...string) (string, error) {
+	if p.Run != nil {
+		return p.Run(name, args...)
+	}
+	out, err := execCommand(name, args...)
+	return string(out), err
+}
+
+func (p *Probe) cmdSession(name string, args ...string) (string, error) {
+	if p.Run != nil {
+		return p.Run(name, args...)
+	}
+	discover := p.Discover
+	if discover == nil {
+		discover = hyprsession.DiscoverRuntime
+	}
+	sess, err := discover()
+	if err != nil {
+		return "", err
+	}
+	b, err := sess.Command(name, args...).Output()
+	return string(b), err
 }
 
 func (p *Probe) hyprJSON() ([]byte, error) {

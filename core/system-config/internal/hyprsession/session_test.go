@@ -68,6 +68,28 @@ func TestDiscoverScanAsSessionUser(t *testing.T) {
 	}
 }
 
+func TestDiscoverRuntimeWithoutHypr(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "1000"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f := &Finder{
+		Environ:     []string{},
+		Getuid:      func() int { return 0 },
+		RuntimeRoot: root,
+		TmpHypr:     filepath.Join(root, "no-hypr"),
+		Lookup:      stubLookup,
+		PreferUID:   func() (uint32, bool) { return 1000, true },
+	}
+	s, err := f.DiscoverRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.UID != 1000 || s.RuntimeDir != filepath.Join(root, "1000") {
+		t.Fatalf("%+v", s)
+	}
+}
+
 func TestDiscoverNone(t *testing.T) {
 	root := t.TempDir()
 	f := &Finder{

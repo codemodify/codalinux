@@ -63,6 +63,15 @@ func TestGetSetRefreshApply(t *testing.T) {
 	if err != nil || !resp.OK || resp.Note == "" {
 		t.Fatalf("watch: %v %+v", err, resp)
 	}
+
+	resp, err = c.Set("network", json.RawMessage(`{"wifi":{"device":"wlan0","connect":"Cafe"}}`))
+	if err != nil || !resp.OK {
+		t.Fatalf("set network: %v %+v", err, resp)
+	}
+	resp, err = c.Apply("network")
+	if err != nil || !resp.OK {
+		t.Fatalf("apply network: %v %+v", err, resp)
+	}
 }
 
 func TestRefuseUnknownSet(t *testing.T) {

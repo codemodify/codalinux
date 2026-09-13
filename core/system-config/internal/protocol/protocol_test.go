@@ -9,8 +9,17 @@ func TestNormalizeAndKnownPath(t *testing.T) {
 	if !KnownPath("display") || !KnownPath("devices.pci") || !KnownPath("") {
 		t.Fatal("expected starter paths")
 	}
-	if KnownPath("network") {
-		t.Fatal("network is not a v1 starter path")
+	if !KnownPath("network") || !KnownPath("audio") || !KnownPath("bluetooth") {
+		t.Fatal("network/audio/bluetooth must be known")
+	}
+	if !KnownPath("input") || !KnownPath("datetime") || !KnownPath("locale") {
+		t.Fatal("input/datetime/locale must be known")
+	}
+	if !Settable("network") || Settable("devices.pci") || Settable("hardware.dmi") {
+		t.Fatal("settable allowlist")
+	}
+	if !AllowedOp(OpNetWiFiConnect) || AllowedOp("shell") {
+		t.Fatal("apply allowlist")
 	}
 }
 

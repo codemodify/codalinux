@@ -39,6 +39,46 @@ func Discover() (Session, error) {
 	return (&Finder{}).Discover()
 }
 
+// DiscoverRuntime finds the graphical user's XDG_RUNTIME_DIR even when Hyprland
+// is missing (PipeWire / session-bus tools). Prefers a Hyprland instance.
+func DiscoverRuntime() (Session, error) {
+	return (&Finder{}).DiscoverRuntime()
+}
+
+func (f *Finder) DiscoverRuntime() (Session, error) {
+	if s, err := f.Discover(); err == nil {
+		return s, nil
+	}
+	uid, ok := f.preferUID()
+	if !ok {
+		if u := f.uid(); u != 0 {
+			uid, ok = uint32(u), true
+		}
+	}
+	if !ok {
+		ents, err := os.ReadDir(f.runtimeRoot())
+		if err != nil {
+			return Session{}, fmt.Errorf("no graphical user session")
+		}
+		for _, e := range ents {
+			id, err := strconv.ParseUint(e.Name(), 10, 32)
+			if err != nil || id == 0 {
+				continue
+			}
+			uid, ok = uint32(id), true
+			break
+		}
+	}
+	if !ok || uid == 0 {
+		return Session{}, fmt.Errorf("no graphical user session")
+	}
+	rt := filepath.Join(f.runtimeRoot(), strconv.FormatUint(uint64(uid), 10))
+	if x := f.getenv("XDG_RUNTIME_DIR"); x != "" && f.uid() != 0 {
+		rt = x
+	}
+	return f.make(uid, rt, f.getenv("HYPRLAND_INSTANCE_SIGNATURE")), nil
+}
+
 func (f *Finder) Discover() (Session, error) {
 	his := f.getenv("HYPRLAND_INSTANCE_SIGNATURE")
 	runtime := f.getenv("XDG_RUNTIME_DIR")

@@ -93,7 +93,7 @@ func (s *Server) get(req protocol.Request) protocol.Response {
 
 func (s *Server) set(req protocol.Request) protocol.Response {
 	path := protocol.NormalizePath(req.Path)
-	if path != protocol.PathDisplay && path != protocol.PathLocale {
+	if !protocol.Settable(path) {
 		return protocol.Response{OK: false, Error: "set not allowed on " + path}
 	}
 	if len(req.Data) == 0 {
@@ -164,11 +164,11 @@ func (s *Server) apply(req protocol.Request) protocol.Response {
 	if path == "" {
 		path = protocol.PathDisplay
 	}
-	if path != protocol.PathDisplay {
-		return protocol.Response{OK: false, Error: "apply v1 allowlist is display only"}
+	if !protocol.Settable(path) {
+		return protocol.Response{OK: false, Error: "apply not allowed on " + path}
 	}
 	d, o, _ := s.st.Get(path)
-	pl, err := plan.FromDisplay(d, o)
+	pl, err := plan.Build(path, d, o)
 	if err != nil {
 		return protocol.Response{OK: false, Error: err.Error()}
 	}

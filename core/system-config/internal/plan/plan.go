@@ -7,74 +7,69 @@ import (
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
 )
 
-// FromDisplay diffs desired vs observed and emits allowlisted display ops.
-func FromDisplay(desired, observed json.RawMessage) (protocol.Plan, error) {
-	var want, have protocol.DisplayModel
+// Build diffs desired vs observed and emits allowlisted ops for path.
+func Build(path string, desired, observed json.RawMessage) (protocol.Plan, error) {
+	path = protocol.NormalizePath(path)
+	var (
+		p   protocol.Plan
+		err error
+	)
+	switch path {
+	case protocol.PathDisplay:
+		p, err = FromDisplay(desired, observed)
+	case protocol.PathNetwork:
+		p, err = FromNetwork(desired, observed)
+	case protocol.PathAudio:
+		p, err = FromAudio(desired, observed)
+	case protocol.PathBluetooth:
+		p, err = FromBluetooth(desired, observed)
+	case protocol.PathInput:
+		p, err = FromInput(desired, observed)
+	case protocol.PathDateTime:
+		p, err = FromDateTime(desired, observed)
+	case protocol.PathLocale:
+		p, err = FromLocale(desired, observed)
+	case protocol.PathSession:
+		p, err = FromSession(desired, observed)
+	case protocol.PathPower:
+		p, err = FromPower(desired, observed)
+	default:
+		return protocol.Plan{}, fmt.Errorf("no apply plan for %s", path)
+	}
+	if err != nil {
+		return p, err
+	}
+	p.Path = path
+	return p, nil
+}
+
+func unmarshal[T any](desired, observed json.RawMessage, want, have *T) error {
 	if len(desired) > 0 {
-		if err := json.Unmarshal(desired, &want); err != nil {
-			return protocol.Plan{}, fmt.Errorf("desired: %w", err)
+		if err := json.Unmarshal(desired, want); err != nil {
+			return fmt.Errorf("desired: %w", err)
 		}
 	}
 	if len(observed) > 0 {
-		if err := json.Unmarshal(observed, &have); err != nil {
-			return protocol.Plan{}, fmt.Errorf("observed: %w", err)
+		if err := json.Unmarshal(observed, have); err != nil {
+			return fmt.Errorf("observed: %w", err)
 		}
 	}
-	byName := map[string]protocol.Output{}
-	for _, o := range have.Outputs {
-		byName[o.Name] = o
-	}
-	var ops []protocol.PlanOp
-	for _, w := range want.Outputs {
-		if w.Name == "" {
-			continue
-		}
-		h := byName[w.Name]
-		mode := w.Mode
-		if mode == "" && h.Width > 0 && h.Height > 0 {
-			hz := h.RefreshHz
-			if hz == 0 {
-				hz = 60
-			}
-			mode = fmt.Sprintf("%dx%d@%d", h.Width, h.Height, hz)
-		}
-		if w.Scale > 0 && (h.Scale == 0 || abs(h.Scale-w.Scale) > 0.01) {
-			ops = append(ops, protocol.PlanOp{
-				Type: protocol.OpDisplayScale, Output: w.Name, Scale: w.Scale, Mode: mode,
-			})
-		}
-		if w.Mode != "" && w.Mode != h.Mode && w.Mode != modeFrom(h) {
-			ops = append(ops, protocol.PlanOp{
-				Type: protocol.OpDisplayMode, Output: w.Name, Mode: w.Mode, Scale: orScale(w.Scale, h.Scale),
-			})
-		}
-	}
-	return protocol.Plan{Path: protocol.PathDisplay, Ops: ops}, nil
+	return nil
 }
 
-func modeFrom(o protocol.Output) string {
-	if o.Mode != "" {
-		return o.Mode
+func jsonHas(raw json.RawMessage, key string) bool {
+	if len(raw) == 0 {
+		return false
 	}
-	if o.Width == 0 || o.Height == 0 {
-		return ""
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return false
 	}
-	hz := o.RefreshHz
-	if hz == 0 {
-		hz = 60
-	}
-	return fmt.Sprintf("%dx%d@%d", o.Width, o.Height, hz)
+	_, ok := m[key]
+	return ok
 }
 
-func orScale(a, b float64) float64 {
-	if a > 0 {
-		return a
-	}
-	if b > 0 {
-		return b
-	}
-	return 1
-}
+func boolPtr(v bool) *bool { return &v }
 
 func abs(v float64) float64 {
 	if v < 0 {
