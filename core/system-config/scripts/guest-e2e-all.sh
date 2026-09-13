@@ -221,7 +221,8 @@ cli() {
 # --- refresh every KnownPath ---
 paths=(
   display network audio bluetooth input datetime locale
-  session power devices.summary devices.pci devices.usb hardware.dmi
+  session power printers users storage
+  devices.summary devices.pci devices.usb hardware.dmi
 )
 
 echo "=== get submodels ==="
@@ -266,10 +267,27 @@ for p in "${paths[@]}"; do
   fi
 done
 
-disp="$(cli get display 2>/dev/null || true)"
-out_name="$(json_field "${disp}" "outputs.0.name")"
-if [[ -z "${out_name}" ]]; then
-  out_name="$(printf '%s' "${disp}" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
+# Wait for Hyprland outputs before display apply (guest race: report
+# can refresh before monitors exist).
+out_name=""
+if command -v hyprctl >/dev/null 2>&1; then
+  n=0
+  while [[ "${n}" -lt 50 ]]; do
+    cli refresh display >/dev/null 2>&1 || true
+    disp="$(cli get display 2>/dev/null || true)"
+    out_name="$(json_field "${disp}" "outputs.0.name")"
+    if [[ -z "${out_name}" ]]; then
+      out_name="$(printf '%s' "${disp}" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | cut -d'"' -f4 || true)"
+    fi
+    if [[ -n "${out_name}" ]]; then
+      break
+    fi
+    sleep 0.2
+    n=$((n + 1))
+  done
+else
+  disp="$(cli get display 2>/dev/null || true)"
+  out_name="$(json_field "${disp}" "outputs.0.name")"
 fi
 
 # --- safe applies ---
@@ -385,6 +403,21 @@ if [[ -z "${adapter}" ]]; then
 else
   record SKIP "apply bluetooth pair" "adapter ${adapter} present; e2e does not pair"
 fi
+
+# Observe-only domains users expect in a settings app.
+for p in printers users storage; do
+  out="$(cli get "${p}" 2>/dev/null || true)"
+  if json_ok "${out}"; then
+    record PASS "get ${p}"
+  else
+    record FAIL "get ${p}"
+  fi
+done
+
+# Never lock/suspend/hibernate/poweroff/reboot in e2e.
+record SKIP "apply session.lock" "would lock the live session"
+record SKIP "apply power.suspend" "e2e never suspends"
+record SKIP "apply power.hibernate" "e2e never hibernates"
 
 # --- sandbox ---
 echo "=== coda-sandbox smoke ==="

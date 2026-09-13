@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/codemodify/uitoolkit"
 	"github.com/codemodify/uitoolkit/app"
@@ -33,6 +34,9 @@ var nav = []struct {
 	{"Devices", protocol.PathDevicesSummary},
 	{"Session", protocol.PathSession},
 	{"Power", protocol.PathPower},
+	{"Printers", protocol.PathPrinters},
+	{"Users", protocol.PathUsers},
+	{"Storage", protocol.PathStorage},
 }
 
 func main() {
@@ -86,6 +90,8 @@ type session struct {
 	scale      float64
 	savedScale float64
 	outName    string
+	outMode    string
+	outPos     string
 
 	net        protocol.NetworkModel
 	wifiDev    string
@@ -93,6 +99,12 @@ type session struct {
 	wifiPSK    string
 	wifiHidden bool
 	iface      string
+	netMethod  string
+	netAddr    string
+	netGW      string
+	netDNS     string
+	netSearch  string
+	airplane   bool
 
 	audio protocol.AudioModel
 	vol   float64
@@ -106,6 +118,7 @@ type session struct {
 	btConnect    []string
 	btDisconnect []string
 	btTrust      []string
+	btPIN        string
 
 	input protocol.InputModel
 	dt    protocol.DateTimeModel
@@ -118,8 +131,15 @@ type session struct {
 	dmi      protocol.DMI
 
 	sessions []protocol.LoginSession
+	seats    []protocol.Seat
+	inhibits []protocol.Inhibit
+	idleHint bool
 	power    protocol.PowerModel
 	bright   float64
+
+	printers protocol.PrintersModel
+	users    protocol.UsersModel
+	storage  protocol.StorageModel
 
 	status   *widgets.StatusBar
 	applyBtn *widgets.Button
@@ -159,6 +179,8 @@ func (s *session) reload() {
 					}
 				}
 				s.outName = o.Name
+				s.outMode = o.Mode
+				s.outPos = o.Position
 				if o.Scale > 0 {
 					s.scale, s.savedScale = o.Scale, o.Scale
 				}
@@ -169,8 +191,21 @@ func (s *session) reload() {
 		_ = json.Unmarshal(raw, &s.net)
 		s.wifiDev = s.net.WiFi.Device
 		s.wifiSSID = s.net.WiFi.Connected
+		s.airplane = s.net.Airplane
 		if s.iface == "" && len(s.net.Links) > 0 {
 			s.iface = s.net.Links[0].Name
+		}
+		for _, l := range s.net.Links {
+			if l.Name == s.iface {
+				s.netMethod = l.Method
+				if len(l.Addresses) > 0 {
+					s.netAddr = l.Addresses[0]
+				}
+				s.netGW = l.Gateway
+				s.netDNS = strings.Join(l.DNS, " ")
+				s.netSearch = strings.Join(l.Search, " ")
+				break
+			}
 		}
 	}
 	if raw := refresh(protocol.PathAudio); len(raw) > 0 {
@@ -223,7 +258,19 @@ func (s *session) reload() {
 		var sm protocol.SessionModel
 		if json.Unmarshal(raw, &sm) == nil {
 			s.sessions = sm.Sessions
+			s.seats = sm.Seats
+			s.inhibits = sm.IdleInhibit
+			s.idleHint = sm.IdleHint
 		}
+	}
+	if raw := refresh(protocol.PathPrinters); len(raw) > 0 {
+		_ = json.Unmarshal(raw, &s.printers)
+	}
+	if raw := refresh(protocol.PathUsers); len(raw) > 0 {
+		_ = json.Unmarshal(raw, &s.users)
+	}
+	if raw := refresh(protocol.PathStorage); len(raw) > 0 {
+		_ = json.Unmarshal(raw, &s.storage)
 	}
 	if raw := refresh(protocol.PathPower); len(raw) > 0 {
 		_ = json.Unmarshal(raw, &s.power)
@@ -238,7 +285,7 @@ func (s *session) dirty() bool {
 	switch s.path() {
 	case protocol.PathDisplay:
 		return s.scale > 0 && abs(s.scale-s.savedScale) > 0.01
-	case protocol.PathDevicesSummary:
+	case protocol.PathDevicesSummary, protocol.PathPrinters, protocol.PathUsers, protocol.PathStorage:
 		return false
 	default:
 		return true
@@ -346,16 +393,34 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 	var v any
 	switch s.path() {
 	case protocol.PathDisplay:
-		v = protocol.DisplayModel{Outputs: []protocol.Output{{Name: s.outName, Scale: s.scale}}}
+		v = protocol.DisplayModel{Outputs: []protocol.Output{{
+			Name: s.outName, Scale: s.scale, Mode: s.outMode, Position: s.outPos,
+		}}}
 	case protocol.PathNetwork:
-		n := protocol.NetworkModel{WiFi: protocol.WiFiState{Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK, Hidden: s.wifiHidden}}
+		n := protocol.NetworkModel{
+			Airplane: s.airplane,
+			WiFi:     protocol.WiFiState{Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK, Hidden: s.wifiHidden},
+		}
 		if s.iface != "" {
-			n.Links = []protocol.NetLink{{Name: s.iface, Enabled: true}}
+			link := protocol.NetLink{Name: s.iface, Enabled: true, Method: s.netMethod, Gateway: s.netGW}
+			if s.netAddr != "" {
+				link.Addresses = []string{s.netAddr}
+			}
+			if s.netDNS != "" {
+				link.DNS = strings.Fields(s.netDNS)
+			}
+			if s.netSearch != "" {
+				link.Search = strings.Fields(s.netSearch)
+			}
+			n.Links = []protocol.NetLink{link}
 		}
 		v = n
 	case protocol.PathAudio:
 		m := s.mute
-		v = protocol.AudioModel{DefaultSink: s.audio.DefaultSink, Volume: s.vol, Mute: &m}
+		v = protocol.AudioModel{
+			DefaultSink: s.audio.DefaultSink, DefaultSource: s.audio.DefaultSource,
+			Volume: s.vol, Mute: &m, Sinks: s.audio.Sinks, Sources: s.audio.Sources,
+		}
 	case protocol.PathBluetooth:
 		v = protocol.BluetoothModel{
 			Powered:    s.btPower,
@@ -364,6 +429,7 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 			Connect:    s.btConnect,
 			Disconnect: s.btDisconnect,
 			Trust:      s.btTrust,
+			PIN:        s.btPIN,
 		}
 	case protocol.PathInput:
 		v = s.input
