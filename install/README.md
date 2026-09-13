@@ -40,4 +40,4 @@ CODA_INSTALL_DISK=/dev/vda coda-install
 
 Keep `"additional-repositories": []`. Do not add a Coda repo.
 
-The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<name>`.
+The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<env>`.

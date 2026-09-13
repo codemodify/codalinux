@@ -2,11 +2,10 @@
 # coda-sandbox — user-owned disposable Arch roots (pacman --root + bwrap).
 # Extra software goes here so host /usr stays a core/OS tree.
 # No sudo: pacman extract runs in a user namespace (unshare --map-root-user)
-# so files on disk are owned by the real user. Upstream bwrap for enter/run.
+# so files on disk are owned by the real user. Upstream bwrap for shell/exec.
 # See docs/sandbox.md and DESIGN.md.
 set -euo pipefail
 
-DEFAULT_NAME="default"
 STORE_ROOT="${CODA_SANDBOX_STORE:-}"
 CACHE_DIR="${CODA_SANDBOX_CACHE:-}"
 BIND_HOME=1
@@ -15,29 +14,26 @@ EXTRA_BINDS=()
 
 usage() {
   cat <<'EOF'
-Usage: coda-sandbox <command> [name] [args…]
+Usage: coda-sandbox <command> <env> [args…]
 
 Disposable Arch roots for extra packages. Host pacman is for the core OS.
-Sandbox pacman is the default way to add software (e.g. postgresql).
+Install packages into a named env with `coda-sandbox install`.
 All commands run as your user — do not use sudo.
 
 Commands:
-  create [name]              Bootstrap a minimal Arch root with
-                             pacman --root inside a user namespace
-  clone <src> <dst>          Copy an existing sandbox tree
-  pacman [name] <args…>      pacman --root <sandbox> --cachedir <cache>
-                             If the first token starts with -, name is default
-  install [name] <pkgs…>     pacman --noconfirm -S into the sandbox
-  enter [name]               bwrap: sandbox is /, then a login shell
-  run [name] <cmd…>          bwrap: sandbox is /, then cmd
-  list                       Show your named sandboxes
-  destroy [name]             Delete a sandbox (needs --force or confirm)
-  path [name]                Print the sandbox pacman root
-  help                       This text
+  create <env>                 Bootstrap a minimal Arch root with
+                               pacman --root inside a user namespace
+  destroy <env>                Delete a sandbox (no prompt)
+  clone <env> <new-name>       Copy an existing sandbox tree
+  list                         Show your named sandboxes
+  install <env> <package> […]  pacman --noconfirm -S into that env
+  shell <env>                  bwrap: sandbox is /, then a login shell
+  exec <env> <command> […]     bwrap: sandbox is /, then command
+  help                         This text
 
 Options (before or after the command):
-  --force                    destroy without prompt
-  --no-home                  do not bind $HOME into enter/run
+  --force                    accepted; destroy never prompts
+  --no-home                  do not bind $HOME into shell/exec
   --bind HOST:GUEST          extra bind (repeatable)
   --store DIR                sandbox store (default ~/.coda/sandbox)
   --cache DIR                pacman cache (default ~/.coda/cache/pacman)
@@ -46,25 +42,27 @@ Environment:
   CODA_SANDBOX_STORE   CODA_SANDBOX_CACHE   CODA_SANDBOX_FORCE=1
 
 Defaults (user-owned, no sudo):
-  ~/.coda/sandbox/<name>/       sandbox directory
-  ~/.coda/sandbox/<name>/root   pacman --root tree
-  ~/.coda/sandbox/<name>/meta
-  ~/.coda/cache/pacman          shared cache for this user
+  ~/.coda/sandbox/<env>/       sandbox directory
+  ~/.coda/sandbox/<env>/root   pacman --root tree
+  ~/.coda/sandbox/<env>/meta
+  ~/.coda/cache/pacman         shared cache for this user
 
 One named sandbox is one Arch root. Install many packages into it
-(repeat install / pacman); do not create one sandbox per app.
+(repeat install); do not create one sandbox per app.
 
 Host requirements: Arch or CodaLinux, official core/extra, initialized
 keyring, network for the first create, bubblewrap, util-linux unshare,
 and unprivileged user namespaces. This script does not reimplement bwrap.
 
 Examples:
-  coda-sandbox create dev
-  coda-sandbox install dev postgresql
-  coda-sandbox install dev redis git
-  coda-sandbox enter dev
-  coda-sandbox run dev postgres --version
-  coda-sandbox destroy dev --force
+  coda-sandbox create <env>
+  coda-sandbox install <env> postgresql
+  coda-sandbox install <env> redis git
+  coda-sandbox shell <env>
+  coda-sandbox exec <env> postgres --version
+  coda-sandbox clone <env> <new-name>
+  coda-sandbox list
+  coda-sandbox destroy <env>
 EOF
 }
 
@@ -306,7 +304,8 @@ bootstrap_root() {
 }
 
 cmd_create() {
-  local name="${1:-${DEFAULT_NAME}}"
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox create <env>"
   valid_name "${name}"
   need_cmd pacman
   ensure_user_dirs
@@ -327,7 +326,7 @@ cmd_create() {
 
 cmd_clone() {
   local src="${1:-}" dst="${2:-}"
-  [[ -n "${src}" && -n "${dst}" ]] || die "usage: coda-sandbox clone <src> <dst>"
+  [[ -n "${src}" && -n "${dst}" ]] || die "usage: coda-sandbox clone <env> <new-name>"
   valid_name "${src}"
   valid_name "${dst}"
   ensure_user_dirs
@@ -341,29 +340,15 @@ cmd_clone() {
   log "cloned ${src} → ${dst}"
 }
 
-cmd_pacman() {
-  local name="${DEFAULT_NAME}"
-  if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
-    name="$1"
-    shift
-  fi
-  valid_name "${name}"
-  exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
-  [[ $# -gt 0 ]] || die "usage: coda-sandbox pacman [name] <pacman-args>"
-  ensure_user_dirs
-  pacman_in_root "$(sandbox_root "${name}")" "$@"
-}
-
 cmd_install() {
-  local name="${DEFAULT_NAME}"
-  if [[ $# -ge 2 ]] && exists "$1"; then
-    name="$1"
-    shift
-  fi
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox install <env> <package> [packages…]"
+  shift
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox install <env> <package> [packages…]"
   valid_name "${name}"
   exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
-  [[ $# -gt 0 ]] || die "usage: coda-sandbox install [name] <packages…>"
-  cmd_pacman "${name}" --noconfirm --needed -S "$@"
+  ensure_user_dirs
+  pacman_in_root "$(sandbox_root "${name}")" --noconfirm --needed -S "$@"
 }
 
 cmd_list() {
@@ -390,24 +375,14 @@ cmd_list() {
   fi
 }
 
-cmd_path() {
-  local name="${1:-${DEFAULT_NAME}}"
-  valid_name "${name}"
-  exists "${name}" || die "no sandbox '${name}'"
-  printf '%s\n' "$(sandbox_root "${name}")"
-}
-
 cmd_destroy() {
-  local name="${1:-${DEFAULT_NAME}}"
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox destroy <env>"
   valid_name "${name}"
   exists "${name}" || die "no sandbox '${name}'"
   local dir
   dir="$(sandbox_dir "${name}")"
-  if [[ "${FORCE}" != 1 ]]; then
-    local ans=""
-    read -r -p "coda-sandbox: destroy ${name} (${dir})? [y/N] " ans || true
-    [[ "${ans}" == y || "${ans}" == Y ]] || die "aborted"
-  fi
+  # --force is a no-op; destroy never prompts.
   remove_tree "${dir}"
   if [[ -e "${dir}" ]]; then
     die "could not remove ${dir} (555 dirs?). No sudo — check user namespaces."
@@ -493,18 +468,21 @@ bwrap_run() {
   exec "${bw[@]}" "$@"
 }
 
-cmd_enter() {
-  local name="${1:-${DEFAULT_NAME}}"
+cmd_shell() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox shell <env>"
   bwrap_run "${name}"
 }
 
-cmd_run() {
-  local name="${DEFAULT_NAME}"
-  if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
-    name="$1"
+cmd_exec() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
+  shift
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
+  if [[ "${1:-}" == "--" ]]; then
     shift
   fi
-  [[ $# -gt 0 ]] || die "usage: coda-sandbox run [name] <cmd…>"
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
   bwrap_run "${name}" "$@"
 }
 
@@ -540,15 +518,13 @@ shift || true
 
 case "${cmd}" in
   help|-h|--help) usage ;;
-  create) cmd_create "${1:-${DEFAULT_NAME}}" ;;
+  create) cmd_create "${1:-}" ;;
+  destroy) cmd_destroy "${1:-}" ;;
   clone) cmd_clone "${1:-}" "${2:-}" ;;
-  pacman) cmd_pacman "$@" ;;
+  list) cmd_list ;;
   install) cmd_install "$@" ;;
-  enter) cmd_enter "${1:-${DEFAULT_NAME}}" ;;
-  run) cmd_run "$@" ;;
-  list|ls) cmd_list ;;
-  destroy|rm|remove) cmd_destroy "${1:-${DEFAULT_NAME}}" ;;
-  path) cmd_path "${1:-${DEFAULT_NAME}}" ;;
+  shell) cmd_shell "${1:-}" ;;
+  exec) cmd_exec "$@" ;;
   *)
     usage >&2
     die "unknown command '${cmd}'"

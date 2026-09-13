@@ -20,7 +20,7 @@ Do **not** claim A/B partitions, a read-only core, or a core-only ISO work until
 | Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | `coda-install` preseeds Bozeman defaults; custom profile still incomplete |
 | Updates | OS slot swap; apps via sandbox `pacman` | ISO rebuild cadence; sandbox helper is in-tree |
 
-Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<name>/`. Not shipped: A/B RO slots, core-only image, installer partition layout.
+Shipped and tryable now: **Hyprland + AGS desktop**, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`. Not shipped: A/B RO slots, core-only image, installer partition layout.
 
 ## Partitions (target)
 
@@ -57,7 +57,7 @@ UEFI-only. systemd-boot. Default filesystems: FAT32 ESP, ext4 OS slots and data.
 | --- | --- | --- | --- |
 | 1 | **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot. **Not** a full Hyprland/AGS root. | Host `pacman` into the **inactive** slot (gated). Reboot into the new slot. |
 | 2 | **Desktop** | Hyprland + vendored AGS/Astal + greetd + branding + official settings apps. A **session**, not “the OS”. | Target: ship with or beside core (slot or later split). Current: on the same live/install image. |
-| 3 | **Sandboxes** | Disposable Arch filesystem trees. Isolation is **upstream bubblewrap** only. | `coda-sandbox install` / `pacman` (repeatable into the same name). Destroy and recreate. |
+| 3 | **Sandboxes** | Disposable Arch filesystem trees. Isolation is **upstream bubblewrap** only. | `coda-sandbox install` (repeatable into the same env). Destroy and recreate. |
 | 4 | **User data** | `/home` (and later other data mounts). | Ordinary files. Sandbox trees live here so they survive OS slot swaps. |
 
 Do not collapse this back into “`pacman -S postgres` on the host.”
@@ -91,19 +91,19 @@ One writable `/` holds core + desktop + `/home` + `/var`. usr-merge is whatever 
 
 ## Sandboxes (implemented)
 
-Path spelling is locked: **`~/.coda/sandbox/<name>`** (singular `sandbox`).
+Path spelling is locked: **`~/.coda/sandbox/<env>`** (singular `sandbox`).
 
 ```
-~/.coda/sandbox/<name>/         sandbox directory
-~/.coda/sandbox/<name>/root     pacman --root tree
-~/.coda/sandbox/<name>/meta
-~/.coda/cache/pacman            shared cache for this user
+~/.coda/sandbox/<env>/         sandbox directory
+~/.coda/sandbox/<env>/root     pacman --root tree
+~/.coda/sandbox/<env>/meta
+~/.coda/cache/pacman           shared cache for this user
 ```
 
-- **User-owned. No sudo** for create / install / pacman / enter / run / destroy.
+- **User-owned. No sudo** for create / install / shell / exec / destroy.
 - `pacman --root` runs in `unshare --user --map-root-user` (optional `--keep-caps`) so extract sees uid 0 and files on disk stay owned by the real user. Uses a generated `~/.coda/cache/pacman/pacman.conf` (`DownloadUser = root`, `DisableSandbox`) — not host `/etc/pacman.conf`. Bootstrap is `base iptables` plus CLI `--noconfirm` (no `NoConfirm` key — pacman rejects it). After bootstrap, `/etc/os-release` is linked to `../usr/lib/os-release` (tmpfiles does not run under `--root`).
-- `enter` / `run` are unprivileged **upstream `bwrap`**. Sandbox `/etc/resolv.conf` is a regular file (not a `/run` symlink). `destroy` chmod-then-rm so `555` dirs go away. CodaLinux does not reimplement bubblewrap.
-- **One name = one Arch root = many packages/apps.** Example: `dev` with `postgresql`, `redis`, `git` via repeated `coda-sandbox install dev …`. Not one sandbox per app.
+- `shell` / `exec` are unprivileged **upstream `bwrap`**. Sandbox `/etc/resolv.conf` is a regular file (not a `/run` symlink). `destroy` chmod-then-rm so `555` dirs go away. CodaLinux does not reimplement bubblewrap.
+- **One env = one Arch root = many packages/apps.** Example: `dev` with `postgresql`, `redis`, `git` via repeated `coda-sandbox install dev …`. Not one sandbox per app.
 - Host `pacman` = **core / OS only** (rare; gated later). Extra software goes in a sandbox.
 - Shared cache is a deliberate choice: one download of `base`, many installs. Override with `--store` / `CODA_SANDBOX_STORE` or `--cache` / `CODA_SANDBOX_CACHE`.
 - Not `/var/coda`, not `/var/lib/coda`, not XDG `~/.local/share/…` as the primary path.
@@ -111,11 +111,12 @@ Path spelling is locked: **`~/.coda/sandbox/<name>`** (singular `sandbox`).
 `~/.coda` is created on first use (`0700`). No system tmpfiles under `/var` for the store.
 
 ```bash
-coda-sandbox create dev
-coda-sandbox install dev postgresql
-coda-sandbox install dev redis git
-coda-sandbox enter dev
-coda-sandbox destroy dev --force
+coda-sandbox create <env>
+coda-sandbox install <env> postgresql
+coda-sandbox install <env> redis git
+coda-sandbox shell <env>
+coda-sandbox exec <env> postgres --version
+coda-sandbox destroy <env>
 ```
 
 Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for the first `create`, `bubblewrap`, and unprivileged user namespaces. Details: [docs/sandbox.md](docs/sandbox.md).
@@ -126,7 +127,7 @@ Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for th
 | --- | --- |
 | **OS / core** | Write the **inactive** slot (OS-A or OS-B). Keep the running slot read-only. Flip systemd-boot to the new slot. Roll back by flipping back. |
 | **Desktop session** | Travels with the core slot until a later split. Not a third A/B pair in v1. |
-| **Apps / extras** | Sandbox `pacman` only. Throw the root away if it is broken. Persist *data* under `$HOME` or `--bind`. |
+| **Apps / extras** | `coda-sandbox install` only. Throw the root away if it is broken. Persist *data* under `$HOME` or `--bind`. |
 | **User files** | Stay on **data** (`/home`). Independent of slot swaps. |
 
 **Current tree:** no slot writer, no RO remount, no boot-entry flip. Delivery is still periodic live ISO rebuilds. Sandbox create/install/destroy is the only implemented half of this table.
