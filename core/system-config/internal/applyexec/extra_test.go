@@ -108,6 +108,65 @@ func TestAudioPersistWireplumber(t *testing.T) {
 	}
 }
 
+func TestAudioPersistDummyDescription(t *testing.T) {
+	home := t.TempDir()
+	r := New()
+	r.Discover = func() (hyprsession.Session, error) {
+		return hyprsession.Session{Home: home}, nil
+	}
+	wrote := map[string]string{}
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote[path] = string(data)
+		return nil
+	}
+	r.Run = func(name string, args ...string) (string, error) {
+		if name == "wpctl" && len(args) >= 1 && args[0] == "inspect" {
+			return "id 41, type PipeWire:Interface:Node\n  * node.description = \"Dummy Output\"\n  media.class = \"Audio/Sink\"\n", nil
+		}
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpAudioDefaultSink, ID: "41",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	body := wrote[home+"/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf"]
+	if !strings.Contains(body, "# coda-sink=Dummy Output") {
+		t.Fatalf("marker %q", body)
+	}
+	if !strings.Contains(body, "node.description") || !strings.Contains(body, "Dummy Output") {
+		t.Fatalf("want description match, got %q", body)
+	}
+}
+
+func TestAudioPersistNumericStub(t *testing.T) {
+	home := t.TempDir()
+	r := New()
+	r.Discover = func() (hyprsession.Session, error) {
+		return hyprsession.Session{Home: home}, nil
+	}
+	wrote := map[string]string{}
+	r.WriteFile = func(path string, data []byte, perm os.FileMode) error {
+		wrote[path] = string(data)
+		return nil
+	}
+	r.Run = func(name string, args ...string) (string, error) {
+		if name == "wpctl" && len(args) >= 1 && args[0] == "inspect" {
+			return "id 41, type PipeWire:Interface:Node\n  media.class = \"Audio/Sink\"\n", nil
+		}
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpAudioDefaultSink, ID: "41",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	body := wrote[home+"/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf"]
+	if !strings.Contains(body, "# coda-sink=41") {
+		t.Fatalf("stub %q", body)
+	}
+}
+
 func TestBluetoothPINFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", dir)
