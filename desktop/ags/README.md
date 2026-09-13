@@ -21,7 +21,7 @@ Vendored Astal libraries (official-repo build deps only):
 
 **Not vendored:**
 
-- `lib/network` — wraps NetworkManager / `nmcli`. CodaLinux is systemd-networkd + iwd; Wi-Fi UI is `impala`.
+- `lib/network` — wraps NetworkManager / `nmcli`. CodaLinux is systemd-networkd + iwd; Wi-Fi/hardware settings are `system-config-gui`.
 - `lib/tray` — needs AUR `appmenu-glib-translator`.
 
 ## Layout
@@ -47,7 +47,7 @@ style.css               shell theme
 - Floating windows show hyprbars titlebars (close / maximize / minimize). Minimize is `/usr/local/bin/coda-hypr-ws minimize` → `special:minimized` (same restore path as the taskbar). Scroll the titlebar to shade / unshade (`coda-hypr-ws shade`). Tiled windows hide the bar.
 - The Settings hub (window name `control-center`) mirrors Plasma System Settings categories that this stack can support: **Appearance**, **Workspace**, **Personalization**, **Network**, **Hardware**, **System Administration**. Last-selected module stays selected when the window is reopened. Lock still runs `coda-hyprlock`. Live hypridle does not lock on idle.
 
-Implemented modules use Hyprland / AGS / official Arch tools (`hyprctl`, `coda-hypr-ws`, `coda-settings`, `impala`, `pavucontrol`, `blueman`, `nwg-look`, `thunar`, `brightnessctl`). Plasma-only KCMs (Global Theme, Plasma Style, KWin Scripts, SDDM, Activities, Wallet, Online Accounts, Feedback, Night Color, NetworkManager) are listed as skipped, not faked.
+Hardware/system pages launch **`system-config-gui`** (talks to `system-configd`). `coda-settings` remains only for session chrome (wallpaper, workspaces, GTK appearance, hypr gaps). Other tools: `hyprctl`, `coda-hypr-ws`, `nwg-look`, `thunar`, `brightnessctl`. Plasma-only KCMs (Global Theme, Plasma Style, KWin Scripts, SDDM, Activities, Wallet, Online Accounts, Feedback, Night Color, NetworkManager) are listed as skipped, not faked.
 
 Display uses `hyprctl` (optional `wlr-randr`). Session default is `1920x1080@60` because QEMU virtio `preferred` picks `640x480@119.99`. Network stays systemd-networkd + iwd.
 
