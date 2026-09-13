@@ -2,7 +2,7 @@
 
 This document is the **decision log** for locked v1 choices. Do not contradict it in ISO profiles, installer configs, package lists, or desktop stubs. If a later decision changes the stack, update this file in the same change.
 
-The canonical **system picture** (partitions → layers → `/` folders → sandboxes → update model, with **Target** vs **Current tree**) is [architecture.md](architecture.md). Do not claim A/B slots or a core-only ISO work until they are built.
+The canonical **system picture** (partitions → layers → `/` folders → sandboxes → **system-config** → update model, with **Target** vs **Current tree**) is [architecture.md](architecture.md). Do not claim A/B slots, a core-only ISO, or `system-config` daemons work until they are built.
 
 CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence.
 
@@ -95,6 +95,19 @@ Official-repo packages only:
 - Images: `imv`
 - Documents: `zathura` + `zathura-pdf-mupdf`
 - Settings tools (opened from the AGS control center): `impala`, `blueman` / `bluetui`, `pavucontrol`, `snapshot`, `nwg-look`
+
+### system-config
+
+Locked **greenfield** target (not implemented). Do not add a `coda-settings` compatibility or migrate layer.
+
+| Decision | Choice |
+| --- | --- |
+| Control plane | Unprivileged `system-configd` owns desired + observed JSON. **Only** API clients talk to it. |
+| Apply | Root `system-config-apply` executes **D’s plans only** (typed allowlist, no arbitrary shell). |
+| Report | `system-config-report` inventory / observers → observed. Never writes config. |
+| Clients | `system-config` (CLI), `system-config-tui`, `system-config-gui` (uitoolkit). All talk to D only. |
+
+Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [architecture.md — system-config](architecture.md#system-config).
 
 ### Delivery
 
