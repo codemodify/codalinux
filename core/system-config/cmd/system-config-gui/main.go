@@ -87,11 +87,12 @@ type session struct {
 	savedScale float64
 	outName    string
 
-	net      protocol.NetworkModel
-	wifiDev  string
-	wifiSSID string
-	wifiPSK  string
-	iface    string
+	net        protocol.NetworkModel
+	wifiDev    string
+	wifiSSID   string
+	wifiPSK    string
+	wifiHidden bool
+	iface      string
 
 	audio protocol.AudioModel
 	vol   float64
@@ -347,7 +348,7 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 	case protocol.PathDisplay:
 		v = protocol.DisplayModel{Outputs: []protocol.Output{{Name: s.outName, Scale: s.scale}}}
 	case protocol.PathNetwork:
-		n := protocol.NetworkModel{WiFi: protocol.WiFiState{Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK}}
+		n := protocol.NetworkModel{WiFi: protocol.WiFiState{Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK, Hidden: s.wifiHidden}}
 		if s.iface != "" {
 			n.Links = []protocol.NetLink{{Name: s.iface, Enabled: true}}
 		}

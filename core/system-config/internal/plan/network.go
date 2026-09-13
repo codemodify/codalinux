@@ -39,6 +39,7 @@ func FromNetwork(desired, observed []byte) (protocol.Plan, error) {
 	if want.WiFi.Connect != "" && want.WiFi.Connect != have.WiFi.Connected {
 		ops = append(ops, protocol.PlanOp{
 			Type: protocol.OpNetWiFiConnect, Device: dev, SSID: want.WiFi.Connect, PSK: want.WiFi.PSK,
+			Hidden: want.WiFi.Hidden,
 		})
 	}
 	return protocol.Plan{Path: protocol.PathNetwork, Ops: ops}, nil

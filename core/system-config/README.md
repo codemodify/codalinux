@@ -36,9 +36,10 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ./bin/system-config-report &
 ./bin/system-config-apply &
 
-# report can also push once, or watch udev netlink (+ slow L2 poll):
+# report RPC server also watches udev by default. --once pushes and exits.
 ./bin/system-config-report --once
-./bin/system-config-report --watch
+./bin/system-config-report --watch      # watch only
+./bin/system-config-report --no-watch   # scan socket only
 
 ./bin/system-config refresh display
 ./bin/system-config get display

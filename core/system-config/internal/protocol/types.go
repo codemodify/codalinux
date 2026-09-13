@@ -38,6 +38,7 @@ type WiFiState struct {
 	Connect    string   `json:"connect,omitempty"`
 	Disconnect bool     `json:"disconnect,omitempty"`
 	PSK        string   `json:"psk,omitempty"`
+	Hidden     bool     `json:"hidden,omitempty"`
 	Scanning   bool     `json:"scanning,omitempty"`
 	Networks   []SSID   `json:"networks,omitempty"`
 	Known      []string `json:"known,omitempty"`

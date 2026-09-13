@@ -38,6 +38,19 @@ func TestFromNetworkWifiAndIface(t *testing.T) {
 	}
 }
 
+func TestFromNetworkHiddenSSID(t *testing.T) {
+	p, err := FromNetwork(
+		[]byte(`{"wifi":{"device":"wlan0","connect":"SecretNet","psk":"password1","hidden":true}}`),
+		[]byte(`{"wifi":{"device":"wlan0"}}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Ops) != 1 || !p.Ops[0].Hidden || p.Ops[0].SSID != "SecretNet" {
+		t.Fatalf("%+v", p.Ops)
+	}
+}
+
 func TestFromAudioVolume(t *testing.T) {
 	p, err := FromAudio(
 		[]byte(`{"default_sink":"52","volume":0.4}`),
