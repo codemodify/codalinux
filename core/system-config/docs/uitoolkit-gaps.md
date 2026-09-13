@@ -18,3 +18,4 @@
 | Sidebar | `Splitter` + `TreeView` (Mail) / `ListView` (Settings). No first-class NavRail. |
 | Devices / PCI | `TableView` (alpha: cap huge lists; no toolkit sort/filter). |
 | Display scale | `Slider` + `NumberField` + Apply. No built-in scale page. |
+| Network / audio / bluetooth / input / datetime / locale / session / power | Same two-pane + `TableView` / `TextField` / `Switch` / `Slider`. No PrefsPage. |

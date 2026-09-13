@@ -180,20 +180,25 @@ hardware / OS → system-config-report → observed → system-configd ← GUI/T
 | **L2 runtime domains** | Live stacks: Hyprland, iwd / networkd, PipeWire, BlueZ, logind | Map to display / network / audio / bluetooth / session. |
 | **L3 status flags** | YaST-inspired: `present` / `configured` / `changed` / `apply_error` | Per submodel object, from observed vs desired and apply results. |
 
-### Submodels (starter)
+### Submodels
 
-Clients ask D for one of these (or a child path), not a dump of the whole tree:
+Clients ask D for one of these (or a child path), not a dump of the whole tree. Implemented in [`core/system-config/`](core/system-config/README.md):
 
-| Submodel | Typical L2 / L0 source |
-| --- | --- |
-| `display` | Hyprland (outputs, modes, scale) |
-| `network` | iwd + systemd-networkd |
-| `audio` | PipeWire |
-| `bluetooth` | BlueZ |
-| `session` | logind (users, seats, idle) |
-| `devices.pci` | udev / sysfs (deep walk is L1, lazy) |
-| `devices.usb` | udev |
-| `hardware.dmi` | DMI + hwdb |
+| Submodel | Typical L2 / L0 source | Set / apply |
+| --- | --- | --- |
+| `display` | Hyprland (outputs, modes, scale) | yes |
+| `network` | iwd + systemd-networkd (no NetworkManager) | yes |
+| `audio` | PipeWire (`wpctl`) | yes |
+| `bluetooth` | BlueZ (`bluetoothctl`) | yes |
+| `input` | localectl / XKB + Hyprland `hl.input` | yes |
+| `datetime` | timedatectl (timezone, NTP, time) | yes |
+| `locale` | locale.conf / localectl | yes |
+| `session` | logind (users, seats) | lock only |
+| `power` | logind + backlight sysfs | suspend/hibernate, brightness, lid |
+| `devices.summary` | DMI + sysfs counts | observe |
+| `devices.pci` | sysfs (L1, lazy) | observe |
+| `devices.usb` | sysfs | observe |
+| `hardware.dmi` | DMI | observe |
 
 Add further submodels the same way: one domain, one path, observed + desired + L3 flags.
 
@@ -222,8 +227,8 @@ Do not rebuild the ISO just to read this document. The desktop image already inc
 1. **Desktop UX** (Hyprland / AGS): `./scripts/qemu-desktop-dev.sh` — 9p share; `coda-sync-desktop-from-host.sh` copies wrappers including `coda-sandbox`.
 2. **Sandbox helper** (on a live/Arch session with network): the commands in [Sandboxes](#sandboxes-implemented). First `create` bootstraps `base` and needs `pacman` on the host. This is **not** an A/B disk test.
 3. **ISO smoke**: `./scripts/qemu-boot-test.sh` after `./scripts/build-iso.sh`. Confirms the mutable desktop live image, not OS-A/OS-B.
-4. **system-config (Go, not on the ISO):** `cd core/system-config && CGO_ENABLED=0 go test ./...`. Run order: [core/system-config/README.md](core/system-config/README.md).
+4. **system-config (Go, not on the ISO):** `cd core/system-config && CGO_ENABLED=0 go test ./...`. Run order: [core/system-config/README.md](core/system-config/README.md). Guest QEMU smoke: `core/system-config/scripts/guest-smoke.sh --guest`.
 
 Live boot: systemd-boot `timeout 1`. `pacman-init` is **off the greeter critical path** (timer after `graphical.target`, not `WantedBy=multi-user.target`). `ldconfig.service` must not rebuild the linker cache on every live boot: squashfs already has `/etc/ld.so.cache`. The drop-in resets stock `Condition*` (empty assignment clears **all** of them), then requires `ConditionFileNotEmpty=!/etc/ld.so.cache` so a non-empty cache skips the unit. See [DESIGN.md](DESIGN.md#service-enablement).
 
-A/B partition layouts, RO core mounts, gated host pacman, and **system-config** are **future work** ([docs/TODO.md](docs/TODO.md) §5). `system-config` is locked in [the section above](#system-config); there is nothing to try yet.
+A/B partition layouts, RO core mounts, and gated host pacman are **future work** ([docs/TODO.md](docs/TODO.md) §5). `system-config` is implemented in-tree (not ISO-wired); try it via [core/system-config/README.md](core/system-config/README.md).
