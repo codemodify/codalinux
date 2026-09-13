@@ -8,11 +8,11 @@ Shipped on the live ISO and this pass: display (scale/mode/position, multi-monit
 
 External probes have hard timeouts so D’s accept loop cannot hang. Hyprland display/input apply persists to `~/.config/hypr/coda-system-config.lua` (dofile from `hyprland.lua`). iwd connect writes `/var/lib/iwd/<ssid>.psk` then `iwctl --passphrase`. Guest e2e: `scripts/guest-e2e-all.sh --guest` (host-refused; waits for Hyprland outputs; printers/users/storage refresh; static IP dry-apply + restore; rfkill observe; never suspends/hibernates/locks).
 
-**Guest hot-push e2e (abox QEMU, not a fresh ISO):** tip **`734fa9ac`** bins → **PASS=39 FAIL=0 SKIP=7**. Notable PASS: users shell no-op, network static dry + restore dhcp, audio default sink persist apply, no `/run/user/0` D/report, printers/users/storage refresh+get. SKIP audio persist *file* on Dummy Output (no `node.name`) is addressed after this tip — persist now matches `node.description` / writes a stub so the file exists. Earlier guest run on `6d3a62c` was 30/0/5. Parent started an ISO rebuild from `734fa9ac`; ISO overlay same-inode install fix is `d18ccec`.
+**Guest hot-push e2e (abox QEMU, not a fresh ISO):** tip **`24fd52e`** bins → **PASS=40 FAIL=0 SKIP=6**. Audio persist file PASS (`~/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf`, `# coda-sink=auto_null`, `node.name` match). Explicit `default_sink`/`default_source` always emit set-default so persist runs even when routing already matches. Earlier: `734fa9ac` 39/0/7 (persist file SKIP); `6d3a62c` 30/0/5. Parent is rebuilding the ISO from `24fd52e`.
 
 `system-config-report` serves scan RPCs **and** watches `NETLINK_KOBJECT_UEVENT` by default (`--no-watch` / `--watch`). Mapped paths include block→storage. A **slow poll** remains for L2 stacks that do not emit kobject uevents.
 
 ## Later work (intentional; not incomplete product code)
 
-- uitoolkit gaps: [`uitoolkit-gaps.md`](uitoolkit-gaps.md) — PrefsPage / NavRail still composed from TreeView + Splitter. Bluetooth PIN is a real Overlay dialog (`Pair…`).
-- Fresh ISO + guest e2e of this tip (parent started rebuild from `734fa9ac`; later commits are audio-persist harden + ISO install same-inode fix).
+- uitoolkit PrefsPage / NavRail ([`uitoolkit-gaps.md`](uitoolkit-gaps.md)) — still composed from TreeView + Splitter.
+- Parent ISO clean-boot + guest e2e (rebuild from `24fd52e` in progress).
