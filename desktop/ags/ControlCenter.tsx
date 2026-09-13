@@ -43,8 +43,24 @@ function launchSystemConfig() {
   )
 }
 
-function launch(tool: string, ...args: string[]) {
-  execAsync(["coda-settings", tool, ...args]).catch(console.error)
+function run(...cmd: string[]) {
+  execAsync(cmd).catch((err) => console.error("exec failed", cmd, err))
+}
+
+function hyprEval(expr: string) {
+  run("hyprctl", "eval", expr)
+}
+
+function hyprAdjust(opt: string, section: string, key: string, delta: number, min: number) {
+  try {
+    const raw = String(exec(["hyprctl", "getoption", opt]))
+    const m = raw.match(/(?:int|float):\s*(-?[0-9]+)/)
+    let next = (m ? parseInt(m[1], 10) : 0) + delta
+    if (next < min) next = min
+    hyprEval(`hl.config({ ${section} = { ${key} = ${next} } })`)
+  } catch (err) {
+    console.error("hypr adjust failed", opt, err)
+  }
 }
 
 function applyDisplay(_mode: string) {
@@ -164,14 +180,12 @@ function PageHeader({ title, body }: { title: string; body: string }) {
 function LaunchRow({
   label,
   hint,
-  tool,
-  args = [],
+  cmd,
   hide,
 }: {
   label: string
   hint: string
-  tool: string
-  args?: string[]
+  cmd: string[]
   hide: () => void
 }) {
   return (
@@ -180,7 +194,7 @@ function LaunchRow({
       class="launch-row"
       onClicked={() => {
         hide()
-        launch(tool, ...args)
+        run(...cmd)
       }}
     >
       <box spacing={10} hexpand>
@@ -346,7 +360,14 @@ function AboutPanel() {
         title="System Information"
         body="About this CodaLinux session. Plasma System Information extras are not shipped."
       />
-      <PollInfo cmd={["coda-settings", "about", "print"]} interval={12000} />
+      <PollInfo
+        cmd={[
+          "bash",
+          "-lc",
+          '(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-CodaLinux}"); uname -srm; echo; timedatectl 2>/dev/null | head -8; echo; hostnamectl 2>/dev/null | head -8',
+        ]}
+        interval={12000}
+      />
     </box>
   )
 }
@@ -445,7 +466,7 @@ export default function ControlCenter() {
               class="control-sub"
               xalign={0}
               wrap
-              label="Hardware via system-config-gui; session chrome via coda-settings"
+              label="Settings is system-config-gui. Session chrome uses coda-wallpaper, coda-hypr-ws, nwg-look, thunar, hyprctl."
             />
             <NavItem id="overview" label="Overview" icon="preferences-system-symbolic" />
 
@@ -519,7 +540,7 @@ export default function ControlCenter() {
                   hexpand
                   onClicked={() => {
                     hide()
-                    launch("webcam")
+                    run("snapshot")
                   }}
                 >
                   <label label="Webcam" />
@@ -540,7 +561,7 @@ export default function ControlCenter() {
               <LaunchRow
                 label="GTK theme, icons, fonts, cursors"
                 hint="nwg-look"
-                tool="appearance"
+                cmd={["nwg-look"]}
                 hide={hide}
               />
               <label class="section" xalign={0} label="Plasma modules not on CodaLinux" />
@@ -560,17 +581,23 @@ export default function ControlCenter() {
                 title="Wallpaper"
                 body="Live wallpaper is the Plasma Horos still. coda-wallpaper tries hyprpaper, then swaybg. Do not overwrite default.png with gen-wallpaper.py."
               />
-              <PollInfo cmd={["coda-settings", "wallpaper", "print"]} interval={8000} />
+              <PollInfo
+                cmd={[
+                  "bash",
+                  "-lc",
+                  'echo "wallpaper=${CODA_WALL:-/usr/share/backgrounds/codalinux/default.png}"',
+                ]}
+                interval={8000}
+              />
               <ActionRow
                 label="Restore Horos wallpaper"
                 hint="coda-wallpaper"
-                onClicked={() => launch("wallpaper", "reset")}
+                onClicked={() => run("coda-wallpaper")}
               />
               <LaunchRow
                 label="Open wallpaper folder"
                 hint="thunar"
-                tool="wallpaper"
-                args={["open"]}
+                cmd={["thunar", "/usr/share/backgrounds/codalinux"]}
                 hide={hide}
               />
             </box>
@@ -585,12 +612,12 @@ export default function ControlCenter() {
                 title="Virtual Desktops"
                 body="Hyprland workspaces. Super+N / Super+= add an empty workspace; Super+- removes an empty one. No Plasma Activities."
               />
-              <PollInfo cmd={["coda-settings", "workspace", "print"]} />
+              <PollInfo cmd={["coda-hypr-ws", "mode"]} />
               <box spacing={8}>
-                <button hexpand onClicked={() => launch("workspace", "add")}>
+                <button hexpand onClicked={() => run("coda-hypr-ws", "add")}>
                   <label label="Add workspace" />
                 </button>
-                <button hexpand onClicked={() => launch("workspace", "remove")}>
+                <button hexpand onClicked={() => run("coda-hypr-ws", "remove")}>
                   <label label="Remove empty" />
                 </button>
               </box>
@@ -607,11 +634,11 @@ export default function ControlCenter() {
                 title="Window Management"
                 body="Tile vs overlapping float (Stack) is workspace-wide via coda-hypr-ws. Task switcher is Super+Tab. Window rules live in hyprland.lua."
               />
-              <PollInfo cmd={["coda-settings", "workspace", "print"]} />
+              <PollInfo cmd={["coda-hypr-ws", "mode"]} />
               <ActionRow
                 label="Tile ↔ stack on this workspace"
                 hint="coda-hypr-ws"
-                onClicked={() => launch("workspace", "toggle-stack")}
+                onClicked={() => run("coda-hypr-ws", "toggle-stack")}
               />
               <label
                 class="display-info"
@@ -632,35 +659,41 @@ export default function ControlCenter() {
                 title="Desktop Effects"
                 body="Hyprland animations and gaps. Blur stays off on the live VM pixman path. No KWin effect pack."
               />
-              <PollInfo cmd={["coda-settings", "hypr", "print"]} />
+              <PollInfo
+                cmd={[
+                  "bash",
+                  "-lc",
+                  'for k in animations:enabled general:gaps_in general:gaps_out general:border_size; do printf "%s=" "$k"; hyprctl getoption "$k" 2>/dev/null | awk "/int:|float:/{print \\$2; exit}"; done',
+                ]}
+              />
               <box spacing={8}>
-                <button hexpand onClicked={() => launch("hypr", "animations", "on")}>
+                <button hexpand onClicked={() => hyprEval("hl.config({ animations = { enabled = true } })")}>
                   <label label="Animations on" />
                 </button>
-                <button hexpand onClicked={() => launch("hypr", "animations", "off")}>
+                <button hexpand onClicked={() => hyprEval("hl.config({ animations = { enabled = false } })")}>
                   <label label="Animations off" />
                 </button>
               </box>
               <label class="section" xalign={0} label="Gaps and borders" />
               <box spacing={8}>
-                <button hexpand onClicked={() => launch("hypr", "gaps-in", "2")}>
+                <button hexpand onClicked={() => hyprAdjust("general:gaps_in", "general", "gaps_in", 2, 0)}>
                   <label label="Inner +" />
                 </button>
-                <button hexpand onClicked={() => launch("hypr", "gaps-in", "-2")}>
+                <button hexpand onClicked={() => hyprAdjust("general:gaps_in", "general", "gaps_in", -2, 0)}>
                   <label label="Inner −" />
                 </button>
-                <button hexpand onClicked={() => launch("hypr", "gaps-out", "2")}>
+                <button hexpand onClicked={() => hyprAdjust("general:gaps_out", "general", "gaps_out", 2, 0)}>
                   <label label="Outer +" />
                 </button>
-                <button hexpand onClicked={() => launch("hypr", "gaps-out", "-2")}>
+                <button hexpand onClicked={() => hyprAdjust("general:gaps_out", "general", "gaps_out", -2, 0)}>
                   <label label="Outer −" />
                 </button>
               </box>
               <box spacing={8}>
-                <button hexpand onClicked={() => launch("hypr", "border", "1")}>
+                <button hexpand onClicked={() => hyprAdjust("general:border_size", "general", "border_size", 1, 1)}>
                   <label label="Border +" />
                 </button>
-                <button hexpand onClicked={() => launch("hypr", "border", "-1")}>
+                <button hexpand onClicked={() => hyprAdjust("general:border_size", "general", "border_size", -1, 1)}>
                   <label label="Border −" />
                 </button>
               </box>
@@ -680,7 +713,7 @@ export default function ControlCenter() {
               <LaunchRow
                 label="Lock now"
                 hint="coda-hyprlock"
-                tool="lock"
+                cmd={["coda-hyprlock"]}
                 hide={hide}
               />
               <SystemConfigRow
@@ -712,9 +745,9 @@ export default function ControlCenter() {
                 label={`Super+Return  Terminal\nSuper+Space   App launcher\nSuper+,       Settings\nSuper+V       Clipboard\nSuper+L       Lock\nSuper+T       Tile ↔ stack\nSuper+N / −   Add / remove workspace\nSuper+Tab     Next window\nTitlebar      close / maximize / minimize; scroll to shade`}
               />
               <LaunchRow
-                label="Full keyboard and touchpad help"
-                hint="input-help"
-                tool="input"
+                label="Open system configuration (keyboard / touchpad)"
+                hint="system-config-gui"
+                cmd={["system-config-gui"]}
                 hide={hide}
               />
             </box>
@@ -729,7 +762,12 @@ export default function ControlCenter() {
                 title="Startup and Shutdown"
                 body="greetd starts the session. Not SDDM. No Plasma Autostart / session restore KCM."
               />
-              <PollInfo cmd={["coda-settings", "startup", "print"]} interval={15000} />
+              <label
+                class="display-info"
+                wrap
+                xalign={0}
+                label={"Login: greetd → /usr/local/bin/coda-hyprland → start-hyprland\nNot SDDM. Edit ~/.config/hypr/hyprland.lua for session startup."}
+              />
               <SkipNote title="SDDM" reason="Login is greetd + coda-hyprland" />
               <SkipNote title="Autostart" reason="Add hl.exec_cmd in hyprland.lua" />
             </box>
@@ -779,7 +817,9 @@ export default function ControlCenter() {
               <ActionRow
                 label="Send a test notification"
                 hint="notify-send"
-                onClicked={() => launch("notify", "test")}
+                onClicked={() =>
+                  run("notify-send", "CodaLinux Settings", "Notification test from the Settings hub.")
+                }
               />
             </box>
 
@@ -793,7 +833,10 @@ export default function ControlCenter() {
                 title="Regional Settings"
                 body="Timezone, locale, and keymap via system-config (timedatectl / localectl). Bozeman defaults until you apply a change."
               />
-              <PollInfo cmd={["coda-settings", "region", "print"]} interval={15000} />
+              <PollInfo
+                cmd={["bash", "-lc", "timedatectl status 2>/dev/null; echo; localectl status 2>/dev/null"]}
+                interval={15000}
+              />
               <SystemConfigRow
                 label="Open system configuration (locale / time)"
                 hide={hide}
@@ -811,7 +854,7 @@ export default function ControlCenter() {
                 body="Local accounts are observed by system-config. Live ISO autologins user live. No Plasma Users KCM."
               />
               <SystemConfigRow label="Open system configuration (users)" hide={hide} />
-              <PollInfo cmd={["coda-settings", "users", "print"]} interval={15000} />
+              <PollInfo cmd={["id"]} interval={15000} />
               <SkipNote
                 title="KDE Wallet / Online Accounts / Feedback"
                 reason="No wallet, accounts, or telemetry modules"
@@ -847,12 +890,18 @@ export default function ControlCenter() {
                 title="Default Applications"
                 body="xdg-mime / Thunar file associations. No Plasma Applications KCM."
               />
-              <PollInfo cmd={["coda-settings", "apps", "print"]} interval={10000} />
+              <PollInfo
+                cmd={[
+                  "bash",
+                  "-lc",
+                  'xdg-mime query default inode/directory; xdg-mime query default text/html; xdg-mime query default x-scheme-handler/https',
+                ]}
+                interval={10000}
+              />
               <LaunchRow
                 label="Open home folder"
                 hint="thunar"
-                tool="apps"
-                args={["files"]}
+                cmd={["thunar"]}
                 hide={hide}
               />
             </box>
@@ -934,8 +983,8 @@ export default function ControlCenter() {
               />
               <LaunchRow
                 label="GTK cursors (nwg-look)"
-                hint="appearance"
-                tool="appearance"
+                hint="nwg-look"
+                cmd={["nwg-look"]}
                 hide={hide}
               />
             </box>
@@ -959,7 +1008,14 @@ export default function ControlCenter() {
                 <image iconName="battery-symbolic" pixelSize={18} />
                 <label hexpand xalign={0} label={battPct ? battPct : "No battery"} />
               </box>
-              <PollInfo cmd={["coda-settings", "power", "print"]} interval={8000} />
+              <PollInfo
+                cmd={[
+                  "bash",
+                  "-lc",
+                  'brightnessctl -m 2>/dev/null || echo "brightness=unavailable"',
+                ]}
+                interval={8000}
+              />
               <SystemConfigRow
                 label="Open system configuration (brightness, lid)"
                 hide={hide}
@@ -980,18 +1036,20 @@ export default function ControlCenter() {
                 label="Open system configuration (storage)"
                 hide={hide}
               />
-              <PollInfo cmd={["coda-settings", "storage", "print"]} interval={8000} />
+              <PollInfo
+                cmd={["lsblk", "-o", "NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT"]}
+                interval={8000}
+              />
               <LaunchRow
                 label="Open media folder"
                 hint="thunar"
-                tool="storage"
-                args={["open"]}
+                cmd={["thunar", "/run/media"]}
                 hide={hide}
               />
               <LaunchRow
                 label="Webcam"
                 hint="snapshot"
-                tool="webcam"
+                cmd={["snapshot"]}
                 hide={hide}
               />
             </box>

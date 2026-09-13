@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Session chrome
-Comment=Optional Hyprland session chrome (wallpaper, workspaces, appearance)
+Comment=Hidden helper — Settings is system-config-gui
 Exec=coda-settings
 TryExec=coda-settings
 Icon=preferences-desktop-theme
