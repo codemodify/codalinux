@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Coda Settings — System Settings hub helpers for the AGS control center.
 # Official-repo tools only. Network stays systemd-networkd + iwd (impala).
-# Display uses hyprctl; wlr-randr if present. No NetworkManager / Plasma.
+# Display uses hyprctl eval hl.monitor({...}) (hyprland.lua). wlr-randr if present.
 set -euo pipefail
 
 WALL_DEFAULT="/usr/share/backgrounds/codalinux/default.png"
@@ -19,6 +19,57 @@ hypr_int() {
 
 hypr_set() {
   hyprctl keyword "$1" "$2"
+}
+
+# Quote a string as a Lua literal for hyprctl eval.
+lua_string() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "${s}"
+}
+
+# hyprland.lua is a non-legacy parser. hyprctl keyword is rejected:
+#   keyword can't work with non-legacy parsers. Use eval.
+# Wiki: hyprctl eval runs a Lua string and returns "ok" or the error.
+# https://wiki.hypr.land/Configuring/Advanced-and-Cool/Using-hyprctl/
+hypr_eval() {
+  local expr="$1"
+  local out rc first
+  command -v hyprctl >/dev/null 2>&1 || {
+    echo "coda-settings: hyprctl is not available (is Hyprland running?)" >&2
+    exit 1
+  }
+  set +e
+  out="$(hyprctl eval "${expr}" 2>&1)"
+  rc=$?
+  set -e
+  first="$(printf '%s\n' "${out}" | head -n1)"
+  if [[ "${rc}" -eq 0 && "${first}" == ok ]]; then
+    return 0
+  fi
+  printf 'coda-settings: hyprctl eval failed (exit %s): %s\n' "${rc}" "${out:-<no output>}" >&2
+  exit 1
+}
+
+# Same table as desktop/hypr/hyprland.lua and wiki Monitors:
+#   hl.monitor({ output = "NAME", mode = "1920x1080@60", position = "auto", scale = 2 })
+# https://wiki.hypr.land/Configuring/Basics/Monitors/
+hypr_monitor() {
+  local output="$1" mode="$2" position="$3" scale="$4"
+  [[ -n "${output}" ]] || {
+    echo "coda-settings: monitor output name is empty" >&2
+    exit 1
+  }
+  [[ -n "${mode}" ]] || {
+    echo "coda-settings: monitor mode is empty" >&2
+    exit 1
+  }
+  [[ "${scale}" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    echo "coda-settings: bad scale '${scale}' (want a number, e.g. 1, 1.25, 1.5, 2)" >&2
+    exit 2
+  }
+  hypr_eval "hl.monitor({ output = $(lua_string "${output}"), mode = $(lua_string "${mode}"), position = $(lua_string "${position}"), scale = ${scale} })"
 }
 
 open_wifi() {
@@ -119,6 +170,7 @@ show_display() {
     echo
   fi
   echo "No KWin compositor / Night Color KCM. Hyprland blur stays off on VMs."
+  echo "Apply uses hyprctl eval 'hl.monitor({...})' (hyprland.lua; not keyword)."
   echo "Apply: coda-settings display apply 1920x1080@60"
   echo "       coda-settings display apply 1280x720@60"
   echo "       coda-settings display scale 1|1.25|2   (100% / 125% / 200%)"
@@ -169,25 +221,29 @@ apply_display() {
     fi
   fi
 
-  local spec
+  local apply_mode
   case "${mode}" in
     preferred)
-      spec="${output},preferred,auto,1"
+      apply_mode="preferred"
       ;;
     *[0-9]x[0-9]*)
-      spec="${output},${mode},auto,1"
+      apply_mode="${mode}"
       ;;
     *)
       echo "coda-settings: unknown mode ${mode}" >&2
       exit 2
       ;;
   esac
-  hyprctl keyword monitor "${spec}"
+  hypr_monitor "${output}" "${apply_mode}" auto 1
 }
 
 apply_scale() {
   local scale="${1:-1}"
   local output="${2:-}"
+  [[ "${scale}" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+    echo "coda-settings: bad scale '${scale}' (want a number, e.g. 1, 1.25, 1.5, 2)" >&2
+    exit 2
+  }
   if [[ -z "${output}" ]]; then
     output="$(focused_monitor || true)"
   fi
@@ -195,20 +251,30 @@ apply_scale() {
     echo "coda-settings: no focused monitor (is Hyprland running?)" >&2
     exit 1
   fi
-  local spec
-  spec="$(hyprctl -j monitors 2>/dev/null | python3 -c '
+  local json mode
+  json="$(hyprctl -j monitors 2>/dev/null)" || true
+  if [[ -z "${json}" ]]; then
+    echo "coda-settings: could not read hyprctl monitors (is Hyprland running?)" >&2
+    exit 1
+  fi
+  mode="$(printf '%s' "${json}" | python3 -c '
 import json, sys
 mons = json.load(sys.stdin)
-name, scale = sys.argv[1], sys.argv[2]
+name = sys.argv[1]
 m = next((x for x in mons if x.get("name") == name), None)
 if m is None:
-    m = next((x for x in mons if x.get("focused")), mons[0])
+    m = next((x for x in mons if x.get("focused")), mons[0] if mons else None)
+if m is None:
+    sys.exit(1)
 w = int(m.get("width") or 1920)
 h = int(m.get("height") or 1080)
 hz = int(round(float(m.get("refreshRate") or 60)))
-print("%s,%sx%s@%s,auto,%s" % (m.get("name") or name, w, h, hz, scale))
-' "${output}" "${scale}")"
-  hyprctl keyword monitor "${spec}"
+print("%sx%s@%s" % (w, h, hz))
+' "${output}")" || {
+    echo "coda-settings: could not build monitor mode from hyprctl" >&2
+    exit 1
+  }
+  hypr_monitor "${output}" "${mode}" auto "${scale}"
 }
 
 open_display() {

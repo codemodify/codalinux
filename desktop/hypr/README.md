@@ -4,7 +4,7 @@ Lua compositor config is `hyprland.lua` (Hyprland 0.55+). Companions still use h
 
 ## Display mode
 
-`hl.monitor` uses `1920x1080@60`, not `preferred`. QEMU virtio EDID lists `640x480@119.99` first; Hyprland preferred picks that even when 1920x1080 is available and QEMU was started with `-device virtio-vga,xres=1920,yres=1080`. Settings → Display can apply another mode at runtime.
+`hl.monitor` uses `1920x1080@60`, not `preferred`. QEMU virtio EDID lists `640x480@119.99` first; Hyprland preferred picks that even when 1920x1080 is available and QEMU was started with `-device virtio-vga,xres=1920,yres=1080`. Settings → Display applies another mode or scale at runtime with `hyprctl eval 'hl.monitor({ output, mode, position, scale })'` — not `hyprctl keyword` (rejected on `hyprland.lua`).
 
 ## Stack = overlapping float
 
