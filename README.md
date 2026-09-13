@@ -21,7 +21,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Delivery | archiso live ISO + archinstall (not Calamares) |
 | Support | GitHub issues |
 
-The system picture (partitions → layers → `/` → sandboxes → **system-config** → updates) is **[architecture.md](architecture.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**. `system-config` is locked target, not implemented.
+The system picture (partitions → layers → `/` → sandboxes → **system-config** → updates) is **[architecture.md](architecture.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**. `system-config` implementation: [`core/system-config/`](core/system-config/README.md) (not ISO-wired).
 
 ## Repository layout
 
@@ -35,6 +35,7 @@ desktop/         Hyprland, hypr* companions, AGS/Astal app layout
 branding/        os-release, wallpaper/theme placeholders
 sessions/        Wayland Hyprland session + XLibre path notes
 scripts/         ISO compose/build helpers, coda-sandbox, NVIDIA hook placeholder
+core/            Go core components (`system-config` daemons + clients)
 docs/            Implementation TODOs + sandbox command reference
 ```
 
