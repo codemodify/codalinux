@@ -9,3 +9,4 @@ Type=Application
 Categories=Settings;DesktopSettings;
 StartupNotify=true
 NoDisplay=true
+Hidden=true

@@ -348,6 +348,33 @@ else
   record SKIP "apply audio mute" "no sinks"
 fi
 
+# Persist the current default sink (no-op routing change) so WirePlumber
+# 51-coda-defaults.conf is written for the seat user.
+sink_id="$(json_field "${audio}" "default_sink")"
+if [[ -z "${sink_id}" || "${sink_id}" == "null" ]]; then
+  sink_id="$(json_field "${audio}" "sinks.0.id")"
+fi
+if [[ -n "${sink_id}" && "${sink_id}" != "null" ]]; then
+  if out="$(cli set audio "{\"default_sink\":\"${sink_id}\"}" 2>&1)" && json_ok "${out}"; then
+    if out="$(cli apply audio 2>&1)" && json_ok "${out}"; then
+      record PASS "apply audio default sink persist" "${sink_id}"
+    else
+      record FAIL "apply audio default sink persist" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+    fi
+  else
+    record FAIL "set audio default sink persist"
+  fi
+  livehome="$(getent passwd "${session_user}" | cut -d: -f6 || true)"
+  persist="${livehome}/.config/wireplumber/wireplumber.conf.d/51-coda-defaults.conf"
+  if [[ -n "${livehome}" && -f "${persist}" ]]; then
+    record PASS "audio persist file" "${persist}"
+  else
+    record SKIP "audio persist file" "no ${persist} (wpctl inspect may lack node.name)"
+  fi
+else
+  record SKIP "apply audio default sink persist" "no sink id"
+fi
+
 if command -v hyprctl >/dev/null 2>&1 && [[ -n "${his}" || -d "${runtime}/hypr" ]]; then
   if out="$(cli set input '{"pointer_speed":0}' 2>&1)" && json_ok "${out}"; then
     if out="$(cli apply input 2>&1)" && json_ok "${out}"; then
@@ -436,6 +463,25 @@ if [[ -n "${e2e_user}" && -n "${e2e_shell}" ]]; then
   fi
 else
   record SKIP "apply users shell no-op" "no local user observed"
+fi
+
+pr_json="$(cli get printers 2>/dev/null || true)"
+pr_def="$(json_field "${pr_json}" "default")"
+if [[ -z "${pr_def}" || "${pr_def}" == "null" ]]; then
+  pr_def="$(json_field "${pr_json}" "printers.0.name")"
+fi
+if [[ -n "${pr_def}" && "${pr_def}" != "null" ]]; then
+  if out="$(cli set printers "{\"default\":\"${pr_def}\"}" 2>&1)" && json_ok "${out}"; then
+    if out="$(cli apply printers 2>&1)" && json_ok "${out}"; then
+      record PASS "apply printers default no-op" "${pr_def}"
+    else
+      record FAIL "apply printers default no-op" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
+    fi
+  else
+    record FAIL "set printers default no-op"
+  fi
+else
+  record SKIP "apply printers default no-op" "no printers"
 fi
 
 # rfkill / airplane observe only — never rfkill block in e2e.
