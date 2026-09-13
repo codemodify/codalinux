@@ -38,7 +38,7 @@ func (s *Server) Listen() error {
 	if err != nil {
 		return err
 	}
-	if err := os.Chmod(s.Socket, 0o600); err != nil {
+	if err := sockpath.FixupSocket(s.Socket); err != nil {
 		_ = ln.Close()
 		return err
 	}

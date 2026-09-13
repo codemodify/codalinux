@@ -43,22 +43,30 @@ if command -v loginctl >/dev/null 2>&1; then
     fi
   done < <(loginctl list-sessions --no-legend --no-pager 2>/dev/null | awk '{print $1}')
 fi
-if [[ -z "${session_uid}" ]]; then
+if [[ -z "${session_uid}" || "${session_uid}" == "0" ]]; then
   if id live >/dev/null 2>&1; then
     session_uid="$(id -u live)"
-  else
+  elif [[ "$(id -u)" != "0" ]]; then
     session_uid="$(id -u)"
   fi
+fi
+if [[ -z "${session_uid}" || "${session_uid}" == "0" ]]; then
+  echo "FAIL: no seat user (refusing uid 0 — do not start D/report as root)" >&2
+  exit 1
 fi
 session_user="$(id -nu "${session_uid}")"
 
 runtime="/run/user/${session_uid}"
-if [[ -d "${XDG_RUNTIME_DIR:-}" && "${XDG_RUNTIME_DIR}" == "${runtime}" ]]; then
-  runtime="${XDG_RUNTIME_DIR}"
-fi
+# Never inherit a root runtime (/run/user/0). Clients always use the seat dir.
 export XDG_RUNTIME_DIR="${runtime}"
 export CODA_SYSTEM_CONFIG_UID="${session_uid}"
-mkdir -p "${runtime}/coda"
+if [[ "$(id -u)" -eq 0 ]]; then
+  mkdir -p "${runtime}/coda"
+  chown "${session_uid}:${session_uid}" "${runtime}/coda" 2>/dev/null || true
+  chmod 0750 "${runtime}/coda" 2>/dev/null || true
+else
+  mkdir -p "${runtime}/coda"
+fi
 
 his=""
 if [[ -d "${runtime}/hypr" ]]; then
@@ -76,10 +84,12 @@ as_session() {
   local -a envvars=(
     "XDG_RUNTIME_DIR=${runtime}"
     "CODA_SYSTEM_CONFIG_UID=${session_uid}"
+    "HOME=$(getent passwd "${session_user}" | cut -d: -f6 || echo /home/${session_user})"
   )
   if [[ -n "${his}" ]]; then
     envvars+=("HYPRLAND_INSTANCE_SIGNATURE=${his}")
   fi
+  # Always the seat user — never a root copy under /run/user/0.
   if [[ "$(id -u)" == "${session_uid}" ]]; then
     env "${envvars[@]}" "$@"
   else
@@ -89,13 +99,37 @@ as_session() {
 
 wait_sock() {
   local s="$1" n=0
-  while [[ ! -S "${s}" && "${n}" -lt 50 ]]; do
+  while [[ ! -S "${s}" && "${n}" -lt 80 ]]; do
     sleep 0.1
     n=$((n + 1))
   done
   [[ -S "${s}" ]]
 }
 
+dial_unix() {
+  local s="$1"
+  as_session python3 -c "import socket,sys; p=sys.argv[1]; c=socket.socket(socket.AF_UNIX); c.settimeout(1); c.connect(p); c.close()" "${s}" 2>/dev/null
+}
+
+wait_dialable() {
+  local s="$1" n=0
+  while [[ "${n}" -lt 80 ]]; do
+    if [[ -S "${s}" ]]; then
+      if command -v python3 >/dev/null 2>&1 && dial_unix "${s}"; then
+        return 0
+      fi
+      if as_session test -w "${s}"; then
+        return 0
+      fi
+    fi
+    sleep 0.1
+    n=$((n + 1))
+  done
+  return 1
+}
+
+# Prefer already-running user units (coda-hyprland). Only start missing
+# D/report as the seat user — never as root.
 if [[ ! -S "${runtime}/coda/system-configd.sock" ]]; then
   as_session system-configd &
 fi
@@ -110,11 +144,15 @@ if [[ ! -S "${runtime}/coda/system-config-apply.sock" ]]; then
   fi
 fi
 if ! wait_sock "${runtime}/coda/system-configd.sock"; then
-  echo "FAIL: system-configd.sock not ready" >&2
+  echo "FAIL: system-configd.sock not ready under ${runtime}/coda" >&2
   exit 1
 fi
 wait_sock "${runtime}/coda/system-config-report.sock" || true
-wait_sock "${runtime}/coda/system-config-apply.sock" || true
+if ! wait_dialable "${runtime}/coda/system-config-apply.sock"; then
+  echo "FAIL: apply socket not dialable as ${session_user} (${runtime}/coda/system-config-apply.sock)" >&2
+  ls -l "${runtime}/coda/" >&2 || true
+  exit 1
+fi
 
 json_ok() {
   printf '%s' "${1:-}" | grep -qE '"ok"[[:space:]]*:[[:space:]]*true'
@@ -377,8 +415,9 @@ else
     }
     as_desktop_sb coda-sandbox destroy "${env_name}" >/dev/null 2>&1 || true
     create_ok=0
+    # timeout must wrap the binary, not the shell function (or PATH misses as_desktop_sb).
     if command -v timeout >/dev/null 2>&1; then
-      if timeout 180 as_desktop_sb coda-sandbox create "${env_name}"; then
+      if as_desktop_sb timeout 180 coda-sandbox create "${env_name}"; then
         create_ok=1
       fi
     elif as_desktop_sb coda-sandbox create "${env_name}"; then
