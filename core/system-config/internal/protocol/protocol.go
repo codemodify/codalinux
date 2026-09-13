@@ -22,21 +22,43 @@ const (
 	OpExec        = "exec"         // D → apply
 )
 
-// Starter submodels (architecture.md). Clients query these, not the whole tree.
+// Submodel paths (architecture.md). Clients query these, not the whole tree.
 const (
 	PathDisplay        = "display"
+	PathNetwork        = "network"
+	PathAudio          = "audio"
+	PathBluetooth      = "bluetooth"
+	PathInput          = "input"
+	PathDateTime       = "datetime"
+	PathLocale         = "locale"
 	PathDevicesSummary = "devices.summary"
 	PathDevicesPCI     = "devices.pci"
-	PathLocale         = "locale"
+	PathDevicesUSB     = "devices.usb"
+	PathHardwareDMI    = "hardware.dmi"
+	PathSession        = "session"
+	PathPower          = "power"
 	PathSubmodels      = "submodels"
 )
 
-var StarterPaths = []string{
+// KnownPaths is every submodel D/report understand.
+var KnownPaths = []string{
 	PathDisplay,
+	PathNetwork,
+	PathAudio,
+	PathBluetooth,
+	PathInput,
+	PathDateTime,
+	PathLocale,
 	PathDevicesSummary,
 	PathDevicesPCI,
-	PathLocale,
+	PathDevicesUSB,
+	PathHardwareDMI,
+	PathSession,
+	PathPower,
 }
+
+// StarterPaths is the list advertised on get submodels (alias of KnownPaths).
+var StarterPaths = KnownPaths
 
 type Request struct {
 	ID      string          `json:"id"`
@@ -72,17 +94,93 @@ type Plan struct {
 	Ops  []PlanOp `json:"ops"`
 }
 
+// PlanOp is a closed allowlisted action. Extra fields are ignored by unused ops.
 type PlanOp struct {
-	Type   string  `json:"type"`
-	Output string  `json:"output,omitempty"`
-	Scale  float64 `json:"scale,omitempty"`
-	Mode   string  `json:"mode,omitempty"`
+	Type      string   `json:"type"`
+	Output    string   `json:"output,omitempty"`
+	Scale     float64  `json:"scale,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
+	Device    string   `json:"device,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	Value     string   `json:"value,omitempty"`
+	SSID      string   `json:"ssid,omitempty"`
+	PSK       string   `json:"psk,omitempty"`
+	Method    string   `json:"method,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Gateway   string   `json:"gateway,omitempty"`
+	DNS       []string `json:"dns,omitempty"`
+	Volume    float64  `json:"volume,omitempty"`
+	Mute      *bool    `json:"mute,omitempty"`
+	Enabled   *bool    `json:"enabled,omitempty"`
+	Action    string   `json:"action,omitempty"`
+	ID        string   `json:"id,omitempty"`
+	Speed     float64  `json:"speed,omitempty"`
+	AddressBT string   `json:"bt_address,omitempty"`
 }
 
 const (
 	OpDisplayScale = "display.scale"
 	OpDisplayMode  = "display.mode"
+
+	OpNetIfaceEnable    = "network.iface.enable"
+	OpNetIfaceMethod    = "network.iface.method"
+	OpNetWiFiConnect    = "network.wifi.connect"
+	OpNetWiFiDisconnect = "network.wifi.disconnect"
+
+	OpAudioDefaultSink   = "audio.default.sink"
+	OpAudioDefaultSource = "audio.default.source"
+	OpAudioVolume        = "audio.volume"
+	OpAudioMute          = "audio.mute"
+
+	OpBTPower      = "bluetooth.power"
+	OpBTScan       = "bluetooth.scan"
+	OpBTPair       = "bluetooth.pair"
+	OpBTConnect    = "bluetooth.connect"
+	OpBTDisconnect = "bluetooth.disconnect"
+	OpBTTrust      = "bluetooth.trust"
+
+	OpInputKeymap        = "input.keymap"
+	OpInputKBLayout      = "input.kb_layout"
+	OpInputPointerSpeed  = "input.pointer.speed"
+	OpInputNaturalScroll = "input.pointer.natural_scroll"
+	OpInputTapToClick    = "input.touchpad.tap"
+
+	OpDateTimeTimezone = "datetime.timezone"
+	OpDateTimeNTP      = "datetime.ntp"
+	OpDateTimeTime     = "datetime.time"
+
+	OpLocaleLang   = "locale.lang"
+	OpLocaleKeymap = "locale.keymap"
+
+	OpSessionLock = "session.lock"
+
+	OpPowerSuspend    = "power.suspend"
+	OpPowerHibernate  = "power.hibernate"
+	OpPowerBrightness = "power.brightness"
+	OpPowerLid        = "power.lid"
 )
+
+// ApplyOps is the closed allowlist executed by system-config-apply.
+var ApplyOps = []string{
+	OpDisplayScale, OpDisplayMode,
+	OpNetIfaceEnable, OpNetIfaceMethod, OpNetWiFiConnect, OpNetWiFiDisconnect,
+	OpAudioDefaultSink, OpAudioDefaultSource, OpAudioVolume, OpAudioMute,
+	OpBTPower, OpBTScan, OpBTPair, OpBTConnect, OpBTDisconnect, OpBTTrust,
+	OpInputKeymap, OpInputKBLayout, OpInputPointerSpeed, OpInputNaturalScroll, OpInputTapToClick,
+	OpDateTimeTimezone, OpDateTimeNTP, OpDateTimeTime,
+	OpLocaleLang, OpLocaleKeymap,
+	OpSessionLock,
+	OpPowerSuspend, OpPowerHibernate, OpPowerBrightness, OpPowerLid,
+}
+
+func AllowedOp(t string) bool {
+	for _, a := range ApplyOps {
+		if a == t {
+			return true
+		}
+	}
+	return false
+}
 
 func NormalizePath(p string) string {
 	p = strings.TrimSpace(p)
@@ -95,12 +193,22 @@ func KnownPath(p string) bool {
 	if p == "" || p == PathSubmodels {
 		return true
 	}
-	for _, k := range StarterPaths {
+	for _, k := range KnownPaths {
 		if p == k {
 			return true
 		}
 	}
 	return false
+}
+
+func Settable(p string) bool {
+	switch NormalizePath(p) {
+	case PathDisplay, PathNetwork, PathAudio, PathBluetooth, PathInput,
+		PathDateTime, PathLocale, PathSession, PathPower:
+		return true
+	default:
+		return false
+	}
 }
 
 func Encode(v any) ([]byte, error) {
