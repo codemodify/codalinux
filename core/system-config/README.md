@@ -55,6 +55,9 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ./bin/system-config get hardware.dmi
 ./bin/system-config get session
 ./bin/system-config get power
+./bin/system-config get printers
+./bin/system-config get users
+./bin/system-config get storage
 ```
 
 `apply display` needs Hyprland (`hyprctl`). Apply may run as root; it discovers the graphical session (`loginctl` / `/run/user/*/hypr/*`) and runs `hyprctl` as that uid with `XDG_RUNTIME_DIR` + `HYPRLAND_INSTANCE_SIGNATURE` (same env `coda-settings` expects). Report uses the same discovery so `refresh display` fills `observed.outputs`. Eval form is `hl.monitor({ output = "NAME", ... })` — not `name=`, not `keyword`.
@@ -93,8 +96,10 @@ Prints a PASS/FAIL table and exits non-zero on any fail. Never suspends/hibernat
 
 JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to the same uid (and root). Ops: `get`, `set`, `watch` (single snapshot stub), `refresh` (ask report), `apply` (ask apply).
 
-**Paths:** `display` `network` `audio` `bluetooth` `input` `datetime` `locale` `session` `power` `devices.summary` `devices.pci` `devices.usb` `hardware.dmi`
+**Paths:** `display` `network` `audio` `bluetooth` `input` `datetime` `locale` `session` `power` `printers` `users` `storage` `devices.summary` `devices.pci` `devices.usb` `hardware.dmi`
 
-**Apply allowlist:** `display.scale` `display.mode` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid`
+**Apply allowlist:** `display.scale` `display.mode` `display.position` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `network.airplane` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid`
+
+Reboot/poweroff are **not** allowlisted. Desktop Settings / AGS hardware pages launch `system-config-gui` (not `coda-settings`).
 
 Display eval stays `hl.monitor({ output = "NAME", ... })`. Hyprland/PipeWire tools use session discovery (`internal/hyprsession`). Remaining work: [`docs/ROADMAP.md`](docs/ROADMAP.md).
