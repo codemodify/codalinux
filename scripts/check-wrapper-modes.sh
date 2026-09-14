@@ -17,6 +17,7 @@ need_bins=(
   coda-settings
   coda-sandbox
   coda-sync-desktop-from-host
+  system-config-gui
 )
 
 log_fail() { printf 'check-wrapper-modes: %s\n' "$*" >&2; failed=1; }
@@ -41,7 +42,7 @@ for bin in "${need_bins[@]}"; do
 done
 
 for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
-           coda-hypr-ws coda-install coda-settings coda-sandbox; do
+           coda-hypr-ws coda-install coda-settings coda-sandbox system-config-gui; do
   f="${root}/scripts/${src}"
   if [[ ! -f "${f}" ]]; then
     log_fail "missing source wrapper: ${f}"
@@ -128,6 +129,28 @@ fi
 
 if ! grep -qx 'bubblewrap' "${root}/packages/sandbox.txt"; then
   log_fail "packages/sandbox.txt must list bubblewrap (coda-sandbox backbone)"
+fi
+
+for gui_rt in wayland libxkbcommon libx11 libxext libxrandr libxcursor; do
+  if ! grep -qx "${gui_rt}" "${root}/packages/desktop.txt"; then
+    log_fail "packages/desktop.txt must list ${gui_rt} (system-config-gui CGO runtime)"
+  fi
+done
+if grep -qE '^export CGO_ENABLED=0' "${root}/scripts/install-system-config.sh"; then
+  log_fail "install-system-config.sh must not force CGO_ENABLED=0 for system-config-gui"
+fi
+if ! grep -q 'CGO_ENABLED=1 go build' "${root}/scripts/install-system-config.sh"; then
+  log_fail "install-system-config.sh must CGO_ENABLED=1 build system-config-gui"
+fi
+if ! grep -qF "[\"/usr/local/lib/codalinux/system-config-gui\"]=\"0:0:755\"" \
+    "${root}/archiso/profiledef.sh"; then
+  log_fail "profiledef.sh missing 755 for CGO system-config-gui binary"
+fi
+if ! grep -q 'UITK_PAINT="${UITK_PAINT:-cpu}"' "${root}/scripts/system-config-gui"; then
+  log_fail "system-config-gui wrapper must default UITK_PAINT=cpu (virtio EGL)"
+fi
+if ! grep -q 'UITK_BACKEND="${UITK_BACKEND:-wayland}"' "${root}/scripts/system-config-gui"; then
+  log_fail "system-config-gui wrapper must prefer UITK_BACKEND=wayland"
 fi
 
 if [[ "${failed}" -ne 0 ]]; then

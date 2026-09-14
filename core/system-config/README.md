@@ -6,17 +6,18 @@ Clients talk to **`system-configd` only**. Report never writes config. Apply onl
 
 ## Build
 
-Needs Go 1.22+ (Arch `go`). Use `CGO_ENABLED=0` unless you have EGL/GLES for a live Wayland/X11 GUI.
+Needs Go 1.22+ (Arch `go`). Tests and helper binaries stay `CGO_ENABLED=0`. **`system-config-gui` must be `CGO_ENABLED=1`** — uitoolkit Wayland/X11 backends are Linux+CGO; CGO off falls through to offscreen (process lives, no window). ISO/install builds use `scripts/install-system-config.sh`, which refuses a static/headless GUI. The `/usr/local/bin/system-config-gui` wrapper prefers Wayland and defaults `UITK_PAINT=cpu` (virtio-gpu EGL often fails; wl_shm is the v1 path).
 
 ```bash
 cd core/system-config
 CGO_ENABLED=0 go test ./...
 CGO_ENABLED=0 go build -o bin/ ./cmd/system-configd ./cmd/system-config-apply \
-  ./cmd/system-config-report ./cmd/system-config ./cmd/system-config-tui \
-  ./cmd/system-config-gui
+  ./cmd/system-config-report ./cmd/system-config ./cmd/system-config-tui
+CGO_ENABLED=1 go build -o bin/ ./cmd/system-config-gui
+ldd bin/system-config-gui | grep wayland
 ```
 
-`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit) (v0.19.x is enough). Mail/Settings pattern: app-level Unix socket + JSON-lines client, two-pane `Splitter` + `TreeView`, pinned Apply, `TableView` for devices (capped), `Slider`/`NumberField` for display scale. Gaps: [`docs/uitoolkit-gaps.md`](docs/uitoolkit-gaps.md). Headless:
+`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit) (v0.19.x is enough). Mail/Settings pattern: app-level Unix socket + JSON-lines client, two-pane `Splitter` + `TreeView`, pinned Apply, `TableView` for devices (capped), `Slider`/`NumberField` for display scale. Gaps: [`docs/uitoolkit-gaps.md`](docs/uitoolkit-gaps.md). Headless (`-headless` / `-screenshot` only):
 
 ```bash
 go run ./cmd/system-config-gui -headless

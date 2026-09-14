@@ -179,8 +179,11 @@ if [[ "${same_root}" -eq 0 ]]; then
   chmod 0755 "${target}/usr/local/bin/ags" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/astal" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/"system-config* 2>/dev/null || true
+  copy_if /usr/local/lib/codalinux/system-config-gui \
+    "${target}/usr/local/lib/codalinux/system-config-gui"
   copy_if /usr/local/lib/codalinux/system-config-apply-launch \
     "${target}/usr/local/lib/codalinux/system-config-apply-launch"
+  chmod 0755 "${target}/usr/local/lib/codalinux/system-config-gui" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/system-config-apply-launch" 2>/dev/null || true
   copy_if /etc/systemd/system/system-config-apply.service \
     "${target}/etc/systemd/system/system-config-apply.service"
@@ -265,6 +268,10 @@ if [[ ! -e "${target}/etc/systemd/system/system-config-apply.service" ]]; then
 fi
 if [[ ! -e "${target}/etc/systemd/user/system-configd.service" ]]; then
   echo "coda-install-post: system-configd.service missing on target" >&2
+  exit 1
+fi
+if [[ ! -x "${target}/usr/local/lib/codalinux/system-config-gui" ]]; then
+  echo "coda-install-post: CGO system-config-gui binary missing (must ship like live)" >&2
   exit 1
 fi
 if [[ ! -e "${target}/usr/share/applications/system-config-gui.desktop" ]]; then

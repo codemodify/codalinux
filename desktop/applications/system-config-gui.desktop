@@ -2,7 +2,7 @@
 Name=Settings
 Comment=System configuration — displays, network, audio, input, locale, power
 Exec=system-config-gui
-TryExec=system-config-gui
+TryExec=/usr/local/lib/codalinux/system-config-gui
 Icon=preferences-system
 Terminal=false
 Type=Application
