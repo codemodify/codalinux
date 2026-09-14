@@ -77,6 +77,12 @@ xdg-desktop-portal-gtk
 xdg-user-dirs
 xdg-utils
 xorg-xwayland
+wayland
+libxkbcommon
+libx11
+libxext
+libxrandr
+libxcursor
 greetd
 gtk3
 gtk4

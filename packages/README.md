@@ -16,11 +16,12 @@ Compose default sets into ISO and installer consumers:
 | `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo, openssh, qemu-guest-agent |
 | `hardware.txt` | yes | Mesa, PipeWire, BlueZ |
 | `network.txt` | yes | iwd + resolved-related tools (not NetworkManager) |
-| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime (gjs/gtk4-layer-shell) |
+| `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime, system-config-gui Wayland/X11 libs |
 | `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura, settings apps |
 | `sandbox.txt` | yes | `bubblewrap` — app isolation backbone (`coda-sandbox`) |
 | `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools (`openssh` / `qemu-guest-agent` also in `base.txt` so install keeps them) |
 | `ags-build-deps.txt` | no | Official-repo deps to *compile* AGS/Astal at ISO build time |
+| `system-config-gui-build-deps.txt` | no | Official-repo deps to *compile* `system-config-gui` with CGO (Wayland/X11/EGL) |
 | `hyprbars-build-deps.txt` | no | Official-repo deps to *compile* hyprbars (includes `hyprland` headers) |
 | `nvidia.txt` | no | Proprietary NVIDIA path (hook later) |
 | `optional-cups.txt` | no | Printing stack, not base |

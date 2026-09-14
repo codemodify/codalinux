@@ -17,6 +17,16 @@ xdg-user-dirs
 xdg-utils
 xorg-xwayland
 
+# system-config-gui (uitoolkit CGO): Wayland/X11 + xkb + cursors.
+# mesa in hardware.txt provides EGL/GLES. Hyprland already pulls some of
+# these; list them so install/packages.txt is not implicit-only.
+wayland
+libxkbcommon
+libx11
+libxext
+libxrandr
+libxcursor
+
 greetd
 
 # Toolkit / session plumbing used by portals, Thunar, and the AGS shell

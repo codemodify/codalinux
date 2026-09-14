@@ -11,6 +11,8 @@
 | Script | Purpose |
 | --- | --- |
 | `compose-package-lists.sh` | Build `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `user_configuration.json` (needs `python3`) |
+| `install-system-config.sh` | Build/install system-config* into DEST; helpers CGO=0, **GUI CGO=1** (refuses static/headless) |
+| `system-config-gui` | Settings launcher: Wayland + `UITK_PAINT=cpu` (virtio EGL skip); execs CGO binary |
 | `check-package-lists.sh` | Reject forbidden / unofficial names |
 | `check-wrapper-modes.sh` | Assert coda-* wrappers are +x and listed in archiso `file_permissions` |
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo**; vendors AGS |
