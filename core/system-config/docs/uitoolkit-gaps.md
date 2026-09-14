@@ -14,7 +14,7 @@
 | Need | What we use |
 | --- | --- |
 | Unix socket + JSON-RPC NDJSON | App-level client (`internal/client` + `internal/rpc`). Not a toolkit Socket API. |
-| Two-pane Settings + pinned Apply | `Splitter` + `Column.AddFlex` + Primary `Apply` row (Settings dogfood). |
+| Two-pane Settings + per-section Apply | `Splitter` + `Column.AddFlex` + Apply/Refresh on each settable page (not a global Apply). |
 | Sidebar | `Splitter` + `TreeView` (Mail) / `ListView` (Settings). No first-class NavRail. |
 | Devices / PCI | `TableView` (alpha: cap huge lists; no toolkit sort/filter). |
 | Display scale | `Slider` + `NumberField` + Apply. No built-in scale page. |

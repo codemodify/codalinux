@@ -17,7 +17,7 @@ CGO_ENABLED=1 go build -o bin/ ./cmd/system-config-gui
 ldd bin/system-config-gui | grep wayland
 ```
 
-`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit) (v0.19.x is enough). Mail/Settings pattern: app-level Unix socket + JSON-lines client, two-pane `Splitter` + `TreeView`, pinned Apply, `TableView` for devices (capped), `Slider`/`NumberField` for display scale. Gaps: [`docs/uitoolkit-gaps.md`](docs/uitoolkit-gaps.md). Headless (`-headless` / `-screenshot` only):
+`system-config-gui` uses [`github.com/codemodify/uitoolkit@dev`](https://github.com/codemodify/uitoolkit) (v0.19.x is enough). Mail/Settings pattern: app-level Unix socket + JSON-lines client, two-pane `Splitter` + `TreeView`, **per-section Apply** (dirty vs that page’s baseline), `TableView` for devices (capped), `Slider`/`NumberField` for display scale. Gaps: [`docs/uitoolkit-gaps.md`](docs/uitoolkit-gaps.md). Headless (`-headless` / `-screenshot` only):
 
 ```bash
 go run ./cmd/system-config-gui -headless
