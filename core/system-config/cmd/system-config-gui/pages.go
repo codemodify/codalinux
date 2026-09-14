@@ -45,10 +45,26 @@ func (s *session) pageFor(path string) uitoolkit.Component {
 
 func (s *session) refreshBtn(path string) *widgets.Button {
 	return uitoolkit.NewButton("Refresh", func() {
-		s.reload()
+		s.reloadPath(path)
 		s.rebuild()
 		s.note("refreshed " + path)
 	})
+}
+
+// pageActions is the per-section footer: Apply (settable only) + Refresh.
+// Apply arms only when this path is dirty. Devices has Refresh only.
+func (s *session) pageActions(path string) uitoolkit.Component {
+	refresh := s.refreshBtn(path)
+	if !protocol.Settable(path) {
+		return refresh
+	}
+	btn := uitoolkit.NewButton("Apply", func() { s.applyPath(path) })
+	btn.Primary = true
+	btn.SetEnabled(s.dirtyPath(path) && s.cli != nil)
+	if path == s.path() {
+		s.applyBtn = btn
+	}
+	return uitoolkit.NewRow(btn, refresh).WithGap(8)
 }
 
 func (s *session) displayPage() uitoolkit.Component {
@@ -82,6 +98,7 @@ func (s *session) displayPage() uitoolkit.Component {
 			s.outMode = s.outputs[i].Mode
 			s.outPos = s.outputs[i].Position
 			s.note("output " + s.outName)
+			s.syncApply()
 		}
 	})
 	pct := float32(s.scale * 100)
@@ -103,9 +120,7 @@ func (s *session) displayPage() uitoolkit.Component {
 		if s.scaleLbl != nil {
 			s.scaleLbl.SetText(fmt.Sprintf("Scale  %.0f%%  (%.2f)", v*100, v))
 		}
-		if s.applyBtn != nil {
-			s.applyBtn.SetEnabled(s.dirty() && s.cli != nil)
-		}
+		s.syncApply()
 	}
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Display"),
@@ -113,9 +128,9 @@ func (s *session) displayPage() uitoolkit.Component {
 		table, s.scaleLbl,
 		uitoolkit.NewSlider(100, 200, pct, func(v float32) { stage(float64(v) / 100) }),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Factor"), uitoolkit.NewNumberField(1, 2, s.scale, 0.25, stage)).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Mode"), uitoolkit.NewTextField(s.outMode, "1920x1080@60", func(v string) { s.outMode = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Position"), uitoolkit.NewTextField(s.outPos, "auto or 0x0", func(v string) { s.outPos = v })).WithGap(8),
-		s.refreshBtn(protocol.PathDisplay),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Mode"), uitoolkit.NewTextField(s.outMode, "1920x1080@60", func(v string) { s.outMode = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Position"), uitoolkit.NewTextField(s.outPos, "auto or 0x0", func(v string) { s.outPos = v; s.syncApply() })).WithGap(8),
+		s.pageActions(protocol.PathDisplay),
 	).WithGap(8)
 }
 
@@ -146,11 +161,12 @@ func (s *session) networkPage() uitoolkit.Component {
 			if s.net.Links[i].Type == "wlan" {
 				s.wifiDev = s.net.Links[i].Name
 			}
+			s.syncApply()
 		}
 	})
-	ssid := uitoolkit.NewTextField(s.wifiSSID, "SSID", func(v string) { s.wifiSSID = v })
-	psk := uitoolkit.NewTextField(s.wifiPSK, "PSK", func(v string) { s.wifiPSK = v })
-	dev := uitoolkit.NewTextField(s.wifiDev, "wlan device", func(v string) { s.wifiDev = v })
+	ssid := uitoolkit.NewTextField(s.wifiSSID, "SSID", func(v string) { s.wifiSSID = v; s.syncApply() })
+	psk := uitoolkit.NewTextField(s.wifiPSK, "PSK", func(v string) { s.wifiPSK = v; s.syncApply() })
+	dev := uitoolkit.NewTextField(s.wifiDev, "wlan device", func(v string) { s.wifiDev = v; s.syncApply() })
 	nets := uitoolkit.NewTableView([]uitoolkit.TableColumn{
 		{Title: "SSID"}, {Title: "Security", Width: 90}, {Title: "Signal", Width: 70},
 	}, len(s.net.WiFi.Networks), func(row, col int) string {
@@ -173,28 +189,30 @@ func (s *session) networkPage() uitoolkit.Component {
 		if i >= 0 && i < len(s.net.WiFi.Networks) {
 			s.wifiSSID = s.net.WiFi.Networks[i].SSID
 			s.note("ssid " + s.wifiSSID)
+			s.syncApply()
 		}
 	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Network"),
 		uitoolkit.NewLabel("systemd-networkd + iwd. Static IP writes a drop-in or 20-coda-*.network (survives reboot). No NetworkManager."),
 		table, nets,
-		uitoolkit.NewSwitch("Airplane mode (rfkill)", s.airplane, func(on bool) { s.airplane = on }),
+		uitoolkit.NewSwitch("Airplane mode (rfkill)", s.airplane, func(on bool) { s.airplane = on; s.syncApply() }),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), dev).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("SSID"), ssid).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("PSK"), psk).WithGap(8),
-		uitoolkit.NewSwitch("Hidden SSID", s.wifiHidden, func(on bool) { s.wifiHidden = on }),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Method"), uitoolkit.NewTextField(s.netMethod, "dhcp|static", func(v string) { s.netMethod = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Address"), uitoolkit.NewTextField(s.netAddr, "10.0.2.15/24", func(v string) { s.netAddr = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Gateway"), uitoolkit.NewTextField(s.netGW, "10.0.2.2", func(v string) { s.netGW = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("DNS"), uitoolkit.NewTextField(s.netDNS, "1.1.1.1 8.8.8.8", func(v string) { s.netDNS = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Search"), uitoolkit.NewTextField(s.netSearch, "example.lan", func(v string) { s.netSearch = v })).WithGap(8),
+		uitoolkit.NewSwitch("Hidden SSID", s.wifiHidden, func(on bool) { s.wifiHidden = on; s.syncApply() }),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Method"), uitoolkit.NewTextField(s.netMethod, "dhcp|static", func(v string) { s.netMethod = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Address"), uitoolkit.NewTextField(s.netAddr, "10.0.2.15/24", func(v string) { s.netAddr = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Gateway"), uitoolkit.NewTextField(s.netGW, "10.0.2.2", func(v string) { s.netGW = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("DNS"), uitoolkit.NewTextField(s.netDNS, "1.1.1.1 8.8.8.8", func(v string) { s.netDNS = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Search"), uitoolkit.NewTextField(s.netSearch, "example.lan", func(v string) { s.netSearch = v; s.syncApply() })).WithGap(8),
 		uitoolkit.NewButton("Disconnect staged", func() {
 			s.net.WiFi.Disconnect = true
 			s.wifiSSID = ""
 			s.note("staged disconnect")
+			s.syncApply()
 		}),
-		s.refreshBtn(protocol.PathNetwork),
+		s.pageActions(protocol.PathNetwork),
 	).WithGap(8)
 }
 
@@ -225,6 +243,7 @@ func (s *session) audioPage() uitoolkit.Component {
 			s.audio.DefaultSink = s.audio.Sinks[i].ID
 			s.vol = s.audio.Sinks[i].Volume
 			s.mute = s.audio.Sinks[i].Mute
+			s.syncApply()
 		}
 	})
 	sources := uitoolkit.NewTableView([]uitoolkit.TableColumn{
@@ -251,6 +270,7 @@ func (s *session) audioPage() uitoolkit.Component {
 	}, func(i int) {
 		if i >= 0 && i < len(s.audio.Sources) {
 			s.audio.DefaultSource = s.audio.Sources[i].ID
+			s.syncApply()
 		}
 	})
 	s.volLbl = uitoolkit.NewLabel(fmt.Sprintf("Volume  %.0f%%", s.vol*100))
@@ -270,9 +290,10 @@ func (s *session) audioPage() uitoolkit.Component {
 					s.audio.Sinks[i].Volume = s.vol
 				}
 			}
+			s.syncApply()
 		}),
-		uitoolkit.NewSwitch("Mute", s.mute, func(on bool) { s.mute = on }),
-		s.refreshBtn(protocol.PathAudio),
+		uitoolkit.NewSwitch("Mute", s.mute, func(on bool) { s.mute = on; s.syncApply() }),
+		s.pageActions(protocol.PathAudio),
 	).WithGap(8)
 }
 
@@ -306,7 +327,7 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 			s.btAddr = s.bt.Devices[i].Address
 		}
 	})
-	addr := uitoolkit.NewTextField(s.btAddr, "AA:BB:CC:DD:EE:FF", func(v string) { s.btAddr = v })
+	addr := uitoolkit.NewTextField(s.btAddr, "AA:BB:CC:DD:EE:FF", func(v string) { s.btAddr = v; s.syncApply() })
 	stageAddr := func(kind string) {
 		if s.btAddr == "" {
 			s.note("pick a device first")
@@ -324,6 +345,7 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 			s.btTrust = []string{s.btAddr}
 		}
 		s.note("staged " + kind + " " + s.btAddr)
+		s.syncApply()
 	}
 	adapter := s.bt.Adapter
 	if adapter == "" {
@@ -333,8 +355,8 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 		uitoolkit.NewTitle("Bluetooth"),
 		uitoolkit.NewLabel("BlueZ D-Bus pairing agent. Pair opens a PIN dialog; Apply writes $XDG_RUNTIME_DIR/coda/bluetooth-pin and the agent reads it (or waits up to 12s)."),
 		uitoolkit.NewLabel("Adapter "+adapter),
-		uitoolkit.NewSwitch("Adapter power", s.btPower, func(on bool) { s.btPower = on }),
-		uitoolkit.NewSwitch("Scan", s.btScan, func(on bool) { s.btScan = on }),
+		uitoolkit.NewSwitch("Adapter power", s.btPower, func(on bool) { s.btPower = on; s.syncApply() }),
+		uitoolkit.NewSwitch("Scan", s.btScan, func(on bool) { s.btScan = on; s.syncApply() }),
 		table,
 		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), addr).WithGap(8),
 		uitoolkit.NewRow(
@@ -343,7 +365,7 @@ func (s *session) bluetoothPage() uitoolkit.Component {
 			uitoolkit.NewButton("Stage disconnect", func() { stageAddr("disconnect") }),
 			uitoolkit.NewButton("Stage trust", func() { stageAddr("trust") }),
 		).WithGap(8),
-		s.refreshBtn(protocol.PathBluetooth),
+		s.pageActions(protocol.PathBluetooth),
 	).WithGap(8)
 }
 
@@ -399,44 +421,44 @@ func (s *session) showPINDialog() {
 }
 
 func (s *session) inputPage() uitoolkit.Component {
-	layout := uitoolkit.NewTextField(s.input.KBLayout, "us", func(v string) { s.input.KBLayout = v })
-	keymap := uitoolkit.NewTextField(s.input.Keymap, "us", func(v string) { s.input.Keymap = v })
+	layout := uitoolkit.NewTextField(s.input.KBLayout, "us", func(v string) { s.input.KBLayout = v; s.syncApply() })
+	keymap := uitoolkit.NewTextField(s.input.Keymap, "us", func(v string) { s.input.Keymap = v; s.syncApply() })
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Input"),
 		uitoolkit.NewLabel("XKB / vconsole via localectl + Hyprland hl.input eval."),
 		uitoolkit.NewRow(uitoolkit.NewLabel("KB layout"), layout).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Console keymap"), keymap).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Pointer speed"), uitoolkit.NewNumberField(-1, 1, s.input.PointerSpeed, 0.1, func(v float64) { s.input.PointerSpeed = v })).WithGap(8),
-		uitoolkit.NewSwitch("Natural scroll", s.input.NaturalScroll, func(on bool) { s.input.NaturalScroll = on }),
-		uitoolkit.NewSwitch("Tap to click", s.input.TapToClick, func(on bool) { s.input.TapToClick = on }),
-		s.refreshBtn(protocol.PathInput),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Pointer speed"), uitoolkit.NewNumberField(-1, 1, s.input.PointerSpeed, 0.1, func(v float64) { s.input.PointerSpeed = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewSwitch("Natural scroll", s.input.NaturalScroll, func(on bool) { s.input.NaturalScroll = on; s.syncApply() }),
+		uitoolkit.NewSwitch("Tap to click", s.input.TapToClick, func(on bool) { s.input.TapToClick = on; s.syncApply() }),
+		s.pageActions(protocol.PathInput),
 	).WithGap(8)
 }
 
 func (s *session) datetimePage() uitoolkit.Component {
-	tz := uitoolkit.NewTextField(s.dt.Timezone, "America/Denver", func(v string) { s.dt.Timezone = v })
-	tm := uitoolkit.NewTextField(s.dt.Time, "YYYY-MM-DD HH:MM:SS", func(v string) { s.dt.Time = v })
+	tz := uitoolkit.NewTextField(s.dt.Timezone, "America/Denver", func(v string) { s.dt.Timezone = v; s.syncApply() })
+	tm := uitoolkit.NewTextField(s.dt.Time, "YYYY-MM-DD HH:MM:SS", func(v string) { s.dt.Time = v; s.syncApply() })
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Date & time"),
 		uitoolkit.NewLabel("timedatectl: timezone, NTP, optional manual time."),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Timezone"), tz).WithGap(8),
-		uitoolkit.NewSwitch("NTP", s.dt.NTP, func(on bool) { s.dt.NTP = on }),
+		uitoolkit.NewSwitch("NTP", s.dt.NTP, func(on bool) { s.dt.NTP = on; s.syncApply() }),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Set time"), tm).WithGap(8),
-		s.refreshBtn(protocol.PathDateTime),
+		s.pageActions(protocol.PathDateTime),
 	).WithGap(8)
 }
 
 func (s *session) localePage() uitoolkit.Component {
-	lang := uitoolkit.NewTextField(s.loc.Lang, "en_US.UTF-8", func(v string) { s.loc.Lang = v })
-	km := uitoolkit.NewTextField(s.loc.Keymap, "us", func(v string) { s.loc.Keymap = v })
-	tz := uitoolkit.NewTextField(s.loc.Timezone, "America/Denver", func(v string) { s.loc.Timezone = v })
+	lang := uitoolkit.NewTextField(s.loc.Lang, "en_US.UTF-8", func(v string) { s.loc.Lang = v; s.syncApply() })
+	km := uitoolkit.NewTextField(s.loc.Keymap, "us", func(v string) { s.loc.Keymap = v; s.syncApply() })
+	tz := uitoolkit.NewTextField(s.loc.Timezone, "America/Denver", func(v string) { s.loc.Timezone = v; s.syncApply() })
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Locale"),
 		uitoolkit.NewLabel("localectl / locale.conf. Apply writes LANG and keymap."),
 		uitoolkit.NewRow(uitoolkit.NewLabel("LANG"), lang).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Keymap"), km).WithGap(8),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Timezone"), tz).WithGap(8),
-		s.refreshBtn(protocol.PathLocale),
+		s.pageActions(protocol.PathLocale),
 	).WithGap(8)
 }
 
@@ -487,7 +509,7 @@ func (s *session) devicesPage() uitoolkit.Component {
 		uitoolkit.NewTitle("Devices"),
 		uitoolkit.NewLabel(summary),
 		pci, usb,
-		s.refreshBtn("devices"),
+		s.refreshBtn(protocol.PathDevicesSummary),
 	).WithGap(8)
 }
 
@@ -536,12 +558,17 @@ func (s *session) sessionPage() uitoolkit.Component {
 		uitoolkit.NewLabel("logind sessions + seats. Apply = lock only (loginctl lock-sessions, then coda-hyprlock). Reboot/poweroff are not allowlisted."),
 		uitoolkit.NewLabel(fmt.Sprintf("IdleHint %v   inhibit %s", s.idleHint, inh)),
 		table, seats,
-		s.refreshBtn(protocol.PathSession),
+		uitoolkit.NewButton("Stage lock", func() {
+			s.sessionAct = "lock"
+			s.note("staged lock")
+			s.syncApply()
+		}),
+		s.pageActions(protocol.PathSession),
 	).WithGap(8)
 }
 
 func (s *session) powerPage() uitoolkit.Component {
-	lid := uitoolkit.NewTextField(s.power.Lid, "ignore|suspend|lock", func(v string) { s.power.Lid = v })
+	lid := uitoolkit.NewTextField(s.power.Lid, "ignore|suspend|lock", func(v string) { s.power.Lid = v; s.syncApply() })
 	max := float32(s.power.MaxBrightness)
 	if max <= 0 {
 		max = 100
@@ -552,11 +579,11 @@ func (s *session) powerPage() uitoolkit.Component {
 		uitoolkit.NewLabel("Brightness when a backlight exists. Lid HandleLidSwitch via logind drop-in. Suspend/hibernate are gated; reboot/poweroff are not allowlisted."),
 		uitoolkit.NewLabel(fmt.Sprintf("CanSuspend %v   CanHibernate %v", s.power.CanSuspend, s.power.CanHibernate)),
 		uitoolkit.NewLabel(fmt.Sprintf("Backlight %s  %d / %d", s.power.Backlight, int(s.bright), s.power.MaxBrightness)),
-		uitoolkit.NewSlider(0, max, cur, func(v float32) { s.bright = float64(v) }),
+		uitoolkit.NewSlider(0, max, cur, func(v float32) { s.bright = float64(v); s.syncApply() }),
 		uitoolkit.NewRow(uitoolkit.NewLabel("Lid"), lid).WithGap(8),
-		uitoolkit.NewButton("Stage suspend", func() { s.power.Action = "suspend"; s.note("staged suspend") }),
-		uitoolkit.NewButton("Stage hibernate", func() { s.power.Action = "hibernate"; s.note("staged hibernate") }),
-		s.refreshBtn(protocol.PathPower),
+		uitoolkit.NewButton("Stage suspend", func() { s.power.Action = "suspend"; s.note("staged suspend"); s.syncApply() }),
+		uitoolkit.NewButton("Stage hibernate", func() { s.power.Action = "hibernate"; s.note("staged hibernate"); s.syncApply() }),
+		s.pageActions(protocol.PathPower),
 	).WithGap(8)
 }
 
@@ -590,15 +617,16 @@ func (s *session) printersPage() uitoolkit.Component {
 			} else {
 				s.printerOn = true
 			}
+			s.syncApply()
 		}
 	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Printers"),
 		uitoolkit.NewLabel(note),
 		table,
-		uitoolkit.NewRow(uitoolkit.NewLabel("Default"), uitoolkit.NewTextField(s.printerName, "printer name", func(v string) { s.printerName = v })).WithGap(8),
-		uitoolkit.NewSwitch("Enabled", s.printerOn, func(on bool) { s.printerOn = on }),
-		s.refreshBtn(protocol.PathPrinters),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Default"), uitoolkit.NewTextField(s.printerName, "printer name", func(v string) { s.printerName = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewSwitch("Enabled", s.printerOn, func(on bool) { s.printerOn = on; s.syncApply() }),
+		s.pageActions(protocol.PathPrinters),
 	).WithGap(8)
 }
 
@@ -624,15 +652,16 @@ func (s *session) usersPage() uitoolkit.Component {
 		if i >= 0 && i < len(s.users.Users) {
 			s.userName = s.users.Users[i].Name
 			s.userShell = s.users.Users[i].Shell
+			s.syncApply()
 		}
 	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Users"),
 		uitoolkit.NewLabel("Local accounts from /etc/passwd. Apply changes login shell only (usermod -s). No add/delete/password."),
 		table,
-		uitoolkit.NewRow(uitoolkit.NewLabel("User"), uitoolkit.NewTextField(s.userName, "live", func(v string) { s.userName = v })).WithGap(8),
-		uitoolkit.NewRow(uitoolkit.NewLabel("Shell"), uitoolkit.NewTextField(s.userShell, "/bin/bash", func(v string) { s.userShell = v })).WithGap(8),
-		s.refreshBtn(protocol.PathUsers),
+		uitoolkit.NewRow(uitoolkit.NewLabel("User"), uitoolkit.NewTextField(s.userName, "live", func(v string) { s.userName = v; s.syncApply() })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Shell"), uitoolkit.NewTextField(s.userShell, "/bin/bash", func(v string) { s.userShell = v; s.syncApply() })).WithGap(8),
+		s.pageActions(protocol.PathUsers),
 	).WithGap(8)
 }
 
@@ -663,17 +692,18 @@ func (s *session) storagePage() uitoolkit.Component {
 	}, func(i int) {
 		if i >= 0 && i < len(s.storage.Block) {
 			s.storageName = s.storage.Block[i].Name
+			s.syncApply()
 		}
 	})
 	return uitoolkit.NewColumn(
 		uitoolkit.NewTitle("Storage"),
 		uitoolkit.NewLabel(note+" Apply mount/unmount via udisksctl. System mounts (/, /boot, /usr, /home) are refused."),
 		table,
-		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), uitoolkit.NewTextField(s.storageName, "sdb1", func(v string) { s.storageName = v })).WithGap(8),
+		uitoolkit.NewRow(uitoolkit.NewLabel("Device"), uitoolkit.NewTextField(s.storageName, "sdb1", func(v string) { s.storageName = v; s.syncApply() })).WithGap(8),
 		uitoolkit.NewRow(
-			uitoolkit.NewButton("Stage mount", func() { s.storageAct = "mount"; s.note("staged mount " + s.storageName) }),
-			uitoolkit.NewButton("Stage unmount", func() { s.storageAct = "unmount"; s.note("staged unmount " + s.storageName) }),
+			uitoolkit.NewButton("Stage mount", func() { s.storageAct = "mount"; s.note("staged mount " + s.storageName); s.syncApply() }),
+			uitoolkit.NewButton("Stage unmount", func() { s.storageAct = "unmount"; s.note("staged unmount " + s.storageName); s.syncApply() }),
 		).WithGap(8),
-		s.refreshBtn(protocol.PathStorage),
+		s.pageActions(protocol.PathStorage),
 	).WithGap(8)
 }
