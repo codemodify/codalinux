@@ -36,6 +36,8 @@ diffutils
 logrotate
 perl
 python
+openssh
+qemu-guest-agent
 
 # --- packages/hardware.txt ---
 mesa

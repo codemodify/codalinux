@@ -16,6 +16,7 @@ pv
 rsync
 wget
 curl
+# Also in base.txt so coda-install targets get SSH (keep on live).
 openssh
 smartmontools
 hdparm
@@ -29,5 +30,6 @@ wireless-regdb
 sof-firmware
 cryptsetup
 lvm2
+# Also in base.txt so coda-install targets get QGA (keep on live).
 qemu-guest-agent
 virtualbox-guest-utils

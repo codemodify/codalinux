@@ -39,3 +39,9 @@ diffutils
 logrotate
 perl
 python
+
+# VM / remote access (also listed in live.txt; compose dedupes).
+# Installed systems need these so QGA and sshd work after coda-install
+# without a live chroot patch.
+openssh
+qemu-guest-agent

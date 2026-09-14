@@ -36,6 +36,8 @@ diffutils
 logrotate
 perl
 python
+openssh
+qemu-guest-agent
 
 # --- packages/hardware.txt ---
 mesa
@@ -140,7 +142,6 @@ pv
 rsync
 wget
 curl
-openssh
 smartmontools
 hdparm
 nvme-cli
@@ -153,6 +154,5 @@ wireless-regdb
 sof-firmware
 cryptsetup
 lvm2
-qemu-guest-agent
 virtualbox-guest-utils
 
