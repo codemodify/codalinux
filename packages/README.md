@@ -19,7 +19,7 @@ Compose default sets into ISO and installer consumers:
 | `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime, system-config-gui Wayland/X11 libs |
 | `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura, settings apps |
 | `sandbox.txt` | yes | `bubblewrap` — app isolation backbone (`coda-sandbox`) |
-| `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools (`openssh` / `qemu-guest-agent` also in `base.txt` so install keeps them) |
+| `live.txt` | ISO only | archiso-mandatory + live recovery tools (`openssh` / `qemu-guest-agent` also in `base.txt` so install keeps them). `archinstall` remains on the ISO but is not the first-install path. |
 | `ags-build-deps.txt` | no | Official-repo deps to *compile* AGS/Astal at ISO build time |
 | `system-config-gui-build-deps.txt` | no | Official-repo deps to *compile* `system-config-gui` with CGO (Wayland/X11/EGL) |
 | `hyprbars-build-deps.txt` | no | Official-repo deps to *compile* hyprbars (includes `hyprland` headers) |

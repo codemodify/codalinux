@@ -86,18 +86,21 @@ fi
 if [[ -n "${scripts_src}" ]]; then
   install -d /usr/local/bin
   local_bin=""
-  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws coda-ags coda-settings coda-sandbox coda-install; do
+  for local_bin in coda-wallpaper coda-hyprpaper coda-hyprland coda-hypr-ws coda-ags coda-settings coda-sandbox coda-install coda-slot; do
     if [[ -f "${scripts_src}/${local_bin}" ]]; then
       install -m 0755 "${scripts_src}/${local_bin}" "/usr/local/bin/${local_bin}"
       log "wrapper → /usr/local/bin/${local_bin}"
     fi
   done
-  if [[ -f "${scripts_src}/coda-install-config.py" ]]; then
-    install -d /usr/local/lib/codalinux
-    install -m 0755 "${scripts_src}/coda-install-config.py" \
-      /usr/local/lib/codalinux/coda-install-config.py
-    log "helper → /usr/local/lib/codalinux/coda-install-config.py"
-  fi
+  install -d /usr/local/lib/codalinux
+  for helper in coda-install-config.py coda-install-lib.sh coda-install-layout.py \
+                coda-install-ab.sh coda-install-post.sh coda-install-verify.sh; do
+    if [[ -f "${scripts_src}/${helper}" ]]; then
+      install -m 0755 "${scripts_src}/${helper}" \
+        "/usr/local/lib/codalinux/${helper}"
+      log "helper → /usr/local/lib/codalinux/${helper}"
+    fi
+  done
 fi
 
 # Optional host-built system-config (ISO already ships these after rebuild).

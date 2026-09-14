@@ -123,6 +123,14 @@ prepare_overlay() {
     "${overlay}/usr/local/lib/codalinux/coda-install-post.sh"
   install -m 0755 "${root}/scripts/coda-install-post.sh" \
     "${overlay}/usr/share/codalinux/install/coda-install-post.sh"
+  install -m 0755 "${root}/scripts/coda-install-lib.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-lib.sh"
+  install -m 0755 "${root}/scripts/coda-install-layout.py" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-layout.py"
+  install -m 0755 "${root}/scripts/coda-install-ab.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-ab.sh"
+  install -m 0755 "${root}/scripts/coda-install-verify.sh" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-verify.sh"
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"
@@ -189,6 +197,8 @@ prepare_overlay() {
   install -d "${overlay}/usr/local/bin"
   install -m 0755 "${root}/scripts/coda-install" \
     "${overlay}/usr/local/bin/coda-install"
+  install -m 0755 "${root}/scripts/coda-slot" \
+    "${overlay}/usr/local/bin/coda-slot"
   install -m 0755 "${root}/scripts/coda-hyprland" \
     "${overlay}/usr/local/bin/coda-hyprland"
   install -m 0755 "${root}/scripts/coda-settings" \
@@ -213,7 +223,7 @@ prepare_overlay() {
   chmod 0755 "${overlay}/usr/local/bin/coda-"* || true
   local wrap
   for wrap in coda-hyprpaper coda-wallpaper coda-ags coda-hyprland \
-              coda-hyprlock coda-hypr-ws coda-install coda-settings \
+              coda-hyprlock coda-hypr-ws coda-install coda-slot coda-settings \
               coda-sandbox coda-sync-desktop-from-host; do
     if [[ ! -x "${overlay}/usr/local/bin/${wrap}" ]]; then
       echo "build-iso: ${overlay}/usr/local/bin/${wrap} is not executable" >&2

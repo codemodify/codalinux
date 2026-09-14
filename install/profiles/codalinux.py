@@ -1,11 +1,8 @@
-"""CodaLinux installed-system finish hook.
+"""Leftover finish hook. First install is coda-install-ab.sh, not archinstall.
 
-archinstall `custom_commands` run inside arch-chroot, so they cannot copy
-live `/usr/local` (vendored AGS, coda-hyprland, hyprbars). `coda-install`
-runs `coda-install-post.sh` on the live ISO after archinstall exits, with
-the target mount (default `/mnt`).
-
-This module is the same hook: `python3 codalinux.py --target /mnt --user user`.
+`coda-install` / `coda-slot` run `coda-install-post.sh` on the live ISO
+against the target mount (default `/mnt`). This module is the same hook:
+`python3 codalinux.py --target /mnt --user user`.
 """
 
 from __future__ import annotations

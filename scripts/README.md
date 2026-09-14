@@ -4,6 +4,7 @@
 
 - **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later. virtio-vga is 1920x1080; Hyprland pins `1920x1080@60` (`preferred` on virtio EDID is 640x480@120).
 - **ISO smoke** (boot, greetd, first paint): `./scripts/qemu-boot-test.sh` (same 1920x1080 virtio-vga default)
+- **Install + A/B e2e** (abox, local ISO): `./scripts/qemu-install-e2e.sh` — first disk, offline install, reboot, slot update, promote
 - **Package / vendor / squashfs changes**: `./scripts/build-iso.sh`
 
 ## Inventory
@@ -18,8 +19,13 @@
 | `build-iso.sh` | Native/rootless `mkarchiso`, or Docker/Podman **without sudo**; vendors AGS |
 | `vendor-ags.sh` | Compile pinned AGS/Astal into airootfs `/usr/local` (works unprivileged via a staging sysroot) |
 | `vendor-hyprbars.sh` | Compile pinned hyprbars against official `hyprland` headers into `/usr/local/lib/hyprland` |
-| `coda-install` | Live helper: prints `user`/`1`, disk prompt, then archinstall + `coda-install-post.sh` |
-| `coda-install-post.sh` | After archinstall: copy live desktop to `/mnt`, greetd autologin `user` |
+| `coda-install` | Live helper: disk pick / `CODA_INSTALL_DISK=auto`, space check, offline A/B install into OS-A |
+| `coda-install-layout.py` | Size planner + `check` / `minimums` (v1 floor ~22 GiB; recommend 32G) |
+| `coda-install-ab.sh` | GPT ESP+A+B+data, rsync airootfs into A, systemd-boot, post-install |
+| `coda-install-post.sh` | After the offline copy: live desktop, greetd autologin `user`, QGA+sshd |
+| `coda-slot` | Inactive-slot install, oneshot `boot-test`, `promote` |
+| `coda-install-verify.sh` | Guest layout / Hyprland checks (`ID=codalinux` for `--boot`) |
+| `qemu-install-e2e.sh` | Host QEMU+QGA loop for steps 1–8 (local ISO, no prompts, no NIC) |
 | `coda-pacman-init.sh` | Live keyring oneshot (after graphical; no-ops if already populated) |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
 | `coda-ags` | Start or message the vendored AGS shell (`ags run` / `ags toggle`); cds to `$HOME`/`/tmp` first |

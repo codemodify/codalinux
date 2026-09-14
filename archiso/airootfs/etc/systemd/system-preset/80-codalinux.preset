@@ -6,6 +6,7 @@ enable systemd-resolved.service
 enable iwd.service
 enable bluetooth.service
 enable system-config-apply.service
+enable qemu-guest-agent.service
 
 disable NetworkManager.service
 disable firewalld.service
