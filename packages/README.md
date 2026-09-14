@@ -13,13 +13,13 @@ Compose default sets into ISO and installer consumers:
 
 | File | In default compose? | Purpose |
 | --- | --- | --- |
-| `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo |
+| `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo, openssh, qemu-guest-agent |
 | `hardware.txt` | yes | Mesa, PipeWire, BlueZ |
 | `network.txt` | yes | iwd + resolved-related tools (not NetworkManager) |
 | `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime (gjs/gtk4-layer-shell) |
 | `apps.txt` | yes | foot, Thunar, Firefox, mpv, imv, Zathura, settings apps |
 | `sandbox.txt` | yes | `bubblewrap` — app isolation backbone (`coda-sandbox`) |
-| `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools |
+| `live.txt` | ISO only | archiso-mandatory + archinstall + live recovery tools (`openssh` / `qemu-guest-agent` also in `base.txt` so install keeps them) |
 | `ags-build-deps.txt` | no | Official-repo deps to *compile* AGS/Astal at ISO build time |
 | `hyprbars-build-deps.txt` | no | Official-repo deps to *compile* hyprbars (includes `hyprland` headers) |
 | `nvidia.txt` | no | Proprietary NVIDIA path (hook later) |

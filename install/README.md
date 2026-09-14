@@ -9,7 +9,7 @@ CodaLinux installs with **archinstall**, not Calamares.
 | `user_configuration.json` | Guided-installer answers: systemd-boot, PipeWire, hostname `coda`; `packages` is generated |
 | `packages.txt` | Generated package list (no live-only tools) — source for the JSON array |
 | `profiles/codalinux.py` | Finish hook: runs `coda-install-post.sh` on a target root |
-| `../scripts/coda-install-post.sh` | Real post-install: copy live `/usr/local` desktop, greetd for `user`, networkd+iwd |
+| `../scripts/coda-install-post.sh` | Real post-install: copy live `/usr/local` desktop, greetd for `user`, networkd+iwd, QGA+sshd |
 
 Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset.
 
@@ -32,7 +32,8 @@ Post-install on the target:
 3. `codalinux-hyprland.desktop` Wayland session.
 4. greetd enabled, autologin **`user`** → `/usr/local/bin/coda-hyprland` (never `live`).
 5. systemd-networkd, systemd-resolved, iwd enabled; NetworkManager not required.
-6. Branding/os-release hook if present.
+6. `qemu-guest-agent.service` and `sshd.service` enabled (password auth for `user`/`1`). Installed images include `qemu-guest-agent` and `openssh` so VM/disk e2e and SSH work without a live chroot patch. Live ISO still ships both.
+7. Branding/os-release hook if present.
 
 ```bash
 CODA_INSTALL_DISK=/dev/vda coda-install

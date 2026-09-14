@@ -61,6 +61,8 @@
     "logrotate",
     "perl",
     "python",
+    "openssh",
+    "qemu-guest-agent",
     "mesa",
     "mesa-utils",
     "vulkan-icd-loader",
@@ -148,7 +150,9 @@
     "systemd-networkd",
     "systemd-resolved",
     "iwd",
-    "bluetooth"
+    "bluetooth",
+    "qemu-guest-agent",
+    "sshd"
   ],
   "silent": false,
   "swap": true,

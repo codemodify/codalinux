@@ -100,6 +100,8 @@ enable systemd-networkd.service
 enable systemd-resolved.service
 enable iwd.service
 enable bluetooth.service
+enable qemu-guest-agent.service
+enable sshd.service
 disable NetworkManager.service
 disable firewalld.service
 disable cups.service
@@ -127,7 +129,7 @@ EOF
 
   systemctl --root="${root}" enable greetd.service systemd-networkd.service \
     systemd-resolved.service iwd.service bluetooth.service \
-    system-config-apply.service || true
+    system-config-apply.service qemu-guest-agent.service sshd.service || true
   systemctl --root="${root}" disable NetworkManager.service 2>/dev/null || true
   systemctl --root="${root}" disable firewalld.service 2>/dev/null || true
   systemctl --root="${root}" disable cups.service 2>/dev/null || true
@@ -239,6 +241,8 @@ if [[ "${same_root}" -eq 0 ]]; then
   copy_if /etc/systemd/network/20-wireless.network \
     "${target}/etc/systemd/network/20-wireless.network"
   copy_if /etc/iwd/main.conf "${target}/etc/iwd/main.conf"
+  copy_if /etc/ssh/sshd_config.d/10-codalinux.conf \
+    "${target}/etc/ssh/sshd_config.d/10-codalinux.conf"
 else
   log "running on target root; configuring in place (user=${user})"
 fi
@@ -281,4 +285,5 @@ if grep -q 'user = "live"' "${target}/etc/greetd/config.toml"; then
 fi
 
 log "greetd will autologin ${user} via /usr/local/bin/coda-hyprland"
+log "enabled qemu-guest-agent.service and sshd.service"
 log "done"
