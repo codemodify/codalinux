@@ -14,6 +14,7 @@ need_bins=(
   coda-hyprpaper
   coda-wallpaper
   coda-install
+  coda-slot
   coda-settings
   coda-sandbox
   coda-sync-desktop-from-host
@@ -42,7 +43,7 @@ for bin in "${need_bins[@]}"; do
 done
 
 for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
-           coda-hypr-ws coda-install coda-settings coda-sandbox system-config-gui; do
+           coda-hypr-ws coda-install coda-slot coda-settings coda-sandbox system-config-gui; do
   f="${root}/scripts/${src}"
   if [[ ! -f "${f}" ]]; then
     log_fail "missing source wrapper: ${f}"
@@ -53,20 +54,22 @@ for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
   fi
 done
 
-for helper_name in coda-install-config.py coda-pacman-init.sh coda-install-post.sh; do
+for helper_name in coda-install-config.py coda-pacman-init.sh coda-install-post.sh \
+                   coda-install-lib.sh coda-install-layout.py coda-install-ab.sh \
+                   coda-install-verify.sh; do
   helper_src="${root}/scripts/${helper_name}"
   helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/${helper_name}"
   if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
     log_fail "missing executable scripts/${helper_name}"
   fi
-  if [[ "${helper_name}" == coda-install-config.py ]]; then
-    if [[ ! -f "${helper_overlay}" || ! -x "${helper_overlay}" ]]; then
-      log_fail "missing executable airootfs ${helper_name}"
-    fi
-    if ! grep -qF "[\"/usr/local/lib/codalinux/${helper_name}\"]=\"0:0:755\"" \
-        "${root}/archiso/profiledef.sh"; then
-      log_fail "profiledef.sh missing 755 for ${helper_name}"
-    fi
+  if ! grep -qF "[\"/usr/local/lib/codalinux/${helper_name}\"]=\"0:0:755\"" \
+      "${root}/archiso/profiledef.sh"; then
+    log_fail "profiledef.sh missing 755 for ${helper_name}"
+  fi
+  # airootfs/usr/local/lib is gitignored for vendor-ags output. Authored
+  # helpers are force-added when present; build-iso.sh always copies them.
+  if [[ -e "${helper_overlay}" && ! -x "${helper_overlay}" ]]; then
+    log_fail "airootfs ${helper_name} exists but is not executable"
   fi
 done
 if ! grep -qF "[\"/usr/local/lib/codalinux/coda-pacman-init.sh\"]=\"0:0:755\"" \
@@ -82,6 +85,32 @@ if ! grep -qF 'user: ${CODA_INSTALL_USER:-user}' "${root}/scripts/coda-install";
 fi
 if ! grep -qF 'password: ${CODA_INSTALL_PASSWORD:-1}' "${root}/scripts/coda-install"; then
   log_fail "coda-install must print default password 1"
+fi
+if ! grep -q 'CODA_INSTALL_DISK' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must honor CODA_INSTALL_DISK"
+fi
+if ! grep -q 'disk=auto\|--first-disk\|auto|first' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must accept auto/first disk for unattended e2e"
+fi
+if [[ ! -x "${root}/scripts/qemu-install-e2e.sh" ]]; then
+  log_fail "missing executable scripts/qemu-install-e2e.sh (host A/B e2e)"
+fi
+if ! python3 "${root}/scripts/coda-install-layout_test.py" >/tmp/coda-layout-test.out 2>&1; then
+  log_fail "coda-install-layout_test.py failed"
+  cat /tmp/coda-layout-test.out >&2 || true
+fi
+for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
+          coda-install-verify.sh qemu-install-e2e.sh; do
+  if ! bash -n "${root}/scripts/${sh}"; then
+    log_fail "bash -n failed: scripts/${sh}"
+  fi
+done
+if [[ ! -L "${root}/archiso/airootfs/etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service" ]]; then
+  log_fail "live ISO must enable qemu-guest-agent.service (QEMU e2e)"
+fi
+if ! grep -q 'enable qemu-guest-agent.service' \
+    "${root}/archiso/airootfs/etc/systemd/system-preset/80-codalinux.preset"; then
+  log_fail "preset must enable qemu-guest-agent.service"
 fi
 if grep -q 'raise NotImplementedError' "${root}/install/profiles/codalinux.py"; then
   log_fail "install/profiles/codalinux.py must not be a NotImplementedError stub"

@@ -67,7 +67,7 @@ NVIDIA work is limited to [`packages/nvidia.txt`](packages/nvidia.txt) and [`scr
 
 `iwd` must not be configured to do its own IP setup (`EnableNetworkConfiguration=false`) so networkd remains the DHCP client.
 
-archinstall's guided installer historically defaults toward NetworkManager for desktop profiles. CodaLinux must override that via a custom profile and/or post-install steps. See [`install/README.md`](install/README.md).
+The Coda installer does not use NetworkManager. `coda-install-post.sh` enables systemd-networkd, systemd-resolved, and iwd on the installed slot. See [`install/README.md`](install/README.md).
 
 ### Display and desktop
 
@@ -114,7 +114,7 @@ Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [ar
 | Decision | Choice |
 | --- | --- |
 | Live image | archiso profile in `archiso/` |
-| Installer | archinstall (guided JSON + custom CodaLinux profile) |
+| Installer | Coda-owned offline copy (`coda-install`); archinstall JSON is leftover |
 | Calamares | **Not used** |
 | ISO rebuilds | Periodic, later — not every upstream Arch ISO date |
 
@@ -219,7 +219,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 | `DESIGN.md` | This decision log |
 | `packages/` | Editable source of truth for package names |
 | `archiso/` | One archiso **profile** (not a copy of the `archiso` tool) |
-| `install/` | archinstall JSON + custom profile stubs |
+| `install/` | leftover archinstall JSON; first install is `scripts/coda-install*` |
 | `desktop/` | User-session configs and the AGS app tree |
 | `branding/` | Files that identify the OS (os-release, issue, themes) |
 | `sessions/` | Display-manager session desktop files |
@@ -265,7 +265,7 @@ Enabled on live and (via the installer profile) on the installed system:
 
 Not enabled: NetworkManager, CUPS, firewalld, Plymouth.
 
-Live ISO service symlinks live under `archiso/airootfs/etc/systemd/system/`. Installed-system enablement is an archinstall profile responsibility.
+Live ISO service symlinks live under `archiso/airootfs/etc/systemd/system/`. Installed-system enablement is `coda-install-post.sh` (and the live preset copied onto the slot).
 
 `pacman-init.service` must **not** be `WantedBy=multi-user.target`. Graphical.target waits on multi-user, so that oneshot (`pacman-key --init` + `--populate`) delayed greetd/Hyprland by tens of seconds. A `pacman-init.timer` (`WantedBy=timers.target`, `OnBootSec=3s`) starts the same job **after** `graphical.target`. The stock `etc-pacman.d-gnupg.mount` tmpfs is masked: it wiped `/etc/pacman.d/gnupg` every boot. `scripts/build-iso.sh` best-effort bakes that keyring (`unshare --map-root-user` when not root; never sudo; failures are logged and the ISO build continues). The live oneshot still populates after greetd if bake skipped. Do not delete pacman-init — `coda-install` / live `pacman` still need a keyring.
 
@@ -284,7 +284,7 @@ Live systemd-boot `archiso/efiboot/loader/loader.conf` uses `timeout 1` (editor 
 | Live session | greetd autologins user `live` into `/usr/local/bin/coda-hyprland` on tty1; tty2 is a root rescue console | Live ISO |
 | Installed users | `user` / `1` (sudo); root `1` | Env override |
 
-Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` / `user_configuration.json` preseed the same values and must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; layout is generated as root (`sudo -E python3 … --emit-layout`) because archinstall disk helpers recurse as `live`, then `archinstall --silent`. Default login is **`user` / `1`** (root password `1`), printed before archinstall. After a successful install, `coda-install-post.sh` copies the live desktop onto `/mnt` and enables greetd autologin for `user` (not `live`). Env overrides (`CODA_INSTALL_CREDS`, `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD`) remain for automation.
+Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; `CODA_INSTALL_DISK=/dev/vda` or `auto` (first `lsblk` disk) is the silent path. Layout is ESP + OS-A + OS-B + data (see [architecture.md](architecture.md)). The live airootfs is copied **offline** into OS-A — no pacstrap, no mirrors. Default login is **`user` / `1`** (root password `1`). `coda-install-post.sh` still wires greetd autologin for `user` (not `live`), QGA, and sshd. `coda-slot` writes the same payload into the inactive slot; `boot-test` is a systemd-boot oneshot; `promote` flips the default after a successful boot. Host e2e: `scripts/qemu-install-e2e.sh`.
 
 Live overlay size is **`cow_spacesize=4G`** on the systemd-boot entry (tmpfs limit for `/run/archiso/cowspace`). Stock 256M is too small for `coda-sandbox create` (~500M+ `base`).
 
@@ -299,7 +299,7 @@ Live GUI notes:
 - Floating windows use vendored **hyprbars** (`/usr/local/lib/hyprland/libhyprbars.so`, hyprland-plugins `7644cecdb947060682891a0db2a0cdc5c0b9e704`, the official hyprpm pin for Hyprland 0.56.2) for close / maximize / minimize. Tiled windows keep `hyprbars:no_bar`. Minimize uses `coda-hypr-ws minimize` (`special:minimized`). The plugin is compiled at ISO build time against official `hyprland` headers; do not run `hyprpm` on the live image. Do not track hyprland-plugins `main` — later chases need headers newer than Arch `hyprland` 0.56.2.
 - Live wallpaper is Plasma **Horos** (Nuno Pinheiro / Oxygen, not a Coda original) at `branding/wallpapers/default.png` via `coda-wallpaper` (`hyprpaper`, then `swaybg` on the live/VM path) at `/usr/share/backgrounds/codalinux/default.png`. `scripts/gen-wallpaper.py` must not overwrite that file. hyprlock uses the same path. Live hypridle does not lock or DPMS-off on idle (hyprlock dies under VirtualBox/pixman). Super+L runs `coda-hyprlock`. If hyprlock still crashes: `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'` and `killall -9 hyprlock`.
 
-Swap (partition vs zram vs none) is **not** locked. The archinstall JSON currently leaves `swap` at `true` as an installer default only.
+Swap (partition vs zram vs none) is **not** locked. The Coda installer does not create a swap partition.
 
 ### Boot modes
 
@@ -341,4 +341,4 @@ Do not add `bios.syslinux.*`.
 
 ## Next steps
 
-See [architecture.md](architecture.md) for the system picture and [docs/TODO.md](docs/TODO.md) for the ISO build, archinstall profile, AGS shell, and sandbox / A/B backlog.
+See [architecture.md](architecture.md) for the system picture and [docs/TODO.md](docs/TODO.md) for the ISO build, installer, AGS shell, and sandbox / A/B backlog.

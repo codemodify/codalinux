@@ -1,6 +1,6 @@
 # CodaLinux
 
-CodaLinux is an [Arch Linux](https://archlinux.org/)-based rolling desktop distribution. It ships a custom [Hyprland](https://hypr.land/) compositor session and an [AGS](https://aylur.github.io/ags/)/[Astal](https://aylur.github.io/astal/) unified shell. The installed system tracks official Arch repositories; this tree only holds branding, session layout, live ISO profile stubs, and an [archinstall](https://archlinux.org/packages/extra/any/archinstall/) profile.
+CodaLinux is an [Arch Linux](https://archlinux.org/)-based rolling desktop distribution. It ships a custom [Hyprland](https://hypr.land/) compositor session and an [AGS](https://aylur.github.io/ags/)/[Astal](https://aylur.github.io/astal/) unified shell. The installed system tracks official Arch repositories; this tree holds branding, session layout, the live ISO profile, and a Coda-owned offline installer (`coda-install`).
 
 This repository is a **v1 scaffold**. It captures locked architecture decisions and a conventional directory layout so the ISO, installer profile, and desktop shell can be implemented without re-litigating the stack.
 
@@ -18,7 +18,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Display | Wayland + XWayland default; XLibre (X11) session path supported later |
 | Display manager | greetd (placeholder greeter) |
 | Desktop | Hyprland + AGS/Astal (vendored into `/usr/local`; no Waybar interim) |
-| Delivery | archiso live ISO + archinstall (not Calamares) |
+| Delivery | archiso live ISO + offline `coda-install` (not Calamares) |
 | Support | GitHub issues |
 
 The system picture (partitions → layers → `/` → sandboxes → **system-config** → updates) is **[architecture.md](architecture.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**. `system-config` implementation: [`core/system-config/`](core/system-config/README.md) (ISO-wired).
@@ -86,15 +86,15 @@ The live ISO autologins user `live` into Hyprland on tty1 (`coda-hyprland` → `
 
 A GitHub Actions workflow (`Build live ISO`) uploads `codalinux-live-iso` as an artifact when it succeeds.
 
-### Install with archinstall
+### Install (offline, one disk)
 
-From a CodaLinux (or Arch) live environment, once the profile is wired up:
+From the CodaLinux live ISO (no network required at install time):
 
 ```bash
 coda-install
 ```
 
-That helper preseeds Bozeman locale/timezone/keymap and only asks for the disk (when it can). `CODA_INSTALL_DISK=/dev/vda coda-install` generates `disk_config` as root, prints **`user` / `1`**, runs `archinstall --silent`, then `coda-install-post.sh` copies the live Hyprland/AGS desktop onto `/mnt` and enables greetd autologin for `user`. See [`install/`](install/README.md).
+That helper keeps Bozeman locale/timezone/keymap and only asks for the disk. `CODA_INSTALL_DISK=/dev/vda coda-install` (or `auto` for the first disk) partitions ESP + OS-A + OS-B + data, copies the live image into OS-A, and enables greetd autologin for **`user` / `1`**. Automated QEMU loop: `./scripts/qemu-install-e2e.sh`. See [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 
@@ -111,7 +111,7 @@ coda-sandbox destroy <env>
 
 Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
-See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). Read-only A/B core slots are the **target**, not implemented yet. The live ISO still includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
+See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented; the running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
 ## What this repo does not contain
 

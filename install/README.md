@@ -1,44 +1,75 @@
-# archinstall profile
+# CodaLinux installer
 
-CodaLinux installs with **archinstall**, not Calamares.
+First install is a **Coda-owned** path (`coda-install` → `coda-install-ab.sh`), not Calamares and not archinstall/pacstrap.
 
-## Files
+Install time is **offline**: the live ISO already contains the system. Nothing is downloaded. ISO **build** may still fetch official Arch packages.
 
-| File | Role |
-| --- | --- |
-| `user_configuration.json` | Guided-installer answers: systemd-boot, PipeWire, hostname `coda`; `packages` is generated |
-| `packages.txt` | Generated package list (no live-only tools) — source for the JSON array |
-| `profiles/codalinux.py` | Finish hook: runs `coda-install-post.sh` on a target root |
-| `../scripts/coda-install-post.sh` | Real post-install: copy live `/usr/local` desktop, greetd for `user`, networkd+iwd, QGA+sshd |
+## Layout
 
-Locale, timezone, and keymap are **fixed** to Bozeman, Montana (`en_US.UTF-8`, `America/Denver`, `us`). `coda-install` must not ask for them. Disk is asked only when `CODA_INSTALL_DISK` is unset.
+Operator picks **one disk**. Locale/timezone/keymap stay Bozeman (`en_US.UTF-8`, `America/Denver`, `us`).
 
-## Default login (always printed)
+| Partition | PARTLABEL | FS | Size (v1) | Mount |
+| --- | --- | --- | --- | --- |
+| ESP | `coda-esp` | FAT32 | 1 GiB | `/boot` |
+| OS-A | `coda-a` | ext4 | 8 GiB floor | `/` on first install |
+| OS-B | `coda-b` | ext4 | 8 GiB floor | inactive (empty until `coda-slot install`) |
+| data | `coda-data` | ext4 | remainder (≥ 4 GiB) | `/coda/data` + bind `/home` + `/var` |
 
-```
-Login after reboot:
-  user: user
-  password: 1
-```
+v1 slots hold the **full live desktop** (not a 4 GiB core-only image). **Minimum disk ~22 GiB** (1+8+8+4 + GPT slack). Recommend **32 GiB** for QEMU. The planner refuses smaller disks with a clear error.
 
-Root password is also `1`. Automation may override with `CODA_INSTALL_CREDS` or `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD` / `CODA_INSTALL_ROOT_PASSWORD`.
+`~/.coda/sandbox` lives on data (`/home`) so it survives slot swaps.
 
-`coda-install` as user `live` writes `$XDG_RUNTIME_DIR/codalinux-archinstall.json` (or `/tmp/codalinux-archinstall-$UID.json`). `disk_config` is generated with `sudo -E python3 … --emit-layout`. After archinstall exits 0, **`coda-install-post.sh /mnt`** runs on the live ISO (not inside arch-chroot — that cannot see live `/usr/local`).
-
-Post-install on the target:
-
-1. Copy live `/usr/local` Coda bits (`coda-hyprland`, `coda-ags`, `ags`, hyprbars, Astal).
-2. Hyprland configs into `/etc/xdg/hypr`, `/etc/skel`, and `/home/user`.
-3. `codalinux-hyprland.desktop` Wayland session.
-4. greetd enabled, autologin **`user`** → `/usr/local/bin/coda-hyprland` (never `live`).
-5. systemd-networkd, systemd-resolved, iwd enabled; NetworkManager not required.
-6. `qemu-guest-agent.service` and `sshd.service` enabled (password auth for `user`/`1`). Installed images include `qemu-guest-agent` and `openssh` so VM/disk e2e and SSH work without a live chroot patch. Live ISO still ships both.
-7. Branding/os-release hook if present.
+## Commands
 
 ```bash
+# Interactive: list disks, confirm wipe
+coda-install
+
+# Silent (QEMU / e2e): first disk or an explicit path
+CODA_INSTALL_DISK=auto coda-install
 CODA_INSTALL_DISK=/dev/vda coda-install
 ```
 
-Keep `"additional-repositories": []`. Do not add a Coda repo.
+Default login after reboot:
 
-The composed install set includes `bubblewrap`. Extra software after install belongs in `coda-sandbox` under `~/.coda/sandbox/<env>`.
+```
+user: user
+password: 1
+```
+
+Root password is also `1`. Override with `CODA_INSTALL_USER` / `CODA_INSTALL_PASSWORD` / `CODA_INSTALL_ROOT_PASSWORD`.
+
+`coda-install-post.sh` still runs on the installed root (greetd → `user`, networkd+iwd, QGA+sshd, live `/usr/local` desktop bits).
+
+## Updates (inactive slot)
+
+From the **live ISO** (offline payload) with the installed disk attached:
+
+```bash
+coda-slot --disk /dev/vda status
+coda-slot --disk /dev/vda install          # write airootfs into inactive (B if A is filled)
+coda-slot --disk /dev/vda boot-test        # systemd-boot oneshot; default unchanged
+# reboot into the oneshot slot; if it fails, next boot is still the old default
+coda-slot promote --slot b                 # only after a successful boot-test
+```
+
+From a running installed system, `--disk` is optional. `install` refuses to write the running slot. Kernels live at `/boot/coda/a/` and `/boot/coda/b/` so A and B do not share one `vmlinuz-linux`.
+
+## Automated e2e (abox)
+
+One host command, no guest TTY, local ISO only:
+
+```bash
+./scripts/qemu-install-e2e.sh
+# or: ./scripts/qemu-install-e2e.sh --phase install
+```
+
+Uses `out/codalinux-*.iso` (or `--build`). QEMU has **no NIC**. Guest disk is the first virtio disk (`/dev/vda`). Steps 1–8: pick disk → layout → offline install A → reboot Hyprland `user`/`1` → write B → oneshot-boot B → promote → reboot B.
+
+Success signal: `/etc/coda/slot` matches, `/home` and `/var` bind `coda-data`, greetd autologin `user`, Hyprland instance under `/run/user/<uid>/hypr`.
+
+Physical laptop promote is **manual after QEMU is green**. Do not run this e2e as a system-config host test.
+
+## Leftover archinstall files
+
+`user_configuration.json`, `packages.txt`, and `profiles/codalinux.py` remain for reference. They are **not** the first-install driver. Keep `"additional-repositories": []`.
