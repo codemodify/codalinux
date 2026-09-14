@@ -86,12 +86,12 @@ type session struct {
 
 	page int
 
-	outputs    []protocol.Output
-	scale      float64
-	savedScale float64
-	outName    string
-	outMode    string
-	outPos     string
+	outputs []protocol.Output
+	scale   float64
+	outName string
+	outMode string
+	outPos  string
+	base    staged
 
 	net        protocol.NetworkModel
 	wifiDev    string
@@ -130,22 +130,23 @@ type session struct {
 	usb      []protocol.USBDevice
 	dmi      protocol.DMI
 
-	sessions []protocol.LoginSession
-	seats    []protocol.Seat
-	inhibits []protocol.Inhibit
-	idleHint bool
-	power    protocol.PowerModel
-	bright   float64
+	sessions   []protocol.LoginSession
+	seats      []protocol.Seat
+	inhibits   []protocol.Inhibit
+	idleHint   bool
+	sessionAct string
+	power      protocol.PowerModel
+	bright     float64
 
-	printers     protocol.PrintersModel
-	printerName  string
-	printerOn    bool
-	users        protocol.UsersModel
-	userName     string
-	userShell    string
-	storage      protocol.StorageModel
-	storageName  string
-	storageAct   string
+	printers    protocol.PrintersModel
+	printerName string
+	printerOn   bool
+	users       protocol.UsersModel
+	userName    string
+	userShell   string
+	storage     protocol.StorageModel
+	storageName string
+	storageAct  string
 
 	status   *widgets.StatusBar
 	applyBtn *widgets.Button
@@ -154,51 +155,80 @@ type session struct {
 }
 
 func newSession(a *app.Application, win *app.Window, cli *client.Client) *session {
-	s := &session{app: a, win: win, cli: cli, scale: 1, savedScale: 1, vol: 0.5}
+	s := &session{app: a, win: win, cli: cli, scale: 1, vol: 0.5}
 	s.reload()
+	s.snapshotAll()
 	return s
 }
 
 func (s *session) path() string { return nav[s.page].Path }
 
-func (s *session) reload() {
+func (s *session) refreshRaw(path string) json.RawMessage {
 	if s.cli == nil {
+		return nil
+	}
+	resp, err := s.cli.Refresh(path)
+	if err != nil || !resp.OK {
+		return nil
+	}
+	return resp.Observed
+}
+
+func (s *session) reload() {
+	for _, p := range protocol.KnownPaths {
+		s.pull(p)
+	}
+	s.snapshotAll()
+}
+
+func (s *session) reloadPath(path string) {
+	s.pull(path)
+	if path == protocol.PathDevicesSummary {
+		s.pull(protocol.PathDevicesPCI)
+		s.pull(protocol.PathDevicesUSB)
+		s.pull(protocol.PathHardwareDMI)
+	}
+	s.snapshot(path)
+}
+
+func (s *session) pull(path string) {
+	raw := s.refreshRaw(path)
+	if len(raw) == 0 {
 		return
 	}
-	refresh := func(path string) json.RawMessage {
-		resp, err := s.cli.Refresh(path)
-		if err != nil || !resp.OK {
-			return nil
-		}
-		return resp.Observed
-	}
-	if raw := refresh(protocol.PathDisplay); len(raw) > 0 {
+	switch path {
+	case protocol.PathDisplay:
 		var d protocol.DisplayModel
-		if json.Unmarshal(raw, &d) == nil {
-			s.outputs = d.Outputs
-			if len(s.outputs) > 0 {
-				o := s.outputs[0]
-				for i := range s.outputs {
-					if s.outputs[i].Focused {
-						o = s.outputs[i]
-						break
-					}
-				}
-				s.outName = o.Name
-				s.outMode = o.Mode
-				s.outPos = o.Position
-				if o.Scale > 0 {
-					s.scale, s.savedScale = o.Scale, o.Scale
+		if json.Unmarshal(raw, &d) != nil {
+			return
+		}
+		s.outputs = d.Outputs
+		if len(s.outputs) > 0 {
+			o := s.outputs[0]
+			for i := range s.outputs {
+				if s.outputs[i].Focused {
+					o = s.outputs[i]
+					break
 				}
 			}
+			s.outName = o.Name
+			s.outMode = o.Mode
+			s.outPos = o.Position
+			if o.Scale > 0 {
+				s.scale = o.Scale
+			}
 		}
-	}
-	if raw := refresh(protocol.PathNetwork); len(raw) > 0 {
+		return
+	case protocol.PathNetwork:
 		_ = json.Unmarshal(raw, &s.net)
 		s.wifiDev = s.net.WiFi.Device
 		s.wifiSSID = s.net.WiFi.Connected
 		s.airplane = s.net.Airplane
-		if s.iface == "" && len(s.net.Links) > 0 {
+		s.wifiPSK = ""
+		s.wifiHidden = false
+		s.net.WiFi.Disconnect = false
+		s.iface = ""
+		if len(s.net.Links) > 0 {
 			s.iface = s.net.Links[0].Name
 		}
 		for _, l := range s.net.Links {
@@ -206,6 +236,8 @@ func (s *session) reload() {
 				s.netMethod = l.Method
 				if len(l.Addresses) > 0 {
 					s.netAddr = l.Addresses[0]
+				} else {
+					s.netAddr = ""
 				}
 				s.netGW = l.Gateway
 				s.netDNS = strings.Join(l.DNS, " ")
@@ -213,8 +245,8 @@ func (s *session) reload() {
 				break
 			}
 		}
-	}
-	if raw := refresh(protocol.PathAudio); len(raw) > 0 {
+		return
+	case protocol.PathAudio:
 		_ = json.Unmarshal(raw, &s.audio)
 		if s.audio.Volume > 0 {
 			s.vol = s.audio.Volume
@@ -222,26 +254,27 @@ func (s *session) reload() {
 		if s.audio.Mute != nil {
 			s.mute = *s.audio.Mute
 		}
-	}
-	if raw := refresh(protocol.PathBluetooth); len(raw) > 0 {
+		return
+	case protocol.PathBluetooth:
 		_ = json.Unmarshal(raw, &s.bt)
 		s.btPower = s.bt.Powered
 		s.btScan = s.bt.Scanning
 		s.btPair, s.btConnect, s.btDisconnect, s.btTrust = nil, nil, nil, nil
-	}
-	if raw := refresh(protocol.PathInput); len(raw) > 0 {
+		s.btPIN = ""
+		return
+	case protocol.PathInput:
 		_ = json.Unmarshal(raw, &s.input)
-	}
-	if raw := refresh(protocol.PathDateTime); len(raw) > 0 {
+		return
+	case protocol.PathDateTime:
 		_ = json.Unmarshal(raw, &s.dt)
-	}
-	if raw := refresh(protocol.PathLocale); len(raw) > 0 {
+		return
+	case protocol.PathLocale:
 		_ = json.Unmarshal(raw, &s.loc)
-	}
-	if raw := refresh(protocol.PathDevicesSummary); len(raw) > 0 {
+		return
+	case protocol.PathDevicesSummary:
 		_ = json.Unmarshal(raw, &s.summary)
-	}
-	if raw := refresh(protocol.PathDevicesPCI); len(raw) > 0 {
+		return
+	case protocol.PathDevicesPCI:
 		var list protocol.PCIList
 		if json.Unmarshal(raw, &list) == nil {
 			s.pciTotal = len(list.Devices)
@@ -250,17 +283,17 @@ func (s *session) reload() {
 				s.pci = s.pci[:pciCap]
 			}
 		}
-	}
-	if raw := refresh(protocol.PathDevicesUSB); len(raw) > 0 {
+		return
+	case protocol.PathDevicesUSB:
 		var list protocol.USBList
 		if json.Unmarshal(raw, &list) == nil {
 			s.usb = list.Devices
 		}
-	}
-	if raw := refresh(protocol.PathHardwareDMI); len(raw) > 0 {
+		return
+	case protocol.PathHardwareDMI:
 		_ = json.Unmarshal(raw, &s.dmi)
-	}
-	if raw := refresh(protocol.PathSession); len(raw) > 0 {
+		return
+	case protocol.PathSession:
 		var sm protocol.SessionModel
 		if json.Unmarshal(raw, &sm) == nil {
 			s.sessions = sm.Sessions
@@ -268,33 +301,23 @@ func (s *session) reload() {
 			s.inhibits = sm.IdleInhibit
 			s.idleHint = sm.IdleHint
 		}
-	}
-	if raw := refresh(protocol.PathPrinters); len(raw) > 0 {
+		s.sessionAct = ""
+		return
+	case protocol.PathPrinters:
 		_ = json.Unmarshal(raw, &s.printers)
-	}
-	if raw := refresh(protocol.PathUsers); len(raw) > 0 {
+		return
+	case protocol.PathUsers:
 		_ = json.Unmarshal(raw, &s.users)
-	}
-	if raw := refresh(protocol.PathStorage); len(raw) > 0 {
+		return
+	case protocol.PathStorage:
 		_ = json.Unmarshal(raw, &s.storage)
-	}
-	if raw := refresh(protocol.PathPower); len(raw) > 0 {
+		s.storageAct = ""
+		return
+	case protocol.PathPower:
 		_ = json.Unmarshal(raw, &s.power)
 		s.bright = float64(s.power.Brightness)
-	}
-}
-
-func (s *session) dirty() bool {
-	if s.cli == nil {
-		return false
-	}
-	switch s.path() {
-	case protocol.PathDisplay:
-		return s.scale > 0 && abs(s.scale-s.savedScale) > 0.01
-	case protocol.PathDevicesSummary:
-		return false
-	default:
-		return true
+		s.power.Action = ""
+		return
 	}
 }
 
@@ -340,35 +363,34 @@ func (s *session) build() uitoolkit.Component {
 	split := uitoolkit.NewSplitter(true, side, uitoolkit.NewPad(12, page))
 	split.Ratio = 0.22
 
-	s.applyBtn = uitoolkit.NewButton("Apply", s.apply)
-	s.applyBtn.Primary = true
-	s.applyBtn.SetEnabled(s.dirty() && s.cli != nil && protocol.Settable(s.path()))
-	hint := uitoolkit.NewLabel("Apply sends staged desired state to system-configd.")
-	actions := uitoolkit.NewRow(s.applyBtn, hint).WithGap(12).WithPad(8)
-
 	st := "system-configd connected"
 	if s.cli == nil {
 		st = "system-configd not running — CLI/GUI still paint; Apply is disabled"
 	}
 	s.status = uitoolkit.NewStatusBar(st, sockpath.Daemon(), "v1")
 
-	chrome := uitoolkit.NewTitleBar("Coda Settings", "All domains via system-configd (uitoolkit)")
-	root := uitoolkit.NewColumn(chrome, split, actions, s.status)
+	chrome := uitoolkit.NewTitleBar("Coda Settings", "Apply is per section — staged edits stay until that section’s Apply or Refresh")
+	root := uitoolkit.NewColumn(chrome, split, s.status)
 	root.AddFlex(split, 1)
 	return root
 }
 
-func (s *session) apply() {
+func (s *session) apply() { s.applyPath(s.path()) }
+
+func (s *session) applyPath(path string) {
 	if s.cli == nil {
 		s.note("system-configd not running")
 		return
 	}
-	path := s.path()
 	if !protocol.Settable(path) {
 		s.note("observe-only")
 		return
 	}
-	data, err := s.desiredJSON()
+	if !s.dirtyPath(path) {
+		s.note("nothing to apply")
+		return
+	}
+	data, err := s.desiredJSON(path)
 	if err != nil {
 		s.note(err.Error())
 		return
@@ -386,18 +408,15 @@ func (s *session) apply() {
 		s.note(resp.Error)
 		return
 	}
-	if path == protocol.PathDisplay {
-		s.savedScale = s.scale
-	}
-	if s.applyBtn != nil {
-		s.applyBtn.SetEnabled(false)
-	}
+	s.clearActions(path)
+	s.snapshot(path)
+	s.syncApply()
 	s.note("applied " + path)
 }
 
-func (s *session) desiredJSON() (json.RawMessage, error) {
+func (s *session) desiredJSON(path string) (json.RawMessage, error) {
 	var v any
-	switch s.path() {
+	switch path {
 	case protocol.PathDisplay:
 		v = protocol.DisplayModel{Outputs: []protocol.Output{{
 			Name: s.outName, Scale: s.scale, Mode: s.outMode, Position: s.outPos,
@@ -405,7 +424,10 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 	case protocol.PathNetwork:
 		n := protocol.NetworkModel{
 			Airplane: s.airplane,
-			WiFi:     protocol.WiFiState{Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK, Hidden: s.wifiHidden},
+			WiFi: protocol.WiFiState{
+				Device: s.wifiDev, Connect: s.wifiSSID, PSK: s.wifiPSK,
+				Hidden: s.wifiHidden, Disconnect: s.net.WiFi.Disconnect,
+			},
 		}
 		if s.iface != "" {
 			link := protocol.NetLink{Name: s.iface, Enabled: true, Method: s.netMethod, Gateway: s.netGW}
@@ -444,7 +466,10 @@ func (s *session) desiredJSON() (json.RawMessage, error) {
 	case protocol.PathLocale:
 		v = s.loc
 	case protocol.PathSession:
-		v = protocol.SessionModel{Action: "lock"}
+		if strings.TrimSpace(s.sessionAct) == "" {
+			return nil, fmt.Errorf("nothing to apply")
+		}
+		v = protocol.SessionModel{Action: s.sessionAct}
 	case protocol.PathPower:
 		v = protocol.PowerModel{Brightness: int(s.bright), Backlight: s.power.Backlight, Action: s.power.Action, Lid: s.power.Lid}
 	case protocol.PathPrinters:
