@@ -94,7 +94,7 @@ From the CodaLinux live ISO (no network required at install time):
 coda-install
 ```
 
-That helper keeps Bozeman locale/timezone/keymap and only asks for the disk. `CODA_INSTALL_DISK=/dev/vda coda-install` (or `auto` for the first disk) partitions ESP + OS-A + OS-B + data, copies the live image into OS-A, and enables greetd autologin for **`user` / `1`**. Automated QEMU loop: `./scripts/qemu-install-e2e.sh`. See [`install/`](install/README.md).
+That helper keeps Bozeman locale/timezone/keymap and only asks for the disk. `CODA_INSTALL_DISK=/dev/vda coda-install` (or `auto` for the first disk) partitions ESP + OS-A + OS-B + data, splits the live airootfs into **core on OS-A** and **desktop on `coda-data`**, and enables greetd autologin for **`user` / `1`**. Automated QEMU loop (local ISO only): `./scripts/qemu-install-e2e.sh`. See [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 
@@ -111,7 +111,7 @@ coda-sandbox destroy <env>
 
 Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
-See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented; the running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
+See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented (core on A/B, desktop on data). The running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
 ## What this repo does not contain
 
@@ -120,7 +120,7 @@ See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). E
 - Working NVIDIA auto-detection (hook + package list only)
 - Plymouth (explicitly deferred)
 - Calamares
-- A shipping read-only A/B core (documented target only)
+- A shipping read-only running slot or a core-only live ISO (slots are core-only after install; the ISO is still the full desktop)
 - Docker / Distrobox as a required app runtime
 
 ## Support

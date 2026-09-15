@@ -131,6 +131,17 @@ prepare_overlay() {
     "${overlay}/usr/local/lib/codalinux/coda-install-ab.sh"
   install -m 0755 "${root}/scripts/coda-install-verify.sh" \
     "${overlay}/usr/local/lib/codalinux/coda-install-verify.sh"
+  install -m 0755 "${root}/scripts/coda-install-split.py" \
+    "${overlay}/usr/local/lib/codalinux/coda-install-split.py"
+  install -m 0755 "${root}/scripts/coda-desktop-mount" \
+    "${overlay}/usr/local/lib/codalinux/coda-desktop-mount"
+  install -m 0644 "${root}/scripts/coda-desktop-mount.service" \
+    "${overlay}/usr/local/lib/codalinux/coda-desktop-mount.service"
+  install -d "${overlay}/usr/local/share/codalinux/packages"
+  install -m 0644 "${root}/packages/base.txt" \
+    "${overlay}/usr/local/share/codalinux/packages/base.txt"
+  install -m 0644 "${root}/packages/core-slot.txt" \
+    "${overlay}/usr/local/share/codalinux/packages/core-slot.txt"
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"

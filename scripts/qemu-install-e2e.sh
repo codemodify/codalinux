@@ -40,9 +40,9 @@ Never downloads a GitHub ISO artifact.
 Steps (--phase all, default):
   1. Pick first guest disk (CODA_INSTALL_DISK=auto)
   2. Auto-partition ESP + OS-A + OS-B + data
-  3. Offline install into OS-A from the live ISO
-  4. Reboot from disk → Hyprland as user/1 on slot A
-  5. Write live payload + kernel/boot into inactive slot B
+  3. Offline core install into OS-A; desktop onto coda-data
+  4. Reboot from disk → Hyprland as user/1 on slot A (from data)
+  5. Write core + kernel/boot into inactive slot B; refresh desktop
   6. Oneshot-boot slot B and verify Hyprland (default still A)
   7. Promote B as systemd-boot default
   8. Reboot and confirm running from B
@@ -56,10 +56,12 @@ Steps (--phase all, default):
 
 Success signal after a disk boot:
   /etc/coda/slot matches the expected slot, /home and /var bind
-  coda-data, greetd autologin user, Hyprland instance under
+  coda-data, /coda/data/desktop holds Hyprland, /usr is merged from
+  that tree, greetd autologin user, Hyprland instance under
   /run/user/<uid>/hypr and a Hyprland process for user.
 
-Minimum disk: ~22 GiB (8G+8G slots for the full desktop). QEMU uses 32G.
+Minimum disk: ~17 GiB (4G+4G core slots + 8G data for desktop).
+QEMU uses 32G. Local ISO only — never GitHub ISO artifacts.
 EOF
 }
 
@@ -542,7 +544,7 @@ SUMMARY[-1]="1 pick first disk (${first_disk})"
 step "2 space-check + auto layout ESP+OS-A+OS-B+data"
 qga_exec "python3 /usr/local/lib/codalinux/coda-install-layout.py check ${first_disk}" 60
 
-step "3 offline install into OS-A (no NIC, no pacstrap)"
+step "3 offline core install into OS-A + desktop on coda-data (no NIC, no pacstrap)"
 qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-install --disk ${first_disk} --yes" "${timeout_install}"
 qga_exec "umount -R /mnt 2>/dev/null || true; /usr/local/lib/codalinux/coda-install-verify.sh --layout" 120
 

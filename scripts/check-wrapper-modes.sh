@@ -56,7 +56,7 @@ done
 
 for helper_name in coda-install-config.py coda-pacman-init.sh coda-install-post.sh \
                    coda-install-lib.sh coda-install-layout.py coda-install-ab.sh \
-                   coda-install-verify.sh; do
+                   coda-install-verify.sh coda-install-split.py coda-desktop-mount; do
   helper_src="${root}/scripts/${helper_name}"
   helper_overlay="${root}/archiso/airootfs/usr/local/lib/codalinux/${helper_name}"
   if [[ ! -f "${helper_src}" || ! -x "${helper_src}" ]]; then
@@ -99,8 +99,12 @@ if ! python3 "${root}/scripts/coda-install-layout_test.py" >/tmp/coda-layout-tes
   log_fail "coda-install-layout_test.py failed"
   cat /tmp/coda-layout-test.out >&2 || true
 fi
+if ! python3 "${root}/scripts/coda-install-split_test.py" >/tmp/coda-split-test.out 2>&1; then
+  log_fail "coda-install-split_test.py failed"
+  cat /tmp/coda-split-test.out >&2 || true
+fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
-          coda-install-verify.sh qemu-install-e2e.sh; do
+          coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount; do
   if ! bash -n "${root}/scripts/${sh}"; then
     log_fail "bash -n failed: scripts/${sh}"
   fi
@@ -158,6 +162,18 @@ fi
 
 if ! grep -qx 'bubblewrap' "${root}/packages/sandbox.txt"; then
   log_fail "packages/sandbox.txt must list bubblewrap (coda-sandbox backbone)"
+fi
+if [[ ! -f "${root}/packages/core-slot.txt" ]]; then
+  log_fail "missing packages/core-slot.txt (OS-A/B seed extras)"
+fi
+if ! grep -qx 'rsync' "${root}/packages/core-slot.txt"; then
+  log_fail "packages/core-slot.txt must list rsync"
+fi
+if grep -Eiq '^(hyprland|greetd|firefox)$' "${root}/packages/core-slot.txt"; then
+  log_fail "packages/core-slot.txt must not list desktop packages"
+fi
+if ! grep -q 'SLOT_FLOOR_MIB = 4096' "${root}/scripts/coda-install-layout.py"; then
+  log_fail "coda-install-layout.py SLOT_FLOOR_MIB must be 4096 (core-only slots)"
 fi
 
 for gui_rt in wayland libxkbcommon libx11 libxext libxrandr libxcursor; do

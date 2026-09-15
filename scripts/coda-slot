@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # A/B slot helper: status, install into inactive, boot-test (oneshot), promote.
-# Offline payload is the live ISO airootfs. Does not mutate the running slot.
+# Offline payload is the live ISO airootfs split: core → slot, desktop → data.
+# Does not mutate the running slot.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +20,7 @@ Usage: coda-slot <command> [options]
 
 Commands:
   status                 show active / inactive / boot default
-  install                write live ISO payload into the inactive slot
+  install                write core into the inactive slot; refresh desktop on data
   boot-test              systemd-boot oneshot the inactive slot (default stays)
   promote                make the given/current slot the boot default
 
@@ -190,10 +191,11 @@ cmd_install() {
   mount "${data_dev}" "${target}/coda/data"
   mkdir -p "${target}/coda/data/home" "${target}/coda/data/var"
 
-  # Copy OS only — never seed/replace data (/home /var stay on coda-data).
-  coda_rsync_root "${src}" "${target}" 1
+  # Core → inactive slot; desktop → coda-data. Never replace /home.
+  coda_split_offline "${src}" "${target}" "${target}/coda/data" 0
   mkdir -p "${target}/home" "${target}/var"
   coda_wipe_live_bits "${target}"
+  coda_wipe_live_bits "${target}/coda/data/desktop"
   coda_write_fstab "${target}" "${inactive}"
   coda_bozeman "${target}"
   coda_write_slot_marker "${target}" "${inactive}" 0
@@ -214,6 +216,7 @@ cmd_install() {
   post="$(coda_find_post || true)"
   if [[ -n "${post}" ]]; then
     CODA_INSTALL_USER="${CODA_INSTALL_USER:-user}" \
+    CODA_DESKTOP_ROOT="${target}/coda/data/desktop" \
       "${post}" --user "${CODA_INSTALL_USER:-user}" --target "${target}"
   else
     coda_die "coda-install-post.sh missing"
