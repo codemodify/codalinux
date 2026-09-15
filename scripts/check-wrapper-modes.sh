@@ -204,6 +204,15 @@ fi
 if ! grep -q 'start --no-block greetd.service' "${root}/scripts/coda-desktop-mount"; then
   log_fail "coda-desktop-mount must start greetd --no-block after merge"
 fi
+if ! grep -q 'daemon-reload' "${root}/scripts/coda-desktop-mount"; then
+  log_fail "coda-desktop-mount must daemon-reload after merge before starting greetd"
+fi
+if grep -q '^ConditionPathExists=' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must not emit a greetd ConditionPathExists drop-in"
+fi
+if ! grep -q 'coda_scrub_live_greetd' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must scrub live greetd drop-in and dangling /usr/lib wants"
+fi
 if ! grep -q 'greetd.service is not active after desktop merge' \
     "${root}/scripts/coda-install-verify.sh"; then
   log_fail "coda-install-verify.sh must fail when greetd is inactive"

@@ -118,6 +118,12 @@ configure_target() {
   rm -f "${root}/etc/systemd/system/coda-live-setup.service"
   rm -f "${root}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
   rm -f "${root}/etc/systemd/system/getty@tty2.service.d/autologin.conf"
+  if declare -F coda_scrub_live_greetd >/dev/null; then
+    coda_scrub_live_greetd "${root}"
+    if [[ "${session}" != "${root}" ]]; then
+      coda_scrub_live_greetd "${session}"
+    fi
+  fi
 
   install -d "${root}/etc/systemd/system-preset"
   cat >"${root}/etc/systemd/system-preset/80-codalinux.preset" <<'EOF'

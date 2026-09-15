@@ -546,12 +546,17 @@ Alias=display-manager.service
 EOF
   fi
 
+  # Do not condition on the greetd binary path: that file appears only
+  # after the late sysext merge. A failed condition skips the unit for
+  # the whole boot (ConditionResult=no, no start job) — the e2e failure
+  # mode. After= the mount unit is enough; Restart= covers a too-early
+  # ExecStart.
+  rm -f "${dest}/etc/systemd/system/greetd.service.d/coda.conf"
   cat >"${dest}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf" <<'EOF'
 [Unit]
 # Binary and session wrappers come from /coda/data/desktop after merge.
 After=coda-desktop-mount.service
 Wants=coda-desktop-mount.service
-ConditionPathExists=/usr/bin/greetd
 EOF
 
   if [[ -f /etc/pam.d/greetd ]]; then
@@ -621,11 +626,35 @@ coda_split_offline() {
   rm -rf "${work}"
 }
 
+coda_scrub_live_greetd() {
+  # Live ISO drop-in Wants=coda-live-setup. Confext would re-apply it
+  # from /coda/data/desktop/etc and leave greetd waiting on a removed
+  # live unit. Dangling /usr/lib DM wants are invisible at first boot.
+  local dest="$1"
+  local link dest_link
+  rm -f "${dest}/etc/systemd/system/coda-live-setup.service"
+  rm -f "${dest}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
+  rm -f "${dest}/etc/systemd/system/greetd.service.d/coda.conf"
+  for link in \
+    etc/systemd/system/display-manager.service \
+    etc/systemd/system/multi-user.target.wants/greetd.service \
+    etc/systemd/system/graphical.target.wants/greetd.service
+  do
+    dest_link="${dest}/${link}"
+    if [[ -L "${dest_link}" ]]; then
+      case "$(readlink "${dest_link}")" in
+        /usr/lib/systemd/system/greetd.service|/lib/systemd/system/greetd.service)
+          rm -f "${dest_link}"
+          ;;
+      esac
+    fi
+  done
+}
+
 coda_wipe_live_bits() {
   local dest="$1"
   rm -f "${dest}/etc/mkinitcpio.conf.d/archiso.conf"
-  rm -f "${dest}/etc/systemd/system/coda-live-setup.service"
-  rm -f "${dest}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
+  coda_scrub_live_greetd "${dest}"
   rm -f "${dest}/etc/systemd/system/getty@tty2.service.d/autologin.conf"
   rm -rf "${dest}/etc/systemd/system/getty@tty2.service.d"
   rm -f "${dest}/etc/machine-id"

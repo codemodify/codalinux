@@ -28,13 +28,15 @@ coda_start_merged_session() {
     log "greetd already active"
     return 0
   fi
-  if ! systemctl cat greetd.service >/dev/null 2>&1; then
-    systemctl daemon-reload >/dev/null 2>&1 || true
-  fi
   if [[ ! -x "${greetd_bin}" ]]; then
     log "WARNING: ${greetd_bin} missing after merge; session will not start"
     return 0
   fi
+  # The vendor unit lives under the desktop /usr tree. systemd planned
+  # (and skipped) display-manager before the merge; reload + start is
+  # the same path as the working manual `systemctl start greetd`.
+  # --no-block avoids a deadlock with Before=greetd.service.
+  systemctl daemon-reload >/dev/null 2>&1 || true
   if systemctl start --no-block greetd.service >/dev/null 2>&1; then
     log "started greetd.service after desktop merge"
   elif systemctl start --no-block display-manager.service >/dev/null 2>&1; then
