@@ -49,6 +49,23 @@ failed=0
 fail() { printf 'VERIFY FAIL: %s\n' "$*" >&2; failed=1; }
 pass() { printf 'VERIFY PASS: %s\n' "$*"; }
 
+# Accept the fstab bind path or findmnt SOURCE like /dev/vda4[/home]
+# (kernel bind-mount spelling on virtio).
+coda_data_bind_ok() {
+  local mp="$1" tail="$2"
+  local line src
+  line="$(findmnt -n "${mp}" 2>/dev/null || true)"
+  [[ -n "${line}" ]] || return 1
+  if printf '%s\n' "${line}" | grep -q "/coda/data/${tail}"; then
+    return 0
+  fi
+  src="$(findmnt -n -o SOURCE "${mp}" 2>/dev/null || true)"
+  case "${src}" in
+    *"[/${tail}]"|*"[/coda/data/${tail}]") return 0 ;;
+  esac
+  return 1
+}
+
 check_layout() {
   local label dev fstype
   for label in coda-esp coda-a coda-b coda-data; do
@@ -126,8 +143,12 @@ check_boot() {
   else
     pass "/ is ${src}"
   fi
-  findmnt -n /home | grep -q /coda/data/home || fail "/home is not bind from /coda/data/home"
-  findmnt -n /var | grep -q /coda/data/var || fail "/var is not bind from /coda/data/var"
+  if ! coda_data_bind_ok /home home; then
+    fail "/home is not bind from coda-data (/coda/data/home or /dev/vdX[/home])"
+  fi
+  if ! coda_data_bind_ok /var var; then
+    fail "/var is not bind from coda-data (/coda/data/var or /dev/vdX[/var])"
+  fi
   pass "/home and /var bind coda-data"
   if [[ ! -d /coda/data/desktop/usr ]]; then
     fail "missing /coda/data/desktop/usr (desktop must live on coda-data)"

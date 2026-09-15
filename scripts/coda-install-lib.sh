@@ -191,13 +191,24 @@ coda_find_desktop_mount() {
   return 1
 }
 
+coda_session_wrapper_names() {
+  printf '%s\n' \
+    coda-hyprland coda-ags coda-hypr-ws coda-hyprlock coda-hyprpaper \
+    coda-wallpaper coda-settings coda-sandbox coda-sync-desktop-from-host \
+    ags astal \
+    system-config system-configd system-config-apply \
+    system-config-report system-config-tui system-config-gui
+}
+
 coda_rsync_filelist() {
-  local src="$1" dest="$2" list="$3" delete="${4:-0}"
+  local src="$1" dest="$2" list="$3" delete="${4:-0}" kind="${5:-}"
   [[ -d "${src}" ]] || coda_die "source root missing: ${src}"
   [[ -f "${list}" ]] || coda_die "file list missing: ${list}"
   mkdir -p "${dest}"
+  # -a includes -r; a listed directory would recurse (filesystem owns
+  # /usr/local/bin/). Lists are files/symlinks only; drop -r anyway.
   local -a args=(
-    -aHAX
+    -lptgoDHAX
     --numeric-ids
     --info=stats1
     --files-from="${list}"
@@ -216,10 +227,41 @@ coda_rsync_filelist() {
   if [[ "${delete}" == 1 ]]; then
     args+=(--delete)
   fi
+  if [[ "${kind}" == core ]]; then
+    local wrap
+    while IFS= read -r wrap; do
+      args+=(--exclude="usr/local/bin/${wrap}")
+    done < <(coda_session_wrapper_names)
+    args+=(--exclude=usr/local/lib/codalinux/system-config-gui)
+    args+=(--exclude=usr/bin/Hyprland)
+    args+=(--exclude=usr/bin/hyprland)
+  fi
   if [[ "${src}" == / ]]; then
     args+=(--exclude="${dest}")
   fi
   rsync "${args[@]}" "${src}/" "${dest}/"
+}
+
+coda_purge_leaked_desktop() {
+  local dest="$1" desktop_list="$2"
+  local rel wrap
+  [[ -d "${dest}" ]] || return 0
+  if [[ -f "${desktop_list}" ]]; then
+    while IFS= read -r rel; do
+      [[ -n "${rel}" ]] || continue
+      if [[ -e "${dest}/${rel}" || -L "${dest}/${rel}" ]]; then
+        if [[ -d "${dest}/${rel}" && ! -L "${dest}/${rel}" ]]; then
+          continue
+        fi
+        rm -f "${dest}/${rel}"
+      fi
+    done <"${desktop_list}"
+  fi
+  while IFS= read -r wrap; do
+    rm -f "${dest}/usr/local/bin/${wrap}"
+  done < <(coda_session_wrapper_names)
+  rm -f "${dest}/usr/local/lib/codalinux/system-config-gui"
+  rm -f "${dest}/usr/bin/Hyprland" "${dest}/usr/bin/hyprland"
 }
 
 coda_rsync_var_home() {
@@ -328,7 +370,8 @@ coda_split_offline() {
   fi
   mkdir -p "${dest}" "${data}/desktop"
   coda_log "offline core ${src} → ${dest}"
-  coda_rsync_filelist "${src}" "${dest}" "${core_list}"
+  coda_rsync_filelist "${src}" "${dest}" "${core_list}" 0 core
+  coda_purge_leaked_desktop "${dest}" "${desktop_list}"
   coda_log "offline desktop ${src} → ${data}/desktop"
   coda_rsync_filelist "${src}" "${data}/desktop" "${desktop_list}" 1
   if [[ "${seed_home_var}" == 1 ]]; then

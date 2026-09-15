@@ -15,22 +15,18 @@ import sys
 # GPT + alignment slack reserved at the end of the disk.
 GPT_SLACK_MIB = 4
 
-# Target picture from architecture.md / DESIGN.md.
-# v1 copies the full live desktop into each slot (not a ~1.1G core-only
-# image). 8 GiB is the implemented floor; 4 GiB remains the later
-# core-only target and is too small for this payload.
+# Target picture from architecture.md / DESIGN.md (required):
+# A/B hold Arch core only; desktop lives on coda-data. ESP stays 1 GiB.
+# 8 GiB slot floors were only for the old full-desktop-in-slot payload.
 ESP_MIB = 1024
-SLOT_FLOOR_MIB = 8192
-SLOT_PREFERRED_MIB = 8192
-DATA_FLOOR_MIB = 4096
-CORE_ONLY_SLOT_FLOOR_MIB = 4096
+SLOT_FLOOR_MIB = 4096
+SLOT_PREFERRED_MIB = 4096
+DATA_FLOOR_MIB = 8192
+CORE_ONLY_SLOT_FLOOR_MIB = SLOT_FLOOR_MIB
 
-# 1 + 8 + 8 + 4 + slack. Documented v1 installer minimum (~21 GiB).
+# 1 + 4 + 4 + 8 + slack. Documented installer minimum (~17 GiB).
 MINIMUM_DISK_MIB = ESP_MIB + (2 * SLOT_FLOOR_MIB) + DATA_FLOOR_MIB + GPT_SLACK_MIB
-# Later core-only picture (not this v1 payload).
-CORE_ONLY_MINIMUM_DISK_MIB = (
-    ESP_MIB + (2 * CORE_ONLY_SLOT_FLOOR_MIB) + DATA_FLOOR_MIB + GPT_SLACK_MIB
-)
+CORE_ONLY_MINIMUM_DISK_MIB = MINIMUM_DISK_MIB
 
 
 def mib(n: int) -> int:
@@ -54,7 +50,7 @@ def plan_layout(disk_bytes: int) -> dict | None:
         return None
 
     usable = disk_mib - ESP_MIB - GPT_SLACK_MIB
-    # Prefer 8G slots when leftover data still meets the floor.
+    # Extra disk goes to data (desktop + home + var), not larger slots.
     if usable >= (2 * SLOT_PREFERRED_MIB) + DATA_FLOOR_MIB:
         slot_mib = SLOT_PREFERRED_MIB
     else:
@@ -86,8 +82,8 @@ def explain_too_small(disk_bytes: int) -> str:
         f"({MINIMUM_DISK_MIB} MiB = {ESP_MIB} MiB ESP + "
         f"{SLOT_FLOOR_MIB} MiB OS-A + {SLOT_FLOOR_MIB} MiB OS-B + "
         f"{DATA_FLOOR_MIB} MiB data + {GPT_SLACK_MIB} MiB GPT slack). "
-        f"v1 slots hold the full live desktop (not a 4 GiB core-only image). "
-        f"Recommend 32 GiB for QEMU."
+        f"Slots are Arch core only (4 GiB floor); desktop lives on coda-data "
+        f"(8 GiB floor). Recommend 32 GiB for QEMU."
     )
 
 
@@ -123,9 +119,9 @@ def list_disks() -> list[dict]:
 def print_plan(plan: dict, disk: str | None = None) -> None:
     prefix = f"{disk}: " if disk else ""
     print(f"{prefix}ESP     {format_mib(plan['esp_mib'])}  FAT32  PARTLABEL=coda-esp  /boot")
-    print(f"{prefix}OS-A    {format_mib(plan['slot_a_mib'])}  ext4   PARTLABEL=coda-a    /  (first install)")
-    print(f"{prefix}OS-B    {format_mib(plan['slot_b_mib'])}  ext4   PARTLABEL=coda-b    inactive")
-    print(f"{prefix}data    {format_mib(plan['data_mib'])}  ext4   PARTLABEL=coda-data /coda/data + bind /home /var")
+    print(f"{prefix}OS-A    {format_mib(plan['slot_a_mib'])}  ext4   PARTLABEL=coda-a    /  (core only)")
+    print(f"{prefix}OS-B    {format_mib(plan['slot_b_mib'])}  ext4   PARTLABEL=coda-b    inactive core")
+    print(f"{prefix}data    {format_mib(plan['data_mib'])}  ext4   PARTLABEL=coda-data /coda/data + /home /var + desktop")
 
 
 def main(argv: list[str] | None = None) -> int:

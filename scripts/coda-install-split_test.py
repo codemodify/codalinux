@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,6 +92,85 @@ class SplitTests(unittest.TestCase):
         self.assertTrue(mod.should_skip("/home/live"))
         self.assertTrue(mod.should_skip("/boot/vmlinuz-linux"))
         self.assertFalse(mod.should_skip("/usr/bin/bash"))
+
+    def test_filesystem_dir_nodes_do_not_claim_coda_hyprland(self):
+        """filesystem owns /usr/local/bin/; that must not list coda-hyprland on core."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local = root / "var/lib/pacman/local"
+            local.mkdir(parents=True)
+            _write_pkg(
+                local,
+                "filesystem",
+                "1-1",
+                [],
+                [
+                    "usr/",
+                    "usr/local/",
+                    "usr/local/bin/",
+                    "usr/local/lib/",
+                    "usr/bin/",
+                    "usr/bin/bash",
+                ],
+            )
+            (root / "usr/local/bin").mkdir(parents=True)
+            (root / "usr/local/lib").mkdir(parents=True)
+            (root / "usr/bin").mkdir(parents=True)
+            (root / "usr/bin/bash").write_text("sh", encoding="utf-8")
+            (root / "usr/local/bin/coda-install").write_text("i", encoding="utf-8")
+            (root / "usr/local/bin/coda-hyprland").write_text("d", encoding="utf-8")
+            (root / "usr/local/bin/coda-ags").write_text("a", encoding="utf-8")
+
+            pkgs, provides = mod.read_pacman_local(local)
+            result = mod.classify(root, ["filesystem"], pkgs, provides, include_unpackaged=True)
+            for path in result["core_files"]:
+                self.assertFalse(
+                    path.endswith("/"),
+                    f"core list must not include directory {path!r} (rsync -a would recurse)",
+                )
+            self.assertIn("/usr/bin/bash", result["core_files"])
+            self.assertIn("/usr/local/bin/coda-install", result["core_files"])
+            self.assertIn("/usr/local/bin/coda-hyprland", result["desktop_files"])
+            self.assertNotIn("/usr/local/bin/coda-hyprland", result["core_files"])
+            self.assertNotIn("/usr/local/bin/", result["core_files"])
+            self.assertNotIn("/usr/local/", result["core_files"])
+
+            core_list = root / "core.list"
+            mod.write_list(core_list, result["core_files"], root)
+            listed = core_list.read_text(encoding="utf-8").splitlines()
+            self.assertNotIn("usr/local/bin/", listed)
+            self.assertNotIn("usr/local/bin/coda-hyprland", listed)
+            self.assertIn("usr/local/bin/coda-install", listed)
+
+            if shutil.which("rsync") is None:
+                return
+            dest = root / "slot"
+            dest.mkdir()
+            subprocess.run(
+                [
+                    "rsync",
+                    "-lptgoDHAX",
+                    "--files-from",
+                    str(core_list),
+                    f"{root}/",
+                    f"{dest}/",
+                ],
+                check=True,
+            )
+            self.assertTrue((dest / "usr/local/bin/coda-install").is_file())
+            self.assertFalse(
+                (dest / "usr/local/bin/coda-hyprland").exists(),
+                "core rsync must not copy coda-hyprland onto the slot",
+            )
+            self.assertFalse((dest / "usr/local/bin/coda-ags").exists())
+
+    def test_desktop_priority_moves_session_wrapper(self):
+        core, desktop = mod.apply_desktop_priority(
+            ["/usr/local/bin/coda-hyprland", "/usr/bin/bash"],
+            ["/usr/bin/Hyprland"],
+        )
+        self.assertEqual(core, ["/usr/bin/bash"])
+        self.assertIn("/usr/local/bin/coda-hyprland", desktop)
 
 
 if __name__ == "__main__":
