@@ -194,6 +194,22 @@ fi
 if ! grep -q 'coda_install_slot_greetd' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must install a real greetd.service on the slot"
 fi
+if ! grep -q 'coda-install-lib.sh' "${root}/scripts/coda-install-split.py"; then
+  log_fail "coda-install-split.py must keep coda-install-lib.sh on the core list"
+fi
+if ! grep -q 'coda_slot_load_lib' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot must load helpers via coda_slot_load_lib"
+fi
+if ! grep -q 'coda_pick_esp' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot boot-test/promote must use coda_pick_esp (not live ISO /boot/loader)"
+fi
+if grep -q 'if \[\[ -d /boot/loader \]\]' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot must not treat live ISO /boot/loader as the disk ESP"
+fi
+if ! grep -q 'coda-install-lib.sh missing on the core slot' \
+    "${root}/scripts/coda-install-post.sh"; then
+  log_fail "coda-install-post.sh must require coda-install-lib.sh on the slot"
+fi
 if ! grep -q 'coda_install_slot_greetd' "${root}/scripts/coda-install-post.sh"; then
   log_fail "coda-install-post.sh must call coda_install_slot_greetd"
 fi
