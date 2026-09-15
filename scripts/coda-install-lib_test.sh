@@ -102,6 +102,48 @@ if ( coda_assert_kernel_modules "${dest}" "${kver}" ) >/dev/null 2>&1; then
 fi
 rm -rf "${src}"
 
+# greetd unit + PAM on the slot (not a dangling /usr/lib symlink).
+coda_install_slot_greetd "${dest}"
+if [[ ! -f "${dest}/etc/systemd/system/greetd.service" ]]; then
+  echo "coda-install-lib_test: greetd.service was not written to the slot" >&2
+  fail=1
+fi
+if [[ -L "${dest}/etc/systemd/system/greetd.service" ]]; then
+  echo "coda-install-lib_test: greetd.service must not be a symlink" >&2
+  fail=1
+fi
+if ! grep -q '^ExecStart=/usr/bin/greetd' "${dest}/etc/systemd/system/greetd.service"; then
+  echo "coda-install-lib_test: greetd.service missing ExecStart" >&2
+  fail=1
+fi
+if [[ ! -f "${dest}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf" ]]; then
+  echo "coda-install-lib_test: greetd drop-in missing" >&2
+  fail=1
+fi
+if ! grep -q 'After=coda-desktop-mount.service' \
+    "${dest}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf"; then
+  echo "coda-install-lib_test: greetd drop-in must After=coda-desktop-mount" >&2
+  fail=1
+fi
+if [[ ! -f "${dest}/etc/pam.d/greetd" ]]; then
+  echo "coda-install-lib_test: /etc/pam.d/greetd missing on the slot" >&2
+  fail=1
+fi
+want_link="$(readlink "${dest}/etc/systemd/system/multi-user.target.wants/greetd.service")"
+if [[ "${want_link}" != /etc/systemd/system/greetd.service ]]; then
+  echo "coda-install-lib_test: greetd wants is ${want_link} (want /etc/systemd/system/greetd.service)" >&2
+  fail=1
+fi
+dm_link="$(readlink "${dest}/etc/systemd/system/display-manager.service")"
+if [[ "${dm_link}" != /etc/systemd/system/greetd.service ]]; then
+  echo "coda-install-lib_test: display-manager.service is ${dm_link}" >&2
+  fail=1
+fi
+if [[ -x "${dest}/usr/bin/greetd" || -x "${dest}/usr/local/bin/coda-hyprland" ]]; then
+  echo "coda-install-lib_test: slot greetd helper must not copy session binaries" >&2
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "coda-install-lib_test: FAILED" >&2
   exit 1
