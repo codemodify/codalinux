@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Live-session wrapper: set a VM-safe environment and exec start-hyprland.
+# greetd initial_session and default_session both point here so a crash
+# retries the GUI instead of dropping to agreety. Do not exec the bare
+# Hyprland binary — current Hyprland warns and expects this watchdog.
+set +e
+umask 022
+
+log="${CODA_HYPRLAND_LOG:-/var/log/coda-hyprland.log}"
+if ! touch "${log}" 2>/dev/null; then
+  log="${HOME:-/tmp}/coda-hyprland.log"
+  touch "${log}" 2>/dev/null || log="/dev/null"
+fi
+
+exec >>"${log}" 2>&1
+echo "==== $(date -Iseconds) pid=$$ uid=$(id -u) user=$(id -un) ===="
+echo "tty=$(tty 2>/dev/null || true) XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-}"
+echo "virt=$(systemd-detect-virt 2>/dev/null || echo unknown)"
+echo "product=$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
+echo "dri=$(ls -l /dev/dri 2>/dev/null || echo none)"
+command -v start-hyprland || true
+ls -l /usr/bin/start-hyprland /usr/bin/Hyprland 2>/dev/null || true
+
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}" || true
+
+export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+export XDG_CURRENT_DESKTOP=Hyprland
+export XDG_SESSION_DESKTOP=Hyprland
+export GI_TYPELIB_PATH="/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:${GI_TYPELIB_PATH}}"
+export LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export XDG_DATA_DIRS="/usr/local/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export HYPRLAND_NO_SD_CHECKS="${HYPRLAND_NO_SD_CHECKS:-1}"
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+export WLR_NO_HARDWARE_CURSORS=1
+export WLR_DRM_NO_ATOMIC="${WLR_DRM_NO_ATOMIC:-1}"
+export AQ_NO_MODIFIERS="${AQ_NO_MODIFIERS:-1}"
+
+use_software=0
+if systemd-detect-virt -q 2>/dev/null; then
+  use_software=1
+fi
+if [[ ! -e /dev/dri/card0 && ! -e /dev/dri/renderD128 ]]; then
+  use_software=1
+fi
+if grep -qiE 'virtualbox|vbox|vmware|qemu|kvm|bochs' \
+    /sys/class/dmi/id/product_name /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+  use_software=1
+fi
+
+# Keep pixman on every VM, including QEMU/KVM with /dev/dri. Skipping
+# it for virtio-gpu is unverified and would risk the VBox VMSVGA path.
+# Wallpaper fallback is swaybg (coda-wallpaper), which does not need
+# hyprtoolkit EGL.
+if [[ "${use_software}" -eq 1 ]]; then
+  export WLR_RENDERER="${WLR_RENDERER:-pixman}"
+  export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
+  export GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}"
+  echo "software rendering enabled (VirtualBox/VMSVGA-safe path)"
+fi
+
+echo "env WLR_RENDERER=${WLR_RENDERER:-} LIBGL_ALWAYS_SOFTWARE=${LIBGL_ALWAYS_SOFTWARE:-} XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+
+launcher=""
+if command -v start-hyprland >/dev/null 2>&1; then
+  launcher="$(command -v start-hyprland)"
+elif [[ -x /usr/bin/start-hyprland ]]; then
+  launcher=/usr/bin/start-hyprland
+else
+  echo "start-hyprland not found. Install the official hyprland package."
+  echo "Refusing to exec bare Hyprland (watchdog warning / missing wrapper)."
+  exit 1
+fi
+
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo "refusing system-config user daemons as root (would bind /run/user/0)"
+elif command -v systemctl >/dev/null 2>&1; then
+  systemctl --user start system-configd.service system-config-report.service >/dev/null 2>&1 || true
+fi
+
+echo "starting ${launcher}"
+exec "${launcher}"

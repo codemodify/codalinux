@@ -1,0 +1,292 @@
+window.Bar {
+  background: transparent;
+  color: #e8eef2;
+  font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
+  font-size: 13px;
+}
+
+.bar-inner {
+  background: rgba(18, 24, 28, 0.92);
+  border: 1px solid rgba(127, 180, 200, 0.28);
+  border-radius: 10px;
+  margin: 6px 10px 0 10px;
+  padding: 4px 8px;
+  min-height: 34px;
+}
+
+window.Bar button {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: #e8eef2;
+}
+
+window.Bar button:hover {
+  background: rgba(127, 180, 200, 0.18);
+}
+
+window.Bar button.brand {
+  font-weight: 700;
+  color: #7fb4c8;
+}
+
+window.Bar button.ws.focused {
+  background: rgba(127, 180, 200, 0.32);
+  font-weight: 700;
+}
+
+window.Bar button.ws-action {
+  min-width: 22px;
+  padding: 4px 7px;
+  color: #7fb4c8;
+}
+
+window.Bar button.stack-toggle.stack {
+  background: rgba(61, 214, 245, 0.22);
+  font-weight: 700;
+}
+
+window.Bar .taskbar {
+  min-width: 80px;
+}
+
+window.Bar button.task {
+  padding: 3px 8px;
+}
+
+window.Bar button.task.focused {
+  background: rgba(61, 214, 245, 0.28);
+  font-weight: 600;
+}
+
+window.Bar button.task.minimized {
+  opacity: 0.55;
+}
+
+window.Bar label.task-title {
+  font-size: 12px;
+}
+
+.task-menu {
+  background: rgba(18, 24, 28, 0.96);
+  border: 1px solid rgba(127, 180, 200, 0.3);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.task-menu button.task-menu-item {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #e8eef2;
+}
+
+.task-menu button.task-menu-item:hover {
+  background: rgba(127, 180, 200, 0.18);
+}
+
+window.Launcher,
+window.ControlCenter,
+window.Clipboard,
+window.NotificationPopups {
+  background: transparent;
+}
+
+.launcher-content,
+.clipboard-content,
+.control-content {
+  background: rgba(18, 24, 28, 0.96);
+  color: #e8eef2;
+  border: 1px solid rgba(127, 180, 200, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  min-width: 420px;
+}
+
+.control-content {
+  margin: 52px 18px 0 0;
+  min-width: 460px;
+}
+
+.control-content.settings-hub {
+  margin: 0;
+  padding: 0;
+  min-width: 920px;
+  min-height: 580px;
+}
+
+.settings-nav-scroll {
+  min-width: 228px;
+  min-height: 560px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 14px 0 0 14px;
+}
+
+.settings-nav {
+  min-width: 214px;
+  padding: 16px 12px 20px 12px;
+}
+
+.settings-page-scroll {
+  min-width: 620px;
+  min-height: 560px;
+}
+
+.settings-page {
+  min-width: 600px;
+  padding: 18px 20px 24px 20px;
+}
+
+.control-content label.page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e8eef2;
+}
+
+.settings-nav label.nav-group {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7fb4c8;
+  margin-top: 10px;
+  margin-bottom: 2px;
+}
+
+.control-content button.nav-item {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.control-content button.nav-item.active {
+  background: rgba(127, 180, 200, 0.28);
+  font-weight: 700;
+}
+
+.control-content .display-info {
+  font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #c5d0d6;
+}
+
+.control-content button.launch-row {
+  padding: 10px 12px;
+}
+
+.control-content .skip-row {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.control-content label.skip-title {
+  font-size: 12px;
+  color: #9aa8b0;
+}
+
+.launcher-title,
+.control-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #7fb4c8;
+}
+
+.control-sub {
+  font-size: 12px;
+  color: #9aa8b0;
+}
+
+.control-content label.section {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7fb4c8;
+  margin-top: 4px;
+}
+
+.control-content .status-row {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.tiles button.tile label.tile-hint {
+  font-size: 11px;
+  color: #8b99a1;
+}
+
+entry {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eef2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(127, 180, 200, 0.2);
+}
+
+button.app,
+.tiles button.tile,
+.control-content button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  color: #e8eef2;
+}
+
+button.app:hover,
+.tiles button.tile:hover,
+.control-content button:hover {
+  background: rgba(127, 180, 200, 0.16);
+}
+
+.tiles button.tile {
+  min-width: 128px;
+  min-height: 92px;
+}
+
+label.hint {
+  color: #7f8b93;
+  font-size: 11px;
+}
+
+.volume-row slider {
+  min-width: 180px;
+}
+
+.Notification {
+  background: rgba(18, 24, 28, 0.96);
+  color: #e8eef2;
+  border-radius: 12px;
+  border: 1px solid rgba(127, 180, 200, 0.25);
+  margin: 8px 14px 0 0;
+  padding: 8px 10px;
+}
+
+.Notification.critical {
+  border-color: rgba(220, 80, 80, 0.55);
+}
+
+.Notification .header {
+  color: #9aa8b0;
+}
+
+.Notification .summary {
+  font-weight: 700;
+}
+
+.Notification .body {
+  color: #c5d0d6;
+}
+
+.Notification button.close {
+  padding: 2px;
+  min-width: 0;
+  min-height: 0;
+}

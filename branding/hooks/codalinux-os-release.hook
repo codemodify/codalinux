@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = filesystem
+
+[Action]
+Description = Restore CodaLinux os-release after filesystem updates
+When = PostTransaction
+Exec = /usr/local/lib/codalinux/apply-os-release.sh

@@ -1,0 +1,42 @@
+CodaLinux pointer and keyboard defaults
+======================================
+
+Keyboard layout: us (Bozeman / US default — not prompted at install)
+Modifier: Super (Windows key)
+
+  Super+Return     Terminal (foot)
+  Super+Space      App launcher (AGS)
+  Super+D          App launcher (AGS)
+  Super+,          Settings (AGS System Settings hub)
+  Super+V          Clipboard history (AGS)
+  Super+E          Files (Thunar)
+  Super+F          Firefox
+  Super+L          Lock (coda-hyprlock)
+  Super+Q          Close window
+  Super+1..0       Workspaces
+  Super+N / Super+=  New empty workspace
+  Super+-          Remove empty workspace
+  Super+T          Tile ↔ stack (overlapping float) on this workspace
+  Super+Tab        Next window
+  Titlebar (float) close / maximize / minimize (hyprbars)
+  Titlebar scroll  shade / unshade (roll-up) on floating windows
+  Volume / media   wpctl + playerctl
+
+If the lockscreen app dies (VirtualBox / pixman) Hyprland shows
+“Oopsie daisy… lockscreen app died”. Recover with:
+  hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'
+  killall -9 hyprlock
+The live image does not lock on idle, so this should not appear by itself.
+
+Touchpad (laptops):
+  natural scroll   on
+  tap to click     on
+
+To change compositor input, edit:
+  ~/.config/hypr/hyprland.lua
+
+GTK fonts, icons, and cursors:
+  Super+,  →  Appearance  (nwg-look)
+
+Wi-Fi uses iwd (impala). Display, Bluetooth, audio, webcam, and
+appearance are opened from Settings (AGS control center / Super+,).

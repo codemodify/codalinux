@@ -1,0 +1,5 @@
+# Sandbox / isolation backbone. Official Arch extra only.
+# Day-to-day extra software goes in coda-sandbox roots (pacman --root + bwrap).
+# Do not add Docker, Distrobox, or Firejail here.
+
+bubblewrap

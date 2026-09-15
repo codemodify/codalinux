@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Root apply launcher: wait for a graphical user's XDG_RUNTIME_DIR so the
+# socket lands next to system-configd (CODA_SYSTEM_CONFIG_UID + runtime).
+set -euo pipefail
+bin="${SYSTEM_CONFIG_APPLY_BIN:-/usr/local/bin/system-config-apply}"
+
+for _ in $(seq 1 60); do
+  for d in /run/user/[1-9]*; do
+    [[ -d "${d}" ]] || continue
+    uid="$(basename "${d}")"
+    [[ "${uid}" =~ ^[0-9]+$ ]] || continue
+    export XDG_RUNTIME_DIR="${d}"
+    export CODA_SYSTEM_CONFIG_UID="${uid}"
+    exec "${bin}"
+  done
+  sleep 1
+done
+
+export CODA_SYSTEM_CONFIG_DIR="${CODA_SYSTEM_CONFIG_DIR:-/run/coda}"
+mkdir -p "${CODA_SYSTEM_CONFIG_DIR}"
+chmod 0755 "${CODA_SYSTEM_CONFIG_DIR}"
+exec "${bin}"

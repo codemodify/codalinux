@@ -1,0 +1,16 @@
+# Official-repo deps to *compile* system-config-gui with CGO (uitoolkit
+# Wayland/X11 + paintengine2d EGL/GLES). Not composed into the live ISO.
+# Runtime copies of these libs come from desktop.txt + mesa in hardware.txt.
+# install-system-config.sh installs this list on the Arch ISO builder.
+
+gcc
+pkgconf
+wayland
+libxkbcommon
+libx11
+libxext
+libxrandr
+libxcursor
+mesa
+libglvnd
+libdrm

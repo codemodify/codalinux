@@ -1,0 +1,6 @@
+# Optional printing stack. Not required in the base image.
+
+cups
+cups-filters
+cups-pk-helper
+system-config-printer

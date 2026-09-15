@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=CodaLinux (XLibre)
+Comment=CodaLinux X11 session (XLibre) — not installed by default
+# TODO: point Exec at a real session script once XLibre packaging is decided.
+# Do not copy this file to /usr/share/xsessions/ until that decision lands.
+Exec=/usr/local/bin/coda-xlibre-session
+TryExec=/usr/local/bin/coda-xlibre-session
+Type=Application
+DesktopNames=CodaLinux

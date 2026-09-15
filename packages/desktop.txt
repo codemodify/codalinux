@@ -1,0 +1,64 @@
+# Hyprland session, greetd, companions, portals.
+# AGS/Astal binaries are vendored into /usr/local at ISO build time —
+# see packages/ags-build-deps.txt and desktop/ags/. Do not list
+# aylurs-gtk-shell or libastal* here.
+
+hyprland
+hyprlock
+hypridle
+hyprpaper
+# Live/VM fallback when hyprpaper/hyprtoolkit cannot create a layer.
+swaybg
+hyprcursor
+xdg-desktop-portal
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+xdg-user-dirs
+xdg-utils
+xorg-xwayland
+
+# system-config-gui (uitoolkit CGO): Wayland/X11 + xkb + cursors.
+# mesa in hardware.txt provides EGL/GLES. Hyprland already pulls some of
+# these; list them so install/packages.txt is not implicit-only.
+wayland
+libxkbcommon
+libx11
+libxext
+libxrandr
+libxcursor
+
+greetd
+
+# Toolkit / session plumbing used by portals, Thunar, and the AGS shell
+gtk3
+gtk4
+gtk4-layer-shell
+libadwaita
+gjs
+gobject-introspection
+json-glib
+gdk-pixbuf2
+upower
+qt5-wayland
+qt6-wayland
+polkit
+polkit-gnome
+
+# Fonts so the first session is readable
+ttf-liberation
+ttf-dejavu
+noto-fonts
+noto-fonts-emoji
+otf-font-awesome
+adwaita-icon-theme
+
+# Official settings / session helpers opened from the AGS control center
+nwg-look
+wl-clipboard
+cliphist
+playerctl
+brightnessctl
+libnotify
+# blueman uses libnm only; NetworkManager remains optional and is not enabled.
+blueman
+bluetui

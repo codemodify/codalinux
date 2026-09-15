@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = glibc
+Target = tzdata
+
+[Action]
+Description = Set CodaLinux locale (en_US.UTF-8) and timezone (America/Denver)
+When = PostTransaction
+Exec = /usr/local/lib/codalinux/apply-locale.sh

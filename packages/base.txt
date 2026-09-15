@@ -1,0 +1,47 @@
+# CodaLinux base — official Arch repos only
+# Kernel, initramfs, firmware, microcode, core userland.
+
+base
+linux
+linux-headers
+linux-firmware
+amd-ucode
+intel-ucode
+mkinitcpio
+systemd
+systemd-sysvcompat
+
+# Filesystems and UEFI install tools (ext4 default, ESP is vfat)
+e2fsprogs
+dosfstools
+gptfdisk
+parted
+
+# Conventional admin
+sudo
+shadow
+util-linux
+coreutils
+iproute2
+iputils
+procps-ng
+pciutils
+usbutils
+man-db
+man-pages
+texinfo
+less
+nano
+vim
+git
+which
+diffutils
+logrotate
+perl
+python
+
+# VM / remote access (also listed in live.txt; compose dedupes).
+# Installed systems need these so QGA and sshd work after coda-install
+# without a live chroot patch.
+openssh
+qemu-guest-agent
