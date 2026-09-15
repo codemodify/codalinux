@@ -103,6 +103,13 @@ if ! python3 "${root}/scripts/coda-install-split_test.py" >/tmp/coda-split-test.
   log_fail "coda-install-split_test.py failed"
   cat /tmp/coda-split-test.out >&2 || true
 fi
+if ! bash "${root}/scripts/coda-install-lib_test.sh" >/tmp/coda-lib-test.out 2>&1; then
+  log_fail "coda-install-lib_test.sh failed"
+  cat /tmp/coda-lib-test.out >&2 || true
+fi
+if ! grep -q 'mkdir -p "${dest}/etc/mkinitcpio.d"' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must mkdir mkinitcpio.d before writing linux.preset"
+fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
           coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount; do
   if ! bash -n "${root}/scripts/${sh}"; then
