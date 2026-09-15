@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=CodaLinux (Hyprland)
+Comment=CodaLinux Wayland desktop (Hyprland + XWayland)
+Exec=/usr/local/bin/coda-hyprland
+TryExec=/usr/local/bin/coda-hyprland
+Type=Application
+DesktopNames=Hyprland
+X-GDM-SessionRegisters=true

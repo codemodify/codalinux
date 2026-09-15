@@ -1,0 +1,8 @@
+# Optional proprietary NVIDIA path. Not in the default compose.
+# TODO: scripts/hooks/nvidia.sh should install this set when a GPU is detected.
+# Do not enable [multilib] unless a later decision needs lib32-nvidia-utils.
+
+nvidia
+nvidia-utils
+nvidia-settings
+linux-headers

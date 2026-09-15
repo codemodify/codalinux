@@ -1,0 +1,7 @@
+# systemd-networkd + iwd. Do not add NetworkManager or a firewall.
+# Pin iptables (not iptables-nft) so unattended pacman is not prompted
+# for a provider. Installing the package does not enable a firewall.
+
+iwd
+systemd-resolvconf
+iptables

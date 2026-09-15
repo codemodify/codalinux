@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Live/VM wallpaper. Try hyprpaper first; swaybg if it exits or does
+# not apply a layer (hyprpaper 0.8 / hyprtoolkit often fails under the
+# VM software-render path even with monitor = *).
+set -euo pipefail
+
+wall="${CODA_WALL:-/usr/share/backgrounds/codalinux/default.png}"
+wait_s="${CODA_WALLPAPER_TIMEOUT:-6}"
+
+LOG_FILES=()
+
+collect_logs() {
+  mkdir -p /tmp
+  touch /tmp/hyprpaper.log /tmp/coda-wallpaper.log 2>/dev/null || true
+  if [[ -f /tmp/hyprpaper.log ]]; then
+    LOG_FILES+=(/tmp/hyprpaper.log)
+  fi
+  if [[ -f /tmp/coda-wallpaper.log ]]; then
+    LOG_FILES+=(/tmp/coda-wallpaper.log)
+  fi
+  local p
+  for p in /var/log/hyprpaper.log /var/log/coda-wallpaper.log \
+           /mnt/coda-guest-logs/hyprpaper.log \
+           /mnt/coda-guest-logs/coda-wallpaper.log; do
+    if [[ -d "$(dirname "${p}")" ]] && touch "${p}" 2>/dev/null; then
+      LOG_FILES+=("${p}")
+    fi
+  done
+  if [[ ${#LOG_FILES[@]} -eq 0 ]]; then
+    LOG_FILES+=(/tmp/hyprpaper.log)
+    touch /tmp/hyprpaper.log 2>/dev/null || true
+  fi
+}
+
+wlog() {
+  local f
+  for f in "${LOG_FILES[@]}"; do
+    printf '%s\n' "$*" >>"${f}" 2>/dev/null || true
+  done
+}
+
+collect_logs
+wlog "coda-wallpaper: start $(date -Iseconds 2>/dev/null || date) wall=${wall} timeout=${wait_s}s"
+wlog "coda-wallpaper: logs ${LOG_FILES[*]}"
+wlog "coda-wallpaper: virt=$(systemd-detect-virt 2>/dev/null || echo unknown) dri=$(ls /dev/dri 2>/dev/null | tr '\n' ' ')"
+wlog "coda-wallpaper: WLR_RENDERER=${WLR_RENDERER:-} LIBGL_ALWAYS_SOFTWARE=${LIBGL_ALWAYS_SOFTWARE:-}"
+
+if [[ ! -f "${wall}" ]]; then
+  wlog "coda-wallpaper: missing wallpaper ${wall}"
+  exit 1
+fi
+
+wallpaper_applied() {
+  local out
+  out="$(hyprctl hyprpaper listactive 2>/dev/null || true)"
+  if [[ "${out}" == *"${wall}"* || "${out}" == *default.png* ]]; then
+    return 0
+  fi
+  if [[ -n "${out}" ]] && echo "${out}" | grep -qiE '[.]png|[.]jpe?g|wallpaper'; then
+    return 0
+  fi
+  return 1
+}
+
+killall coda-hyprpaper 2>/dev/null || true
+killall hyprpaper 2>/dev/null || true
+killall swaybg 2>/dev/null || true
+sleep 0.2
+
+hp_pid=""
+hp="$(command -v coda-hyprpaper 2>/dev/null || true)"
+if [[ -n "${hp}" && -x "${hp}" ]]; then
+  "${hp}" &
+  hp_pid=$!
+  wlog "coda-wallpaper: started coda-hyprpaper pid=${hp_pid} (${hp})"
+elif command -v hyprpaper >/dev/null 2>&1 && [[ -x "$(command -v hyprpaper)" ]]; then
+  hyprpaper -c /etc/xdg/hypr/hyprpaper.conf --verbose >>/tmp/hyprpaper.log 2>&1 &
+  hp_pid=$!
+  wlog "coda-wallpaper: started hyprpaper pid=${hp_pid} (wrapper missing or not +x)"
+else
+  wlog "coda-wallpaper: hyprpaper not viable (missing or not executable); swaybg next"
+  wait_s=0
+fi
+
+i=0
+while [[ "${i}" -lt "${wait_s}" ]]; do
+  sleep 1
+  i=$((i + 1))
+  if wallpaper_applied; then
+    wlog "coda-wallpaper: backend=hyprpaper (applied after ${i}s)"
+    exit 0
+  fi
+  if [[ -n "${hp_pid}" ]] && ! kill -0 "${hp_pid}" 2>/dev/null; then
+    if ! pidof hyprpaper >/dev/null 2>&1; then
+      wlog "coda-wallpaper: hyprpaper process gone after ${i}s"
+      break
+    fi
+  fi
+done
+
+if wallpaper_applied && pidof hyprpaper >/dev/null 2>&1; then
+  wlog "coda-wallpaper: backend=hyprpaper"
+  exit 0
+fi
+
+wlog "coda-wallpaper: hyprpaper did not apply a wallpaper; falling back"
+killall hyprpaper 2>/dev/null || true
+killall coda-hyprpaper 2>/dev/null || true
+
+if ! command -v swaybg >/dev/null 2>&1; then
+  wlog "coda-wallpaper: swaybg missing — rebuild ISO (packages/desktop.txt) or pacman -S swaybg"
+  exit 1
+fi
+
+wlog "coda-wallpaper: backend=swaybg (${wall})"
+exec swaybg -i "${wall}" -m fill

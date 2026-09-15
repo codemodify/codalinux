@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Launch the CGO system-config-gui with virtio-safe uitoolkit defaults.
+# CGO-off binaries stay offscreen (no window). On QEMU/virtio-gpu, EGL
+# often fails (MESA-EGL dri2 screen); UITK_PAINT=cpu + Wayland/wl_shm is
+# the verified v1 path. Overrides: UITK_PAINT, UITK_BACKEND, WAYLAND_DISPLAY.
+set -euo pipefail
+
+runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" || -d "${runtime}/hypr" || "${XDG_CURRENT_DESKTOP:-}" == Hyprland ]]; then
+    if [[ -S "${runtime}/wayland-1" ]]; then
+      export WAYLAND_DISPLAY=wayland-1
+    elif [[ -S "${runtime}/wayland-0" ]]; then
+      export WAYLAND_DISPLAY=wayland-0
+    else
+      for sock in "${runtime}"/wayland-*; do
+        [[ -S "${sock}" ]] || continue
+        export WAYLAND_DISPLAY="$(basename "${sock}")"
+        break
+      done
+    fi
+  fi
+fi
+
+if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+  export UITK_BACKEND="${UITK_BACKEND:-wayland}"
+  # Hyprland often exports DISPLAY for XWayland. Auto-select can fall
+  # through to that X11 path if Wayland probe fails; do not take it.
+  unset DISPLAY
+fi
+
+# auto/gpu tries EGL first; virtio-gpu commonly errors and never maps.
+# uitoolkit CPU present is wl_shm — fine for v1. Caller may override.
+export UITK_PAINT="${UITK_PAINT:-cpu}"
+
+bin="${SYSTEM_CONFIG_GUI_BIN:-/usr/local/lib/codalinux/system-config-gui}"
+if [[ ! -x "${bin}" ]]; then
+  echo "system-config-gui: missing CGO binary ${bin}" >&2
+  exit 1
+fi
+exec "${bin}" "$@"

@@ -1,0 +1,12 @@
+NAME="CodaLinux"
+PRETTY_NAME="CodaLinux"
+ID=codalinux
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="1;36"
+HOME_URL="https://github.com/codemodify/codalinux"
+DOCUMENTATION_URL="https://github.com/codemodify/codalinux"
+SUPPORT_URL="https://github.com/codemodify/codalinux/issues"
+BUG_REPORT_URL="https://github.com/codemodify/codalinux/issues"
+VENDOR_NAME="CodaLinux"
+LOGO=codalinux

@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Live-ISO installer: pick one disk, space-check, auto ESP+A+B+data, offline
+# copy into OS-A. Locale/timezone/keymap stay Bozeman (not asked).
+# Silent: CODA_INSTALL_DISK=/dev/vda|auto  (auto = first lsblk disk).
+# Default login is user / 1 (root password 1).
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f /usr/local/lib/codalinux/coda-install-lib.sh ]]; then
+  lib=/usr/local/lib/codalinux/coda-install-lib.sh
+  engine=/usr/local/lib/codalinux/coda-install-ab.sh
+  layout=/usr/local/lib/codalinux/coda-install-layout.py
+else
+  lib="${here}/coda-install-lib.sh"
+  engine="${here}/coda-install-ab.sh"
+  layout="${here}/coda-install-layout.py"
+fi
+# shellcheck source=coda-install-lib.sh
+. "${lib}"
+CODA_INSTALL_LOG_PREFIX=coda-install
+
+usage() {
+  cat <<'EOF'
+Usage: coda-install [--disk DEV|auto] [--yes]
+
+Install CodaLinux onto one disk (wipes it):
+  ESP + OS-A + OS-B + data, offline copy of the live ISO into OS-A.
+
+  --disk DEV    target disk (or CODA_INSTALL_DISK)
+  --disk auto   first lsblk disk (QEMU e2e; no prompt)
+  --yes         skip the wipe confirmation (implied when CODA_INSTALL_DISK is set)
+
+Bozeman defaults (not asked): en_US.UTF-8, America/Denver, keymap us.
+Login after reboot: user / 1
+EOF
+}
+
+disk="${CODA_INSTALL_DISK:-}"
+force=0
+if [[ -n "${disk}" || "${CODA_INSTALL_FORCE:-}" == 1 ]]; then
+  force=1
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --disk)
+      disk="$2"
+      shift 2
+      ;;
+    --yes|--force)
+      force=1
+      shift
+      ;;
+    --first-disk)
+      disk=auto
+      force=1
+      shift
+      ;;
+    *)
+      echo "coda-install: unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+echo "CodaLinux install defaults (not asked):"
+echo "  timezone  America/Denver   (Bozeman, Montana)"
+echo "  locale    en_US.UTF-8"
+echo "  keymap    us"
+echo "  bootloader systemd-boot    root fs ext4    repos official Arch only"
+echo "  layout    ESP + OS-A + OS-B + data (offline copy, no pacstrap)"
+echo
+echo "Login after reboot:"
+echo "  user: ${CODA_INSTALL_USER:-user}"
+echo "  password: ${CODA_INSTALL_PASSWORD:-1}"
+echo
+
+if [[ "${EUID}" -ne 0 ]]; then
+  exec sudo -E -- "$0" ${disk:+--disk "${disk}"} ${force:+--yes} "$@"
+fi
+
+if [[ -z "${disk}" ]]; then
+  echo "Select the install disk (this will be partitioned)."
+  mapfile -t rows < <(coda_list_disks)
+  if [[ "${#rows[@]}" -eq 0 ]]; then
+    echo "No disks found." >&2
+    exit 1
+  fi
+  local_i=1
+  for row in "${rows[@]}"; do
+    printf '  %d) %s\n' "${local_i}" "${row}"
+    local_i=$((local_i + 1))
+  done
+  read -r -p "Disk number or path: " raw
+  raw="${raw// /}"
+  if [[ "${raw}" =~ ^[0-9]+$ ]] && [[ "${raw}" -ge 1 && "${raw}" -le "${#rows[@]}" ]]; then
+    disk="${rows[$((raw - 1))]%% *}"
+  else
+    disk="${raw}"
+  fi
+fi
+
+case "${disk}" in
+  auto|first|AUTO|FIRST)
+    disk="$(coda_first_disk)" || coda_die "no usable disk found"
+    echo "Using first disk: ${disk}"
+    force=1
+    ;;
+esac
+
+[[ -b "${disk}" ]] || coda_die "${disk} is not a block device"
+export CODA_INSTALL_DISK="${disk}"
+
+if ! python3 "${layout}" check "${disk}"; then
+  exit 1
+fi
+
+if [[ "${force}" -ne 1 ]]; then
+  echo
+  echo "This will ERASE ${disk}."
+  read -r -p "Type YES to continue: " ans
+  [[ "${ans}" == YES ]] || coda_die "aborted"
+fi
+
+exec "${engine}" --disk "${disk}"

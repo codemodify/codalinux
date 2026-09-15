@@ -1,0 +1,20 @@
+# Default application set (official repos only).
+
+foot
+thunar
+thunar-volman
+tumbler
+ffmpegthumbnailer
+gvfs
+gvfs-mtp
+firefox
+mpv
+imv
+zathura
+zathura-pdf-mupdf
+# Pin tesseract English data so pacman does not default tessdata to afr.
+tesseract-data-eng
+
+pavucontrol
+impala
+snapshot

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Start hyprpaper with the xdg config. Always write /tmp/hyprpaper.log
+# and also /var/log plus the 9p guest-logs share when those are writable.
+set -euo pipefail
+
+conf="${HYPRPAPER_CONF:-/etc/xdg/hypr/hyprpaper.conf}"
+wall="${HYPRPAPER_WALL:-/usr/share/backgrounds/codalinux/default.png}"
+
+LOG_FILES=()
+
+collect_logs() {
+  mkdir -p /tmp
+  if ! touch /tmp/hyprpaper.log 2>/dev/null; then
+    mkdir -p /tmp
+    touch /tmp/hyprpaper.log 2>/dev/null || true
+  fi
+  LOG_FILES+=(/tmp/hyprpaper.log)
+  local p
+  for p in /var/log/hyprpaper.log /var/log/coda-wallpaper.log \
+           /mnt/coda-guest-logs/hyprpaper.log; do
+    if [[ -d "$(dirname "${p}")" ]] && touch "${p}" 2>/dev/null; then
+      LOG_FILES+=("${p}")
+    fi
+  done
+}
+
+wlog() {
+  local f
+  for f in "${LOG_FILES[@]}"; do
+    printf '%s\n' "$*" >>"${f}" 2>/dev/null || true
+  done
+}
+
+collect_logs
+wlog "coda-hyprpaper: start $(date -Iseconds 2>/dev/null || date)"
+wlog "coda-hyprpaper: conf=${conf} wall=${wall} logs=${LOG_FILES[*]}"
+
+if [[ ! -f "${conf}" ]]; then
+  wlog "coda-hyprpaper: missing ${conf}"
+  echo "coda-hyprpaper: missing ${conf}" >&2
+  exit 1
+fi
+if [[ ! -f "${wall}" ]]; then
+  wlog "coda-hyprpaper: missing wallpaper ${wall}"
+  echo "coda-hyprpaper: missing wallpaper ${wall}" >&2
+fi
+
+apply_wallpaper() {
+  # * = all outputs. Third field is fit_mode (hyprpaper 0.8+).
+  hyprctl hyprpaper wallpaper "*,${wall},cover"
+}
+
+if command -v pidof >/dev/null 2>&1 && pidof hyprpaper >/dev/null 2>&1; then
+  apply_wallpaper >>/tmp/hyprpaper.log 2>&1 || true
+  wlog "coda-hyprpaper: already running; IPC apply attempted"
+  exit 0
+fi
+
+if ! command -v hyprpaper >/dev/null 2>&1; then
+  wlog "coda-hyprpaper: hyprpaper binary not found"
+  exit 1
+fi
+
+(
+  for _ in $(seq 1 10); do
+    sleep 1
+    if apply_wallpaper >>/tmp/hyprpaper.log 2>&1; then
+      wlog "coda-hyprpaper: IPC wallpaper apply ok"
+      exit 0
+    fi
+  done
+  wlog "coda-hyprpaper: IPC wallpaper apply failed after retries"
+) &
+
+# Mirror verbose output to every writable log.
+exec > >(tee -a "${LOG_FILES[@]}" >/dev/null)
+exec 2>&1
+wlog "coda-hyprpaper: exec hyprpaper -c ${conf} --verbose"
+exec hyprpaper -c "${conf}" --verbose

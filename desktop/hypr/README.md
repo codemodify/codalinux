@@ -1,0 +1,45 @@
+# Hyprland session config
+
+Lua compositor config is `hyprland.lua` (Hyprland 0.55+). Companions still use hyprlang: `hyprpaper.conf`, `hyprlock.conf`, `hypridle.conf`.
+
+## Display mode
+
+`hl.monitor` uses `1920x1080@60`, not `preferred`. QEMU virtio EDID lists `640x480@119.99` first; Hyprland preferred picks that even when 1920x1080 is available and QEMU was started with `-device virtio-vga,xres=1920,yres=1080`. Settings → Display applies another mode or scale at runtime with `hyprctl eval 'hl.monitor({ output, mode, position, scale })'` — not `hyprctl keyword` (rejected on `hyprland.lua`).
+
+## Stack = overlapping float
+
+Super+T and the AGS Tile/Stack control run `coda-hypr-ws toggle-stack`. That floats every window on the current workspace and cascades them. It is **not** Hyprland tabbed groups. Floating windows are resizable: grab borders/corners (`resize_on_border`), Super+RMB, or Alt+RMB.
+
+## Floating titlebars (hyprbars)
+
+Official [hyprbars](https://github.com/hyprwm/hyprland-plugins/tree/main/hyprbars) from hyprland-plugins. Not in Arch `extra`; vendored at ISO build time by [`scripts/vendor-hyprbars.sh`](../../scripts/vendor-hyprbars.sh).
+
+| Pin | Value |
+| --- | --- |
+| hyprland-plugins commit | `7644cecdb947060682891a0db2a0cdc5c0b9e704` (official hyprpm pin for Hyprland 0.56.2) |
+| Plugin path | `/usr/local/lib/hyprland/libhyprbars.so` |
+| Load | `hl.plugin.load(...)` at the top of `hyprland.lua` |
+| Buttons | close → `hl.dsp.window.close()`; max → maximized fullscreen toggle; min → `/usr/local/bin/coda-hypr-ws minimize` (`special:minimized`; hyprbars `exec`s the action) |
+| Titlebar scroll | Wheel up rolls the float up to the titlebar (KDE shade); wheel down restores. hyprbars has no axis hook — `mouse_up` / `mouse_down` are non-consuming binds that call `coda-hypr-ws shade` only when the pointer is on the titlebar. |
+| Tiled windows | `hyprbars:no_bar` when `float = false` |
+
+Buttons are registered with `hl.plugin.hyprbars.add_button` (Lua). Do not use the hyprlang `hyprbars-button` keyword — Hyprland 0.55’s legacy parser does not call that handler.
+
+Build deps are official only (`packages/hyprbars-build-deps.txt`), including `hyprland` so headers match the compositor on the image. The vendor script compiles with `-std=c++23` (Arch GCC 16 needs that for `std::expected` in the 0.56.2 headers; the upstream Makefile’s `-std=c++2b` is replaced, not dropped). **Do not** use `hyprpm` on the live ISO (that needs a compiler). **Do not** add AUR plugin packages. **Do not** track hyprland-plugins `main`: commits after the 0.56.2 pin expect `hyprland/src/desktop/view/window/Window.hpp`, which Arch `hyprland` 0.56.2 does not ship. When Arch rolls Hyprland, update the pin from upstream `hyprpm.toml` `commit_pins`.
+
+hyprbars is drawn inside Hyprland (cairo/pango decoration), not a separate Wayland client. It should follow the VirtualBox pixman path in `coda-hyprland`. If the plugin fails to load, floating still works — you just lose titlebar buttons (usually an ABI mismatch: rebuild the ISO so vendor-hyprbars and pacstrap see the same `hyprland`).
+
+Blur on the bar is left off (`bar_blur = false`) because live VMs use software rendering.
+
+## Lock screen (live VM)
+
+hypridle does **not** lock or DPMS-off on idle. hyprlock dies under VirtualBox/pixman and Hyprland then shows the crashed-lockscreen recovery UI. Super+L and the AGS Lock tile run `coda-hyprlock` (`hyprlock -c /etc/xdg/hypr/hyprlock.conf`). Recover a dead lockscreen with:
+
+```text
+hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'
+killall -9 hyprlock
+```
+
+## Wallpaper
+
+hyprpaper 0.8+ uses a `wallpaper { }` block with `monitor = *` (empty keys are dropped by hyprlang). Launch is `coda-wallpaper`: try hyprpaper, then `swaybg` if no layer appears (common under the live VM pixman path). Logs: `/tmp/hyprpaper.log` and `/var/log/coda-wallpaper.log`. Same Horos PNG for hyprlock (`branding/wallpapers/README.md`).

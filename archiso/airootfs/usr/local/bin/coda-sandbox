@@ -1,0 +1,532 @@
+#!/usr/bin/env bash
+# coda-sandbox — user-owned disposable Arch roots (pacman --root + bwrap).
+# Extra software goes here so host /usr stays a core/OS tree.
+# No sudo: pacman extract runs in a user namespace (unshare --map-root-user)
+# so files on disk are owned by the real user. Upstream bwrap for shell/exec.
+# See docs/sandbox.md and DESIGN.md.
+set -euo pipefail
+
+STORE_ROOT="${CODA_SANDBOX_STORE:-}"
+CACHE_DIR="${CODA_SANDBOX_CACHE:-}"
+BIND_HOME=1
+FORCE="${CODA_SANDBOX_FORCE:-0}"
+EXTRA_BINDS=()
+
+usage() {
+  cat <<'EOF'
+Usage: coda-sandbox <command> <env> [args…]
+
+Disposable Arch roots for extra packages. Host pacman is for the core OS.
+Install packages into a named env with `coda-sandbox install`.
+All commands run as your user — do not use sudo.
+
+Commands:
+  create <env>                 Bootstrap a minimal Arch root with
+                               pacman --root inside a user namespace
+  destroy <env>                Delete a sandbox (no prompt)
+  clone <env> <new-name>       Copy an existing sandbox tree
+  list                         Show your named sandboxes
+  install <env> <package> […]  pacman --noconfirm -S into that env
+  shell <env>                  bwrap: sandbox is /, then a login shell
+  exec <env> <command> […]     bwrap: sandbox is /, then command
+  help                         This text
+
+Options (before or after the command):
+  --force                    accepted; destroy never prompts
+  --no-home                  do not bind $HOME into shell/exec
+  --bind HOST:GUEST          extra bind (repeatable)
+  --store DIR                sandbox store (default ~/.coda/sandbox)
+  --cache DIR                pacman cache (default ~/.coda/cache/pacman)
+
+Environment:
+  CODA_SANDBOX_STORE   CODA_SANDBOX_CACHE   CODA_SANDBOX_FORCE=1
+
+Defaults (user-owned, no sudo):
+  ~/.coda/sandbox/<env>/       sandbox directory
+  ~/.coda/sandbox/<env>/root   pacman --root tree
+  ~/.coda/sandbox/<env>/meta
+  ~/.coda/cache/pacman         shared cache for this user
+
+One named sandbox is one Arch root. Install many packages into it
+(repeat install); do not create one sandbox per app.
+
+Host requirements: Arch or CodaLinux, official core/extra, initialized
+keyring, network for the first create, bubblewrap, util-linux unshare,
+and unprivileged user namespaces. This script does not reimplement bwrap.
+
+Examples:
+  coda-sandbox create <env>
+  coda-sandbox install <env> postgresql
+  coda-sandbox install <env> redis git
+  coda-sandbox shell <env>
+  coda-sandbox exec <env> postgres --version
+  coda-sandbox clone <env> <new-name>
+  coda-sandbox list
+  coda-sandbox destroy <env>
+EOF
+}
+
+log() { printf 'coda-sandbox: %s\n' "$*"; }
+die() { printf 'coda-sandbox: %s\n' "$*" >&2; exit 1; }
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "need $1 on the host (official Arch package)"
+}
+
+valid_name() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || \
+    die "bad sandbox name '$1' (use letters, digits, . _ -)"
+}
+
+coda_home() {
+  local h="${HOME:-}"
+  if [[ -z "${h}" ]]; then
+    h="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6 || true)"
+  fi
+  [[ -n "${h}" ]] || die "HOME is unset"
+  printf '%s' "${h}"
+}
+
+default_store() {
+  if [[ -n "${STORE_ROOT}" ]]; then
+    printf '%s' "${STORE_ROOT}"
+    return
+  fi
+  printf '%s/.coda/sandbox' "$(coda_home)"
+}
+
+default_cache() {
+  if [[ -n "${CACHE_DIR}" ]]; then
+    printf '%s' "${CACHE_DIR}"
+    return
+  fi
+  printf '%s/.coda/cache/pacman' "$(coda_home)"
+}
+
+ensure_user_dirs() {
+  local store cache coda
+  store="$(default_store)"
+  cache="$(default_cache)"
+  coda="$(coda_home)/.coda"
+  mkdir -p "${store}" "${cache}"
+  chmod 0700 "${coda}" 2>/dev/null || true
+}
+
+sandbox_dir() { printf '%s/%s' "$(default_store)" "$1"; }
+sandbox_root() { printf '%s/%s/root' "$(default_store)" "$1"; }
+sandbox_meta() { printf '%s/%s/meta' "$(default_store)" "$1"; }
+
+exists() {
+  [[ -d "$(sandbox_root "$1")" && -f "$(sandbox_meta "$1")" ]]
+}
+
+write_meta() {
+  local name="$1"
+  local dir
+  dir="$(sandbox_dir "${name}")"
+  mkdir -p "${dir}"
+  cat >"$(sandbox_meta "${name}")" <<EOF
+name=${name}
+created=$(date -Iseconds 2>/dev/null || date)
+root=$(sandbox_root "${name}")
+EOF
+}
+
+# Run as uid 0 inside a user namespace. Files created as "root" there are
+# owned by the real user on the host. Does not use sudo.
+as_userns_root() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  need_cmd unshare
+  if unshare --user --map-root-user --keep-caps true >/dev/null 2>&1; then
+    unshare --user --map-root-user --keep-caps -- "$@"
+    return
+  fi
+  if unshare --user --map-root-user true >/dev/null 2>&1; then
+    unshare --user --map-root-user -- "$@"
+    return
+  fi
+  die "user namespaces required (unshare --map-root-user). Check max_user_namespaces / kernel.unprivileged_userns_clone. Do not sudo — enable userns instead."
+}
+
+prepare_gpgdir() {
+  local dest="$1"
+  if [[ -d "${dest}" ]] && [[ -e "${dest}/pubring.gpg" || -d "${dest}/openpgp-revocs.d" ]]; then
+    return 0
+  fi
+  mkdir -p "${dest}"
+  if [[ -d /etc/pacman.d/gnupg ]]; then
+    cp -a /etc/pacman.d/gnupg/. "${dest}/" 2>/dev/null || \
+      cp -r /etc/pacman.d/gnupg/. "${dest}/" 2>/dev/null || true
+    chmod -R u+rwX "${dest}" 2>/dev/null || true
+  fi
+}
+
+sandbox_pacman_conf() {
+  printf '%s/pacman.conf' "$(default_cache)"
+}
+
+# Host [options] value (first match). Empty if missing or no host config.
+host_pacman_option() {
+  local key="$1"
+  [[ -f /etc/pacman.conf ]] || return 0
+  awk -v key="${key}" '
+    /^[[:space:]]*\[options\]/ { inopt=1; next }
+    /^[[:space:]]*\[/ { inopt=0 }
+    inopt && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      sub(/^[^=]+=[[:space:]]*/, "")
+      print
+      exit
+    }
+  ' /etc/pacman.conf
+}
+
+# Do not pass host /etc/pacman.conf into a user namespace. Stock Arch sets
+# DownloadUser = alpm; only uid 0 is mapped, so chown of the download dir
+# fails with EINVAL. Landlock/seccomp download sandbox can fail too.
+write_sandbox_pacman_conf() {
+  local dest="$1"
+  local mirror="/etc/pacman.d/mirrorlist"
+  mkdir -p "$(dirname "${dest}")"
+  [[ -f "${mirror}" ]] || die "need ${mirror} on the host (official Arch mirrorlist)"
+  local siglevel architecture
+  siglevel="$(host_pacman_option SigLevel)"
+  architecture="$(host_pacman_option Architecture)"
+  [[ -n "${siglevel}" ]] || siglevel="Required DatabaseOptional"
+  [[ -n "${architecture}" ]] || architecture="auto"
+  cat >"${dest}" <<EOF
+# Generated by coda-sandbox for unprivileged pacman --root.
+# Not a copy of host /etc/pacman.conf (DownloadUser = alpm breaks userns).
+[options]
+HoldPkg = pacman glibc
+Architecture = ${architecture}
+CheckSpace
+ParallelDownloads = 5
+SigLevel = ${siglevel}
+LocalFileSigLevel = Optional
+DownloadUser = root
+DisableSandbox
+
+[core]
+Include = ${mirror}
+
+[extra]
+Include = ${mirror}
+EOF
+}
+
+pacman_in_root() {
+  local root="$1"
+  shift
+  need_cmd pacman
+  local cache gpgdir conf
+  cache="$(default_cache)"
+  mkdir -p "${root}/var/lib/pacman" "${root}/etc" "${cache}"
+  conf="$(sandbox_pacman_conf)"
+  write_sandbox_pacman_conf "${conf}"
+  cp -a "${conf}" "${root}/etc/pacman.conf" 2>/dev/null || \
+    cp "${conf}" "${root}/etc/pacman.conf"
+  gpgdir="${cache}/gnupg-host"
+  prepare_gpgdir "${gpgdir}"
+
+  local -a args=(
+    --noconfirm
+    --needed
+    --root "${root}"
+    --cachedir "${cache}"
+    --config "${conf}"
+  )
+  if [[ -d "${gpgdir}" ]]; then
+    args+=(--gpgdir "${gpgdir}")
+  fi
+  # --noconfirm still prints "Proceed with installation?" on some pacman
+  # builds, then continues. Feed yes so a future prompt cannot block.
+  # pipefail off: yes exits 141 (SIGPIPE) after pacman closes stdin.
+  set +o pipefail
+  yes | as_userns_root pacman "${args[@]}" "$@"
+  local rc=$?
+  set -o pipefail
+  return "${rc}"
+}
+
+# filesystem ships usr/lib/os-release only. Host /etc/os-release is a
+# systemd-tmpfiles symlink (L /etc/os-release → ../usr/lib/os-release).
+# pacman --root does not run tmpfiles, so create the link ourselves.
+materialize_os_release() {
+  local root="$1"
+  mkdir -p "${root}/etc"
+  if [[ -e "${root}/usr/lib/os-release" && ! -e "${root}/etc/os-release" ]]; then
+    ln -sfn ../usr/lib/os-release "${root}/etc/os-release"
+  fi
+}
+
+# Write a regular file (never a systemd symlink). bwrap cannot bind over
+# /etc/resolv.conf when it points at /run/... and we mount a tmpfs on /run.
+materialize_resolv_conf() {
+  local root="$1"
+  local dest="${root}/etc/resolv.conf"
+  mkdir -p "${root}/etc"
+  if [[ -L "${dest}" ]]; then
+    rm -f "${dest}"
+  fi
+  if [[ -e /etc/resolv.conf ]]; then
+    cat /etc/resolv.conf >"${dest}" 2>/dev/null || \
+      printf 'nameserver 1.1.1.1\n' >"${dest}"
+  else
+    printf 'nameserver 1.1.1.1\n' >"${dest}"
+  fi
+}
+
+# User-owned trees still have 555 dirs (e.g. ca-certificates cadir).
+# chmod as the owner, then rm; userns root if that is not enough.
+remove_tree() {
+  local dir="$1"
+  [[ -e "${dir}" ]] || return 0
+  chmod -R u+w "${dir}" 2>/dev/null || true
+  rm -rf "${dir}" 2>/dev/null && return 0
+  as_userns_root /bin/bash -c 'chmod -R u+w -- "$1" && rm -rf -- "$1"' bash "${dir}"
+}
+
+bootstrap_root() {
+  local root="$1"
+  mkdir -p "${root}/var/lib/pacman" "${root}/etc/pacman.d"
+  if [[ -f /etc/pacman.d/mirrorlist && ! -f "${root}/etc/pacman.d/mirrorlist" ]]; then
+    cp -a /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist" 2>/dev/null || \
+      cp /etc/pacman.d/mirrorlist "${root}/etc/pacman.d/mirrorlist"
+  fi
+  materialize_resolv_conf "${root}"
+  # Pin iptables so libxtables.so does not ask iptables vs iptables-legacy.
+  log "bootstrapping ${root} with pacman --root base iptables (user namespace, cache $(default_cache))"
+  pacman_in_root "${root}" -Sy --noconfirm --needed base iptables
+  materialize_os_release "${root}"
+}
+
+cmd_create() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox create <env>"
+  valid_name "${name}"
+  need_cmd pacman
+  ensure_user_dirs
+  if exists "${name}"; then
+    die "sandbox '${name}' already exists ($(sandbox_root "${name}"))"
+  fi
+  local root
+  root="$(sandbox_root "${name}")"
+  mkdir -p "${root}"
+  write_meta "${name}"
+  if ! bootstrap_root "${root}"; then
+    remove_tree "$(sandbox_dir "${name}")"
+    die "bootstrap failed; removed ${name}"
+  fi
+  log "created ${name} at ${root}"
+  log "install software with: coda-sandbox install ${name} <packages>"
+}
+
+cmd_clone() {
+  local src="${1:-}" dst="${2:-}"
+  [[ -n "${src}" && -n "${dst}" ]] || die "usage: coda-sandbox clone <env> <new-name>"
+  valid_name "${src}"
+  valid_name "${dst}"
+  ensure_user_dirs
+  exists "${src}" || die "no sandbox '${src}'"
+  if exists "${dst}"; then
+    die "sandbox '${dst}' already exists"
+  fi
+  mkdir -p "$(sandbox_dir "${dst}")"
+  cp -a "$(sandbox_root "${src}")" "$(sandbox_root "${dst}")"
+  write_meta "${dst}"
+  log "cloned ${src} → ${dst}"
+}
+
+cmd_install() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox install <env> <package> [packages…]"
+  shift
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox install <env> <package> [packages…]"
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}' (coda-sandbox create ${name})"
+  ensure_user_dirs
+  pacman_in_root "$(sandbox_root "${name}")" --noconfirm --needed -S "$@"
+}
+
+cmd_list() {
+  local store
+  store="$(default_store)"
+  if [[ ! -d "${store}" ]]; then
+    log "no store at ${store}"
+    return 0
+  fi
+  local d name root
+  local found=0
+  for d in "${store}"/*; do
+    [[ -d "${d}" ]] || continue
+    name="$(basename "${d}")"
+    root="${d}/root"
+    if [[ ! -d "${root}" ]]; then
+      continue
+    fi
+    found=1
+    printf '%s\t%s\n' "${name}" "${root}"
+  done
+  if [[ "${found}" -eq 0 ]]; then
+    log "no sandboxes in ${store}"
+  fi
+}
+
+cmd_destroy() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox destroy <env>"
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}'"
+  local dir
+  dir="$(sandbox_dir "${name}")"
+  # --force is a no-op; destroy never prompts.
+  remove_tree "${dir}"
+  if [[ -e "${dir}" ]]; then
+    die "could not remove ${dir} (555 dirs?). No sudo — check user namespaces."
+  fi
+  log "destroyed ${name}"
+}
+
+bwrap_run() {
+  local name="$1"
+  shift
+  valid_name "${name}"
+  exists "${name}" || die "no sandbox '${name}'"
+  need_cmd bwrap
+  local root cache host_resolv
+  root="$(sandbox_root "${name}")"
+  cache="$(default_cache)"
+  mkdir -p "${root}/tmp" "${root}/run" "${root}/var/cache/pacman/pkg" "${cache}"
+  materialize_os_release "${root}"
+  materialize_resolv_conf "${root}"
+
+  local -a bw=(
+    bwrap
+    --unshare-pid
+    --unshare-uts
+    --hostname "coda-${name}"
+    --die-with-parent
+    --bind "${root}" /
+    --proc /proc
+    --dev /dev
+    --ro-bind-try /sys /sys
+    --tmpfs /tmp
+    --tmpfs /run
+    --bind "${cache}" /var/cache/pacman/pkg
+    --setenv PATH /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  )
+
+  host_resolv="/etc/resolv.conf"
+  if [[ -L "${host_resolv}" ]]; then
+    host_resolv="$(readlink -f /etc/resolv.conf || true)"
+  fi
+  if [[ -n "${host_resolv}" && -f "${host_resolv}" ]]; then
+    bw+=(--ro-bind-try "${host_resolv}" /etc/resolv.conf)
+  fi
+  if [[ -f /etc/hosts ]]; then
+    bw+=(--ro-bind-try /etc/hosts /etc/hosts)
+  fi
+
+  if [[ "${BIND_HOME}" -eq 1 && -n "${HOME:-}" && -d "${HOME}" ]]; then
+    bw+=(--bind "${HOME}" "${HOME}")
+    bw+=(--setenv HOME "${HOME}")
+    if [[ -n "${USER:-}" ]]; then
+      bw+=(--setenv USER "${USER}")
+    fi
+  fi
+
+  local spec host guest
+  for spec in "${EXTRA_BINDS[@]}"; do
+    host="${spec%%:*}"
+    guest="${spec#*:}"
+    [[ -n "${host}" && -n "${guest}" && "${host}" != "${spec}" ]] || \
+      die "bad --bind '${spec}' (want HOST:GUEST)"
+    bw+=(--bind "${host}" "${guest}")
+  done
+
+  if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR}" ]]; then
+    bw+=(--bind-try "${XDG_RUNTIME_DIR}" "${XDG_RUNTIME_DIR}")
+  fi
+
+  local cwd="/"
+  if [[ "${BIND_HOME}" -eq 1 && -n "${HOME:-}" && -d "${HOME}" ]]; then
+    cwd="${HOME}"
+  fi
+  bw+=(--chdir "${cwd}")
+
+  if [[ $# -eq 0 ]]; then
+    if [[ -x "${root}/bin/bash" ]]; then
+      set -- /bin/bash -l
+    else
+      set -- /bin/sh -l
+    fi
+  fi
+
+  exec "${bw[@]}" "$@"
+}
+
+cmd_shell() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox shell <env>"
+  bwrap_run "${name}"
+}
+
+cmd_exec() {
+  local name="${1:-}"
+  [[ -n "${name}" ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
+  shift
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
+  if [[ "${1:-}" == "--" ]]; then
+    shift
+  fi
+  [[ $# -gt 0 ]] || die "usage: coda-sandbox exec <env> <command> [params…]"
+  bwrap_run "${name}" "$@"
+}
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --force) FORCE=1; shift ;;
+    --no-home) BIND_HOME=0; shift ;;
+    --store)
+      [[ $# -ge 2 ]] || die "--store needs a directory"
+      STORE_ROOT="$2"
+      shift 2
+      ;;
+    --cache)
+      [[ $# -ge 2 ]] || die "--cache needs a directory"
+      CACHE_DIR="$2"
+      shift 2
+      ;;
+    --bind)
+      [[ $# -ge 2 ]] || die "--bind needs HOST:GUEST"
+      EXTRA_BINDS+=("$2")
+      shift 2
+      ;;
+    --) shift; ARGS+=("$@"); break ;;
+    *) ARGS+=("$1"); shift ;;
+  esac
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+cmd="${1:-help}"
+shift || true
+
+case "${cmd}" in
+  help|-h|--help) usage ;;
+  create) cmd_create "${1:-}" ;;
+  destroy) cmd_destroy "${1:-}" ;;
+  clone) cmd_clone "${1:-}" "${2:-}" ;;
+  list) cmd_list ;;
+  install) cmd_install "$@" ;;
+  shell) cmd_shell "${1:-}" ;;
+  exec) cmd_exec "$@" ;;
+  *)
+    usage >&2
+    die "unknown command '${cmd}'"
+    ;;
+esac

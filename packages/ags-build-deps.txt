@@ -1,0 +1,33 @@
+# Official-repo dependencies for building AGS/Astal from source at ISO
+# image-build time (scripts/vendor-ags.sh). Not composed into the default
+# live ISO. AGS itself is not an official package — do not add
+# aylurs-gtk-shell or libastal* here.
+
+meson
+ninja
+npm
+nodejs
+go
+gobject-introspection
+gjs
+gtk3
+gtk4
+gtk-layer-shell
+gtk4-layer-shell
+vala
+glib2
+glib2-devel
+json-glib
+gdk-pixbuf2
+upower
+wireplumber
+git
+curl
+python
+pkgconf
+gcc
+make
+blueprint-compiler
+dart-sass
+typescript
+esbuild
