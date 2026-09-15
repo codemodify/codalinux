@@ -87,6 +87,31 @@ class SplitTests(unittest.TestCase):
             self.assertIn("/usr/local/bin/coda-hyprland", result["desktop_files"])
             self.assertNotIn("/usr/local/bin/coda-hyprland", result["core_files"])
 
+    def test_installer_lib_stays_on_core(self):
+        """coda-install-* helpers must not follow Hyprland onto coda-data."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local = root / "var/lib/pacman/local"
+            local.mkdir(parents=True)
+            _write_pkg(local, "filesystem", "1-1", [], ["usr/bin/bash"])
+            (root / "usr/bin").mkdir(parents=True)
+            (root / "usr/bin/bash").write_text("sh", encoding="utf-8")
+            libdir = root / "usr/local/lib/codalinux"
+            libdir.mkdir(parents=True)
+            (libdir / "coda-install-lib.sh").write_text("coda_need_root() { :; }\n", encoding="utf-8")
+            (libdir / "coda-desktop-mount").write_text("mount\n", encoding="utf-8")
+            (root / "usr/local/bin").mkdir(parents=True)
+            (root / "usr/local/bin/coda-slot").write_text("slot\n", encoding="utf-8")
+            (root / "usr/local/bin/coda-hyprland").write_text("hypr\n", encoding="utf-8")
+
+            pkgs, provides = mod.read_pacman_local(local)
+            result = mod.classify(root, ["filesystem"], pkgs, provides, include_unpackaged=True)
+            self.assertIn("/usr/local/lib/codalinux/coda-install-lib.sh", result["core_files"])
+            self.assertNotIn("/usr/local/lib/codalinux/coda-install-lib.sh", result["desktop_files"])
+            self.assertIn("/usr/local/bin/coda-slot", result["core_files"])
+            self.assertIn("/usr/local/lib/codalinux/coda-desktop-mount", result["core_files"])
+            self.assertNotIn("/usr/local/bin/coda-hyprland", result["core_files"])
+
     def test_home_var_boot_skipped(self):
         self.assertTrue(mod.should_skip("/var/lib/pacman/local"))
         self.assertTrue(mod.should_skip("/home/live"))

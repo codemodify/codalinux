@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 # Wire greetd + core services after the offline split.
 # Desktop/session files go to CODA_DESKTOP_ROOT (/coda/data/desktop).
-# Core slot gets sshd/QGA/networkd and coda-desktop-mount — not Hyprland.
+# Core slot gets sshd/QGA/networkd, coda-desktop-mount, and a real
+# greetd.service unit + PAM — not the greetd/Hyprland binaries.
 # Runs from the live ISO after coda-install-ab.sh / coda-slot.
 set -euo pipefail
+
+_post_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f /usr/local/lib/codalinux/coda-install-lib.sh ]]; then
+  # shellcheck source=coda-install-lib.sh
+  . /usr/local/lib/codalinux/coda-install-lib.sh
+elif [[ -f "${_post_here}/coda-install-lib.sh" ]]; then
+  # shellcheck source=coda-install-lib.sh
+  . "${_post_here}/coda-install-lib.sh"
+fi
 
 user="${CODA_INSTALL_USER:-user}"
 target="${CODA_INSTALL_TARGET:-/mnt}"
@@ -108,6 +118,12 @@ configure_target() {
   rm -f "${root}/etc/systemd/system/coda-live-setup.service"
   rm -f "${root}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
   rm -f "${root}/etc/systemd/system/getty@tty2.service.d/autologin.conf"
+  if declare -F coda_scrub_live_greetd >/dev/null; then
+    coda_scrub_live_greetd "${root}"
+    if [[ "${session}" != "${root}" ]]; then
+      coda_scrub_live_greetd "${session}"
+    fi
+  fi
 
   install -d "${root}/etc/systemd/system-preset"
   cat >"${root}/etc/systemd/system-preset/80-codalinux.preset" <<'EOF'
@@ -145,7 +161,16 @@ EOF
     fi
   fi
 
-  # Core units exist on the slot. Desktop units (greetd/iwd/bluetooth) exist
+  # greetd.service + PAM on the slot so systemd can start the DM after
+  # coda-desktop-mount. The greetd binary stays on coda-data.
+  if declare -F coda_install_slot_greetd >/dev/null; then
+    coda_install_slot_greetd "${root}"
+  else
+    echo "coda-install-post: coda_install_slot_greetd missing" >&2
+    exit 1
+  fi
+
+  # Core units exist on the slot. Desktop units (iwd/bluetooth) exist
   # after coda-desktop-mount; enable them as wants symlinks anyway.
   systemctl --root="${root}" enable systemd-networkd.service \
     systemd-resolved.service qemu-guest-agent.service sshd.service || true
@@ -155,12 +180,7 @@ EOF
   systemctl --root="${root}" disable firewalld.service 2>/dev/null || true
   systemctl --root="${root}" disable cups.service 2>/dev/null || true
   systemctl --root="${root}" disable coda-live-setup.service 2>/dev/null || true
-  mkdir -p "${root}/etc/systemd/system"
-  ln -sfn /usr/lib/systemd/system/greetd.service \
-    "${root}/etc/systemd/system/display-manager.service"
   mkdir -p "${root}/etc/systemd/system/multi-user.target.wants"
-  ln -sfn /usr/lib/systemd/system/greetd.service \
-    "${root}/etc/systemd/system/multi-user.target.wants/greetd.service"
   ln -sfn /usr/lib/systemd/system/iwd.service \
     "${root}/etc/systemd/system/multi-user.target.wants/iwd.service" 2>/dev/null || true
   ln -sfn /usr/lib/systemd/system/bluetooth.service \
@@ -283,9 +303,17 @@ if [[ "${same_root}" -eq 0 ]]; then
   done
   copy_if /usr/local/lib/codalinux/coda-desktop-mount \
     "${target}/usr/local/lib/codalinux/coda-desktop-mount"
+  local helper
+  for helper in coda-install-lib.sh coda-install-post.sh coda-install-ab.sh \
+                coda-install-split.py coda-install-layout.py \
+                coda-install-verify.sh coda-install-config.py; do
+    copy_if "/usr/local/lib/codalinux/${helper}" \
+      "${target}/usr/local/lib/codalinux/${helper}"
+  done
   chmod 0755 "${target}/usr/local/bin/coda-install" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/coda-slot" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/coda-desktop-mount" 2>/dev/null || true
+  chmod 0755 "${target}/usr/local/lib/codalinux/"coda-install* 2>/dev/null || true
 
   copy_if /etc/systemd/network/20-wired.network \
     "${target}/etc/systemd/network/20-wired.network"
@@ -342,6 +370,34 @@ if grep -q 'user = "live"' "${session}/etc/greetd/config.toml"; then
 fi
 if [[ -n "${desktop_root}" && -x "${target}/usr/local/bin/coda-hyprland" ]]; then
   echo "coda-install-post: coda-hyprland must not be installed on the core slot" >&2
+  exit 1
+fi
+if [[ ! -f "${target}/usr/local/lib/codalinux/coda-install-lib.sh" ]]; then
+  echo "coda-install-post: coda-install-lib.sh missing on the core slot (boot-test/promote need it)" >&2
+  exit 1
+fi
+if [[ ! -f "${target}/etc/systemd/system/greetd.service" \
+   || -L "${target}/etc/systemd/system/greetd.service" ]]; then
+  echo "coda-install-post: greetd.service must be a real file on the core slot" >&2
+  exit 1
+fi
+if [[ ! -f "${target}/etc/pam.d/greetd" ]]; then
+  echo "coda-install-post: /etc/pam.d/greetd missing on the core slot" >&2
+  exit 1
+fi
+if [[ ! -f "${target}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf" ]]; then
+  echo "coda-install-post: greetd drop-in After=coda-desktop-mount missing" >&2
+  exit 1
+fi
+_greetd_want="${target}/etc/systemd/system/multi-user.target.wants/greetd.service"
+if [[ -L "${_greetd_want}" ]]; then
+  _greetd_link="$(readlink "${_greetd_want}")"
+  if [[ "${_greetd_link}" == /usr/lib/systemd/system/greetd.service ]]; then
+    echo "coda-install-post: greetd wants must not dangle at /usr/lib (desktop-only)" >&2
+    exit 1
+  fi
+elif [[ ! -e "${_greetd_want}" ]]; then
+  echo "coda-install-post: greetd.service is not wanted on the core slot" >&2
   exit 1
 fi
 

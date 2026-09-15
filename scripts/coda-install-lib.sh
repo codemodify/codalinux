@@ -3,7 +3,9 @@
 # Offline payload = live airootfs split (core → slot, desktop → coda-data).
 # Never pacstrap.
 
-if [[ -n "${CODA_INSTALL_LIB_SOURCED:-}" ]]; then
+# Re-load if a stale CODA_INSTALL_LIB_SOURCED=1 leaked into the environment
+# without the helpers (fresh qga_exec of coda-slot boot-test/promote).
+if declare -F coda_need_root >/dev/null 2>&1; then
   return 0
 fi
 CODA_INSTALL_LIB_SOURCED=1
@@ -15,6 +17,22 @@ coda_need_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     coda_die "must run as root (live ISO: sudo -E; QGA guest-exec is already root)"
   fi
+}
+
+coda_pick_esp() {
+  # Prefer an ESP that already has coda-*.conf. Live ISO /boot/loader is
+  # the ISO's systemd-boot, not the installed disk.
+  local target="${1:-/mnt/coda-slot}"
+  if [[ -f /boot/loader/entries/coda-a.conf || -f /boot/loader/entries/coda-b.conf ]]; then
+    printf '%s' /boot
+    return 0
+  fi
+  if [[ -f "${target}/boot/loader/entries/coda-a.conf" \
+     || -f "${target}/boot/loader/entries/coda-b.conf" ]]; then
+    printf '%s' "${target}/boot"
+    return 0
+  fi
+  return 1
 }
 
 coda_part_path() {
