@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Live-ISO installer: pick one disk, space-check, auto ESP+A+B+data, offline
-# copy into OS-A. Locale/timezone/keymap stay Bozeman (not asked).
+# split (core → OS-A, desktop → coda-data). Locale/tz/keymap stay Bozeman.
 # Silent: CODA_INSTALL_DISK=/dev/vda|auto  (auto = first lsblk disk).
 # Default login is user / 1 (root password 1).
 set -euo pipefail
@@ -24,7 +24,7 @@ usage() {
 Usage: coda-install [--disk DEV|auto] [--yes]
 
 Install CodaLinux onto one disk (wipes it):
-  ESP + OS-A + OS-B + data, offline copy of the live ISO into OS-A.
+  ESP + OS-A + OS-B + data. Core → OS-A; desktop → coda-data.
 
   --disk DEV    target disk (or CODA_INSTALL_DISK)
   --disk auto   first lsblk disk (QEMU e2e; no prompt)
@@ -70,7 +70,7 @@ echo "  timezone  America/Denver   (Bozeman, Montana)"
 echo "  locale    en_US.UTF-8"
 echo "  keymap    us"
 echo "  bootloader systemd-boot    root fs ext4    repos official Arch only"
-echo "  layout    ESP + OS-A + OS-B + data (offline copy, no pacstrap)"
+echo "  layout    ESP + OS-A + OS-B + data (core on slots, desktop on data)"
 echo
 echo "Login after reboot:"
 echo "  user: ${CODA_INSTALL_USER:-user}"

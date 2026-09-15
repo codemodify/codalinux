@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Partition ESP+OS-A+OS-B+data and offline-install the live image into OS-A.
-# Called by coda-install. Not an archinstall/pacstrap path.
+# Partition ESP+OS-A+OS-B+data and offline-install core into OS-A,
+# desktop onto coda-data. Called by coda-install. Not pacstrap.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,9 +14,9 @@ Usage: coda-install-ab.sh --disk DEV
 
 Wipe DEV and install CodaLinux offline:
   GPT: coda-esp (FAT32) + coda-a + coda-b (ext4) + coda-data (ext4)
-  Copy live airootfs into OS-A (no mirrors)
+  Split live airootfs: Arch core → OS-A, desktop → /coda/data/desktop
   systemd-boot entries A (default) and B (placeholder)
-  data bind-mounted at /home and /var
+  data bind-mounted at /home and /var; desktop merged at boot
 
 Environment:
   CODA_INSTALL_DISK     same as --disk
@@ -63,12 +63,8 @@ if [[ "${src}" == / ]]; then
   coda_log "airootfs not mounted; copying live / with exclusions (still offline)"
 fi
 
-# Fail early if the live payload cannot fit the slot.
-src_bytes="$(coda_source_bytes "${src}" || echo 0)"
-slot_bytes=$((a_mib * 1024 * 1024))
-if [[ "${src_bytes}" -gt 0 && $((src_bytes + src_bytes / 10)) -gt "${slot_bytes}" ]]; then
-  coda_die "live payload (${src_bytes} bytes) does not fit OS-A (${slot_bytes} bytes)"
-fi
+# Full live airootfs no longer goes on the slot (core-only). Desktop
+# lands on coda-data. ENOSPC during the split rsync is the size check.
 
 coda_log "unmounting any existing filesystems on ${disk}"
 coda_umount_tree "${target}"
@@ -109,16 +105,16 @@ mount "${esp_dev}" "${target}/boot"
 data_mnt="${target}/coda/data"
 mount "${data_dev}" "${data_mnt}"
 
-coda_rsync_root "${src}" "${target}" 0
+coda_split_offline "${src}" "${target}" "${data_mnt}"
 coda_wipe_live_bits "${target}"
-coda_seed_data "${target}" "${data_mnt}"
+coda_wipe_live_bits "${data_mnt}/desktop"
+mkdir -p "${data_mnt}/home" "${data_mnt}/var"
 coda_bind_data "${target}" "${data_mnt}"
 coda_bind_dev "${target}"
 coda_write_fstab "${target}" a
 coda_bozeman "${target}"
 coda_write_slot_marker "${target}" a 0
 printf '%s\n' "${plan_json}" >"${target}/etc/coda/layout.json"
-mkdir -p "${data_mnt}/home" "${data_mnt}/var"
 
 coda_create_user "${target}"
 if ! coda_chroot "${target}" systemd-machine-id-setup >/dev/null 2>&1; then
@@ -156,6 +152,7 @@ post="$(coda_find_post || true)"
 if [[ -n "${post}" ]]; then
   coda_log "running ${post}"
   CODA_INSTALL_USER="${CODA_INSTALL_USER:-user}" \
+  CODA_DESKTOP_ROOT="${data_mnt}/desktop" \
     "${post}" --user "${CODA_INSTALL_USER:-user}" --target "${target}"
 else
   coda_die "coda-install-post.sh missing"

@@ -175,6 +175,31 @@ fi
 if ! grep -q 'SLOT_FLOOR_MIB = 4096' "${root}/scripts/coda-install-layout.py"; then
   log_fail "coda-install-layout.py SLOT_FLOOR_MIB must be 4096 (core-only slots)"
 fi
+if ! grep -q 'coda-hyprland must not be installed on the core slot' \
+    "${root}/scripts/coda-install-post.sh"; then
+  log_fail "coda-install-post.sh must keep the core-slot coda-hyprland guard"
+fi
+if ! grep -q 'is_directory_entry' "${root}/scripts/coda-install-split.py"; then
+  log_fail "coda-install-split.py must skip directory nodes (rsync recurse leak)"
+fi
+if ! grep -q 'coda_purge_leaked_desktop' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must purge leaked desktop files from the slot"
+fi
+if grep -qE 'arg.: \[.-lc' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh qga_exec must use bash -c, not bash -lc"
+fi
+if ! grep -q '"-c", cmd' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh qga_exec must pass bash -c"
+fi
+if grep -q 'status.get("exitcode") or 1' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must not treat guest-exec exitcode 0 as missing"
+fi
+if ! grep -q 'coda-slot install --disk' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must call coda-slot install --disk (subcommand first)"
+fi
+if ! grep -q 'coda-slot boot-test --disk' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must call coda-slot boot-test --disk"
+fi
 
 for gui_rt in wayland libxkbcommon libx11 libxext libxrandr libxcursor; do
   if ! grep -qx "${gui_rt}" "${root}/packages/desktop.txt"; then

@@ -38,13 +38,13 @@ default. promote uses `bootctl set-default`.
 EOF
 }
 
-cmd="${1:-}"
-shift || true
 disk="${CODA_INSTALL_DISK:-}"
 target="${CODA_SLOT_TARGET:-/mnt/coda-slot}"
 slot=""
 src_override=""
+cmd=""
 
+# Accept both `coda-slot install --disk DEV` and `coda-slot --disk DEV install`.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -52,6 +52,13 @@ while [[ $# -gt 0 ]]; do
     --target) target="$2"; shift 2 ;;
     --slot) slot="$2"; shift 2 ;;
     --from) src_override="$2"; shift 2 ;;
+    status|install|boot-test|promote)
+      if [[ -n "${cmd}" ]]; then
+        coda_die "duplicate command: $1 (already ${cmd})"
+      fi
+      cmd="$1"
+      shift
+      ;;
     *) coda_die "unknown argument: $1" ;;
   esac
 done
@@ -275,7 +282,11 @@ cmd_promote() {
   [[ -f "${esp}/loader/entries/coda-${s}.conf" ]] || coda_die "missing coda-${s}.conf"
   bootctl set-default "coda-${s}.conf" --esp-path="${esp}"
   coda_write_loader_conf "${esp}" "${s}"
-  coda_log "default boot entry is now coda-${s}.conf"
+  sync "${esp}/loader/loader.conf" 2>/dev/null || sync
+  if ! grep -q "^default coda-${s}.conf" "${esp}/loader/loader.conf"; then
+    coda_die "ESP ${esp}/loader/loader.conf default is not coda-${s}.conf after promote"
+  fi
+  coda_log "default boot entry is now coda-${s}.conf (verified on ESP)"
 }
 
 case "${cmd}" in

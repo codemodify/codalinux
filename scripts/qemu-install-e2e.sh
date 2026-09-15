@@ -307,7 +307,7 @@ start = rpc({
     "execute": "guest-exec",
     "arguments": {
         "path": "/bin/bash",
-        "arg": ["-lc", cmd],
+        "arg": ["-c", cmd],
         "capture-output": True,
     },
 })
@@ -331,7 +331,11 @@ def dec(key):
 out, err = dec("out-data"), dec("err-data")
 sys.stdout.write(out)
 sys.stderr.write(err)
-rc = int(status.get("exitcode") or 1)
+# exitcode 0 is success. Do not use a truthiness fallback (0 is valid).
+if "exitcode" not in status or status.get("exitcode") is None:
+    rc = 1
+else:
+    rc = int(status["exitcode"])
 raise SystemExit(rc)
 PY
 }
@@ -524,10 +528,29 @@ fi
 qemu-img create -f qcow2 "${disk_img}" "${disk_size}" >/dev/null
 
 guest_need_new_iso() {
-  if qga_exec 'test -x /usr/local/bin/coda-slot && test -x /usr/local/lib/codalinux/coda-install-ab.sh && test -x /usr/local/lib/codalinux/coda-install-layout.py' 30; then
-    return 0
-  fi
+  local i
+  # Overlay/QGA can race just after wait_qga; retry ~120s.
+  for i in $(seq 1 24); do
+    if qga_exec 'test -x /usr/local/bin/coda-slot && test -x /usr/local/lib/codalinux/coda-install-ab.sh && test -x /usr/local/lib/codalinux/coda-install-layout.py' 10; then
+      return 0
+    fi
+    sleep 5
+  done
   die "live ISO is missing the A/B installer (coda-slot / coda-install-ab.sh). Rebuild on abox: ./scripts/build-iso.sh"
+}
+
+parse_first_disk() {
+  local raw="$1" name=""
+  name="$(printf '%s\n' "${raw}" | awk '
+    $1 ~ /^\/dev\/(vd|sd|nvme)/ && ($2 == "disk" || NF == 1) { print $1; exit }
+  ')"
+  if [[ -z "${name}" ]]; then
+    name="$(printf '%s\n' "${raw}" | awk '$2 == "disk" { print $1; exit }')"
+  fi
+  if [[ -z "${name}" ]]; then
+    name="$(printf '%s\n' "${raw}" | awk '/^\/dev\// { print $1; exit }')"
+  fi
+  printf '%s' "${name}"
 }
 
 # 1–3 live install
@@ -535,9 +558,8 @@ step "1 pick first disk (CODA_INSTALL_DISK=auto)"
 start_qemu live
 wait_qga
 guest_need_new_iso
-first_disk="$(qga_exec 'lsblk -dnpo NAME,TYPE | awk "\$2==\"disk\"{print \$1; exit}"' 30)"
-first_disk="$(printf '%s' "${first_disk}" | tr -d '[:space:]')"
-[[ -n "${first_disk}" ]] || die "guest has no disk"
+first_disk="$(parse_first_disk "$(qga_exec 'lsblk -dnpo NAME,TYPE' 30)")"
+[[ "${first_disk}" == /dev/* ]] || die "guest has no disk (parsed '${first_disk}')"
 log "guest first disk: ${first_disk}"
 SUMMARY[-1]="1 pick first disk (${first_disk})"
 
@@ -566,12 +588,12 @@ step "5 upgrade inactive slot B from live ISO (kernel + root, not running A)"
 stop_qemu
 start_qemu live
 wait_qga
-qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot --disk ${first_disk} install --slot b" "${timeout_install}"
+qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot install --disk ${first_disk} --slot b" "${timeout_install}"
 qga_exec "test -f /mnt/coda-slot/boot/coda/b/vmlinuz-linux && test -f /mnt/coda-slot/boot/coda/b/initramfs-linux.img" 30 \
   || qga_exec "mkdir -p /mnt/coda-esp && mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp && test -f /mnt/coda-esp/coda/b/vmlinuz-linux && test -f /mnt/coda-esp/coda/b/initramfs-linux.img && umount /mnt/coda-esp" 60
 
 step "6 oneshot-boot slot B (default remains A) and verify desktop"
-qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot --disk ${first_disk} boot-test --slot b" 60
+qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot boot-test --disk ${first_disk} --slot b" 60
 # Proof that failure would keep A: default is still coda-a.conf after oneshot.
 qga_exec 'esp=/mnt/coda-slot/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-a.conf" $esp/loader/loader.conf' 30
 stop_qemu
@@ -584,7 +606,8 @@ log "slot B boot-test OK; default still A"
 
 step "7 promote slot B (systemd-boot default)"
 qga_exec '/usr/local/bin/coda-slot promote --slot b' 60
-qga_exec 'grep -q "default coda-b.conf" /boot/loader/loader.conf' 30
+qga_exec 'sync; grep -q "default coda-b.conf" /boot/loader/loader.conf' 30
+qga_exec 'esp=/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-b.conf" $esp/loader/loader.conf; sync; if mountpoint -q /mnt/coda-esp; then umount /mnt/coda-esp; fi' 30
 
 step "8 reboot and confirm promoted slot B"
 stop_qemu
