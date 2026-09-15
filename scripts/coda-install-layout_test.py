@@ -25,14 +25,17 @@ class LayoutTests(unittest.TestCase):
             + mod.DATA_FLOOR_MIB
             + mod.GPT_SLACK_MIB,
         )
-        # 1024 + 8192 + 8192 + 4096 + 4
-        self.assertEqual(mod.MINIMUM_DISK_MIB, 21508)
-        # 1024 + 2*4096 + 4096 + 4 (later core-only picture)
-        self.assertEqual(mod.CORE_ONLY_MINIMUM_DISK_MIB, 13316)
+        # 1024 + 4096 + 4096 + 8192 + 4
+        self.assertEqual(mod.MINIMUM_DISK_MIB, 17412)
+        self.assertEqual(mod.SLOT_FLOOR_MIB, 4096)
+        self.assertEqual(mod.DATA_FLOOR_MIB, 8192)
+        self.assertEqual(mod.ESP_MIB, 1024)
+        self.assertEqual(mod.CORE_ONLY_MINIMUM_DISK_MIB, mod.MINIMUM_DISK_MIB)
 
     def test_too_small(self):
         self.assertIsNone(mod.plan_layout(bytes_from_mib(mod.MINIMUM_DISK_MIB - 1)))
         self.assertIn("too small", mod.explain_too_small(bytes_from_mib(16 * 1024)))
+        self.assertIn("core only", mod.explain_too_small(bytes_from_mib(16 * 1024)))
 
     def test_exact_minimum_uses_floors(self):
         plan = mod.plan_layout(bytes_from_mib(mod.MINIMUM_DISK_MIB))
@@ -43,10 +46,19 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(plan["slot_b_mib"], mod.SLOT_FLOOR_MIB)
         self.assertEqual(plan["data_mib"], mod.DATA_FLOOR_MIB)
 
-    def test_16g_rejected_for_v1_desktop_slots(self):
+    def test_16g_rejected_data_needs_desktop(self):
+        # 16 GiB < 17 GiB minimum (desktop now lives on data).
         self.assertIsNone(mod.plan_layout(16 * 1024 * 1024 * 1024))
 
-    def test_32g_uses_preferred_slots(self):
+    def test_22g_accepted_core_only_slots(self):
+        plan = mod.plan_layout(22 * 1024 * 1024 * 1024)
+        self.assertIsNotNone(plan)
+        assert plan is not None
+        self.assertEqual(plan["slot_a_mib"], 4096)
+        self.assertEqual(plan["slot_b_mib"], 4096)
+        self.assertGreaterEqual(plan["data_mib"], mod.DATA_FLOOR_MIB)
+
+    def test_32g_gives_extra_to_data(self):
         plan = mod.plan_layout(32 * 1024 * 1024 * 1024)
         self.assertIsNotNone(plan)
         assert plan is not None
@@ -56,7 +68,7 @@ class LayoutTests(unittest.TestCase):
         self.assertGreaterEqual(plan["data_mib"], 14 * 1024)
 
     def test_parts_sum_with_slack(self):
-        for size_g in (22, 32, 64):
+        for size_g in (18, 22, 32, 64):
             plan = mod.plan_layout(size_g * 1024 * 1024 * 1024)
             self.assertIsNotNone(plan, size_g)
             assert plan is not None

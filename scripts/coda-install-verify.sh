@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Verify ESP+A+B+data layout and/or an installed Hyprland session.
 # Guest-safe: Hyprland checks refuse unless ID=codalinux.
+# Hyprland must come from /coda/data/desktop (not the slot root payload).
 set -euo pipefail
 
 usage() {
@@ -9,7 +10,8 @@ Usage: coda-install-verify.sh [--layout] [--boot] [--slot a|b] [--disk DEV]
 
   --layout   GPT PARTLABELs, fstypes, size floors
   --boot     running root is the expected slot; /home and /var binds;
-             greetd user; Hyprland as that user (ID=codalinux only)
+             desktop payload on coda-data; greetd user; Hyprland as
+             that user from data (ID=codalinux only)
   default    both, when running on an installed slot
 EOF
 }
@@ -80,9 +82,9 @@ def size(label):
 mib = 1024 * 1024
 checks = [
     ("coda-esp", 900 * mib),
-    ("coda-a", 7 * 1024 * mib),
-    ("coda-b", 7 * 1024 * mib),
-    ("coda-data", 3 * 1024 * mib),
+    ("coda-a", 3500 * mib),
+    ("coda-b", 3500 * mib),
+    ("coda-data", 7 * 1024 * mib),
 ]
 rc = 0
 for label, floor in checks:
@@ -127,6 +129,39 @@ check_boot() {
   findmnt -n /home | grep -q /coda/data/home || fail "/home is not bind from /coda/data/home"
   findmnt -n /var | grep -q /coda/data/var || fail "/var is not bind from /coda/data/var"
   pass "/home and /var bind coda-data"
+  if [[ ! -d /coda/data/desktop/usr ]]; then
+    fail "missing /coda/data/desktop/usr (desktop must live on coda-data)"
+  else
+    pass "/coda/data/desktop/usr present"
+  fi
+  if [[ ! -e /coda/data/desktop/.coda-desktop-payload ]]; then
+    fail "missing /coda/data/desktop/.coda-desktop-payload marker"
+  else
+    pass "desktop payload marker on coda-data"
+  fi
+  hypr_data=""
+  for cand in \
+    /coda/data/desktop/usr/bin/Hyprland \
+    /coda/data/desktop/usr/bin/hyprland \
+    /coda/data/desktop/usr/local/bin/coda-hyprland
+  do
+    if [[ -e "${cand}" ]]; then
+      hypr_data="${cand}"
+      break
+    fi
+  done
+  if [[ -z "${hypr_data}" ]]; then
+    fail "Hyprland missing from /coda/data/desktop (must not live only on the slot)"
+  else
+    pass "Hyprland on data: ${hypr_data}"
+  fi
+  usr_opts="$(findmnt -n -o OPTIONS /usr 2>/dev/null || true)"
+  usr_src="$(findmnt -n -o SOURCE /usr 2>/dev/null || true)"
+  if echo "${usr_src} ${usr_opts}" | grep -Eq 'overlay|sysext|coda/data/desktop'; then
+    pass "/usr is merged from coda-data desktop (${usr_src})"
+  else
+    fail "/usr is not overlay/sysext from /coda/data/desktop (${usr_src})"
+  fi
   local user="${CODA_INSTALL_USER:-user}"
   id "${user}" >/dev/null 2>&1 || fail "user ${user} missing"
   if [[ -f /etc/greetd/config.toml ]]; then

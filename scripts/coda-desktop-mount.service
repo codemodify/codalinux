@@ -1,0 +1,21 @@
+[Unit]
+Description=Merge CodaLinux desktop from coda-data onto the core slot
+Documentation=https://github.com/codemodify/codalinux
+DefaultDependencies=no
+After=local-fs.target coda-data.mount
+Wants=coda-data.mount
+Before=display-manager.service greetd.service graphical.target
+ConditionPathIsDirectory=/coda/data
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/codalinux/coda-desktop-mount
+# Missing/broken desktop must not fail the boot.
+SuccessExitStatus=0
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=graphical.target
