@@ -164,6 +164,103 @@ class SplitTests(unittest.TestCase):
             )
             self.assertFalse((dest / "usr/local/bin/coda-ags").exists())
 
+    def test_usr_merge_and_modules_stay_on_core(self):
+        """Trailing-slash usr-merge links + .ko files must rsync onto the slot."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            local = root / "var/lib/pacman/local"
+            local.mkdir(parents=True)
+            _write_pkg(
+                local,
+                "filesystem",
+                "1-1",
+                [],
+                [
+                    "bin/",
+                    "lib/",
+                    "lib64/",
+                    "sbin/",
+                    "usr/",
+                    "usr/bin/",
+                    "usr/lib/",
+                    "usr/sbin/",
+                    "usr/bin/bash",
+                ],
+            )
+            _write_pkg(
+                local,
+                "linux",
+                "1-1",
+                ["filesystem"],
+                [
+                    "usr/lib/modules/",
+                    "usr/lib/modules/k/",
+                    "usr/lib/modules/k/vmlinuz",
+                    "usr/lib/modules/k/modules.dep",
+                    "usr/lib/modules/k/kernel/fs/fat/vfat.ko.zst",
+                    "usr/lib/modules/k/kernel/fs/fat/fat.ko.zst",
+                    "usr/lib/modules/k/kernel/fs/ext4/ext4.ko.zst",
+                    "usr/lib/modules/k/kernel/drivers/virtio/virtio_blk.ko.zst",
+                ],
+            )
+            (root / "usr/bin").mkdir(parents=True)
+            (root / "usr/lib").mkdir(parents=True)
+            (root / "usr/sbin").mkdir(parents=True)
+            (root / "bin").symlink_to("usr/bin")
+            (root / "lib").symlink_to("usr/lib")
+            (root / "lib64").symlink_to("usr/lib")
+            (root / "sbin").symlink_to("usr/sbin")
+            (root / "usr/bin/bash").write_text("sh", encoding="utf-8")
+            moddir = root / "usr/lib/modules/k/kernel"
+            (moddir / "fs/fat").mkdir(parents=True)
+            (moddir / "fs/ext4").mkdir(parents=True)
+            (moddir / "drivers/virtio").mkdir(parents=True)
+            (root / "usr/lib/modules/k/vmlinuz").write_bytes(b"k")
+            (root / "usr/lib/modules/k/modules.dep").write_text("vfat:\n", encoding="utf-8")
+            (moddir / "fs/fat/vfat.ko.zst").write_bytes(b"m")
+            (moddir / "fs/fat/fat.ko.zst").write_bytes(b"m")
+            (moddir / "fs/ext4/ext4.ko.zst").write_bytes(b"m")
+            (moddir / "drivers/virtio/virtio_blk.ko.zst").write_bytes(b"m")
+
+            self.assertFalse(mod.is_directory_entry("/lib/", root))
+            self.assertFalse(mod.is_directory_entry("lib/", root))
+            self.assertTrue(mod.is_directory_entry("/usr/lib/", root))
+
+            pkgs, provides = mod.read_pacman_local(local)
+            result = mod.classify(root, ["linux"], pkgs, provides, include_unpackaged=False)
+            for link in ("/bin", "/lib", "/lib64", "/sbin"):
+                self.assertIn(link, result["core_files"])
+            self.assertIn("/usr/lib/modules/k/kernel/fs/fat/vfat.ko.zst", result["core_files"])
+            self.assertIn("/usr/lib/modules/k/modules.dep", result["core_files"])
+            self.assertNotIn("/lib/", result["core_files"])
+
+            core_list = root / "core.list"
+            mod.write_list(core_list, result["core_files"], root)
+            listed = core_list.read_text(encoding="utf-8").splitlines()
+            self.assertIn("lib", listed)
+            self.assertNotIn("lib/", listed)
+            self.assertIn("usr/lib/modules/k/kernel/fs/fat/vfat.ko.zst", listed)
+
+            if shutil.which("rsync") is None:
+                return
+            dest = root / "slot"
+            dest.mkdir()
+            subprocess.run(
+                [
+                    "rsync",
+                    "-lptgoDHAX",
+                    "--files-from",
+                    str(core_list),
+                    f"{root}/",
+                    f"{dest}/",
+                ],
+                check=True,
+            )
+            self.assertTrue((dest / "lib").is_symlink())
+            self.assertEqual((dest / "lib").readlink().as_posix(), "usr/lib")
+            self.assertTrue((dest / "usr/lib/modules/k/kernel/fs/fat/vfat.ko.zst").is_file())
+            self.assertTrue((dest / "usr/lib/modules/k/modules.dep").is_file())
+
     def test_desktop_priority_moves_session_wrapper(self):
         core, desktop = mod.apply_desktop_priority(
             ["/usr/local/bin/coda-hyprland", "/usr/bin/bash"],
