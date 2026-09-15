@@ -201,6 +201,12 @@ fi
 if ! grep -q 'coda_assert_kernel_modules' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must assert ext4/vfat/virtio modules before mkinitcpio"
 fi
+if ! grep -q 'coda_module_is_builtin' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must accept modules.builtin (Arch 7.2 ext4 is built-in)"
+fi
+if ! grep -q 'replace, no hardlinks' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must replace the slot modules tree (no rsync -H merge)"
+fi
 if ! grep -q 'USR_MERGE_LINKS' "${root}/scripts/coda-install-split.py"; then
   log_fail "coda-install-split.py must keep usr-merge symlinks on the core list"
 fi

@@ -73,6 +73,33 @@ if ( coda_assert_kernel_modules "${dest}" "${kver}" ) >/dev/null 2>&1; then
   echo "coda-install-lib_test: assert should fail when vfat is missing" >&2
   fail=1
 fi
+cp -a "${src}/usr/lib/modules/${kver}/kernel/fs/fat/vfat.ko.zst" \
+  "${dest}/usr/lib/modules/${kver}/kernel/fs/fat/vfat.ko.zst"
+
+# Stale dest tree must be replaced (not hardlink-merged) on resync.
+if command -v rsync >/dev/null 2>&1; then
+  mkdir -p "${dest}/usr/lib/modules/${kver}/kernel/fs/fat"
+  printf 'STALE\n' >"${dest}/usr/lib/modules/${kver}/kernel/fs/fat/vfat.ko.zst"
+  printf 'FRESH\n' >"${src}/usr/lib/modules/${kver}/kernel/fs/fat/vfat.ko.zst"
+  coda_sync_kernel_modules "${src}" "${dest}"
+  if ! grep -qx 'FRESH' "${dest}/usr/lib/modules/${kver}/kernel/fs/fat/vfat.ko.zst"; then
+    echo "coda-install-lib_test: resync left a stale vfat.ko.zst" >&2
+    fail=1
+  fi
+fi
+
+# Arch linux 7.2 ships ext4 built-in (no ext4.ko). Assert must accept modules.builtin.
+rm -f "${dest}/usr/lib/modules/${kver}/kernel/fs/ext4/ext4.ko.zst"
+printf 'kernel/fs/ext4/ext4.ko\n' >"${dest}/usr/lib/modules/${kver}/modules.builtin"
+if ! coda_assert_kernel_modules "${dest}" "${kver}"; then
+  echo "coda-install-lib_test: assert should accept built-in ext4" >&2
+  fail=1
+fi
+rm -f "${dest}/usr/lib/modules/${kver}/modules.builtin"
+if ( coda_assert_kernel_modules "${dest}" "${kver}" ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: assert should fail when ext4 is neither a .ko nor built-in" >&2
+  fail=1
+fi
 rm -rf "${src}"
 
 if [[ "${fail}" -ne 0 ]]; then
