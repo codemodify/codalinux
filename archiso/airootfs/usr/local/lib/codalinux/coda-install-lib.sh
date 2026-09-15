@@ -399,6 +399,7 @@ coda_wipe_live_bits() {
 
 coda_write_mkinitcpio() {
   local dest="$1"
+  mkdir -p "${dest}/etc"
   cat >"${dest}/etc/mkinitcpio.conf" <<'EOF'
 # CodaLinux installed slot — stock hooks, no archiso.
 MODULES=()
@@ -406,6 +407,19 @@ BINARIES=()
 FILES=()
 HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)
 COMPRESSION="zstd"
+EOF
+}
+
+coda_write_linux_preset() {
+  local dest="$1" slot="$2"
+  # Core-only file lists omit empty package dirs (mkinitcpio owns
+  # /etc/mkinitcpio.d/). The live ISO often has no linux.preset, so
+  # rsync never creates the parent. mkdir before the redirect.
+  mkdir -p "${dest}/etc/mkinitcpio.d"
+  cat >"${dest}/etc/mkinitcpio.d/linux.preset" <<EOF
+PRESETS=('default')
+ALL_kver="/boot/coda/${slot}/vmlinuz-linux"
+default_image="/boot/coda/${slot}/initramfs-linux.img"
 EOF
 }
 
@@ -535,11 +549,7 @@ coda_install_boot_files() {
   cp -a "${kpath}" "${esp}/coda/${slot}/vmlinuz-linux"
   coda_copy_ucode "${esp}/coda/${slot}"
   coda_write_mkinitcpio "${dest}"
-  cat >"${dest}/etc/mkinitcpio.d/linux.preset" <<EOF
-PRESETS=('default')
-ALL_kver="/boot/coda/${slot}/vmlinuz-linux"
-default_image="/boot/coda/${slot}/initramfs-linux.img"
-EOF
+  coda_write_linux_preset "${dest}" "${slot}"
   coda_log "mkinitcpio for slot ${slot} (kver=${kver})"
   if ! coda_chroot "${dest}" mkinitcpio -k "${kver}" -g "/boot/coda/${slot}/initramfs-linux.img"; then
     coda_die "mkinitcpio failed for slot ${slot}"
