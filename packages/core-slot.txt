@@ -1,0 +1,8 @@
+# Extra OS-A/B seed packages on top of base.txt.
+# The installer expands recursive depends from the live pacman db.
+# This is NOT a second ISO compose list — the live image stays the
+# full desktop. Do not add Hyprland, greetd, or AGS runtime here.
+
+# coda-slot / coda-install need these on the core slot.
+rsync
+efibootmgr

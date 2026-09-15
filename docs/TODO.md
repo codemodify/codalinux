@@ -19,10 +19,10 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 2. Installer (`install/` + `scripts/coda-install*`)
 
-- [x] `coda-install` + `coda-install-post.sh`: greetd autologin `user`, copy live `/usr/local` desktop, networkd+iwd, default creds `user`/`1`.
+- [x] `coda-install` + `coda-install-post.sh`: greetd autologin `user` on the **desktop** tree, networkd+sshd+QGA on the slot, default creds `user`/`1`.
 - [x] Operator picks **disk only** (or `CODA_INSTALL_DISK` / `auto` for e2e). Bozeman locale/tz/keymap not asked.
 - [x] Automatic GPT layout ESP + OS-A + OS-B + data with documented size floors; fail if the disk is too small.
-- [x] Offline first install into OS-A (live airootfs copy; no pacstrap/mirrors). ISO **build** may still fetch packages.
+- [x] Offline first install into OS-A (live airootfs **split**: core → slot, desktop → `coda-data`; no pacstrap/mirrors). ISO **build** may still fetch packages.
 - [x] systemd-boot entries A (default) and B (placeholder); data bind-mounted at `/home` and `/var`.
 - [x] Host e2e: `scripts/qemu-install-e2e.sh` (local ISO, QEMU+QGA, no prompts).
 - [x] Keep `additional-repositories` empty.
@@ -52,12 +52,14 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 
 ## 5. Core OS vs sandboxes (bubblewrap)
 
-Picture: [architecture.md](../architecture.md) (target A/B vs current mutable desktop root). Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the live/install image.
+Picture: [architecture.md](../architecture.md) (target A/B vs current). Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the **live ISO**. Installed desktop lives on `coda-data`.
 
-- [x] Installer disk layout: ESP + OS-A + OS-B + data (`/home` includes `~/.coda/sandbox`). v1 slots are the full desktop image (8 GiB floor), not a 4 GiB core-only root.
-- [x] Inactive-slot writer + oneshot boot-test + promote (`coda-slot`). Host e2e: `scripts/qemu-install-e2e.sh`.
+- [x] Installer disk layout: ESP + OS-A + OS-B + data (`/home` includes `~/.coda/sandbox`). Slots are **core-only** (4 GiB floor). Desktop is on `coda-data` (8 GiB data floor).
+- [x] Inactive-slot writer + oneshot boot-test + promote (`coda-slot`). Host e2e: `scripts/qemu-install-e2e.sh` (local ISO only).
+- [x] Offline split: core packages → slot; Hyprland/AGS/session → `/coda/data/desktop`; boot merge via `coda-desktop-mount`.
 - [ ] Read-only remount of the **running** slot and gated host `pacman`. Documented in DESIGN.md; **not implemented**.
-- [ ] Core-only (~1.1 GiB) slot image (desktop as a session on top). v1 still copies the live desktop onto each slot.
+- [ ] Core-only (~1.1 GiB) *live ISO* (desktop as a session on top of a minimal squashfs). The live image is still the full desktop.
+- [ ] A/B the desktop payload (today `coda-slot install` refreshes `/coda/data/desktop` in place).
 - [ ] Optional Distrobox / Podman **alongside** `coda-sandbox`, not as a replacement.
 - [ ] Flatpak alongside bwrap (still official-repo / documented policy only).
 - [ ] GUI entry from the AGS Settings hub (list / shell / destroy).
