@@ -2,11 +2,11 @@
 
 This document is the **decision log** for locked v1 choices. Do not contradict it in ISO profiles, installer configs, package lists, or desktop stubs. If a later decision changes the stack, update this file in the same change.
 
-The canonical **system picture** (partitions → layers → `/` folders → sandboxes → **system-config** → update model, with **Target** vs **Current tree**) is [architecture.md](architecture.md). Do not claim A/B slots, a core-only ISO, or `system-config` daemons work until they are built.
+The canonical **system picture** (partitions → layers → `/` folders → sandboxes → **system-config** → update model, with **Target** vs **Current tree**) is [architecture.md](architecture.md). Do not claim a core-only *live ISO*, a read-only running slot, or gated host `pacman` until those are built.
 
 CodaLinux is a rolling Arch Linux derivative: it does not fork the base system. Periodic live ISO rebuilds are the delivery cadence.
 
-**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / shell / exec / destroy tool. **One named sandbox is one Arch root that holds many packages** (e.g. `dev` with `postgresql`, `redis`, `git`) — not one sandbox per app. Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The current live/install image still ships the Hyprland + AGS desktop for v1; it is not yet a minimal core-only image. Read-only A/B core slots are the target, not something this tree implements yet. Picture: [architecture.md](architecture.md). Decisions below: [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
+**App model (locked):** day-to-day packages must not pollute the host OS. Host `pacman` is for the **core OS** (rare; gated later). Extra software is installed with `pacman --root` into disposable trees and run with **upstream [bubblewrap](https://github.com/containers/bubblewrap)** (`bwrap`, LGPL-2.1-or-later). `coda-sandbox` is the user-facing create / install / shell / exec / destroy tool. **One named sandbox is one Arch root that holds many packages** (e.g. `dev` with `postgresql`, `redis`, `git`) — not one sandbox per app. Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). This supersedes “one mutable ext4 root + rolling pacman for everything” as the long-term app story. The **live ISO** still ships the Hyprland + AGS desktop for v1; it is not a minimal core-only *image*. **Installed** OS-A/OS-B must be Arch core only; the desktop/session lives on `coda-data`. Read-only remount of the running slot is still later. Picture: [architecture.md](architecture.md). Decisions below: [Core, desktop, and sandboxes](#core-desktop-and-sandboxes).
 
 ## Locked stack
 
@@ -114,7 +114,7 @@ Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [ar
 | Decision | Choice |
 | --- | --- |
 | Live image | archiso profile in `archiso/` |
-| Installer | Coda-owned offline copy (`coda-install`); archinstall JSON is leftover |
+| Installer | Coda-owned offline split (`coda-install`: core → slot, desktop → data); archinstall JSON is leftover |
 | Calamares | **Not used** |
 | ISO rebuilds | Periodic, later — not every upstream Arch ISO date |
 
@@ -165,8 +165,8 @@ Three layers. Do not collapse them back into “install postgres on the host.”
 
 | Layer | What it is | How it is updated | v1 status |
 | --- | --- | --- | --- |
-| **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot | Host pacman, later **gated**; target is read-only **A/B** slots | Documented target. Not implemented. Today’s ISO is still a full desktop image. |
-| **Desktop** | Hyprland + vendored AGS/Astal, greetd, portals, official settings apps | Same image as core for now (do not rip out this PR) | Shipped on live/install. May become a slot or a sandbox later. |
+| **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot | Host pacman, later **gated**; **A/B** slots. RO remount later. | **Required on installed A/B.** Live ISO is still a full desktop image (do not rip it out). |
+| **Desktop** | Hyprland + vendored AGS/Astal, greetd, portals, official settings apps | On **`coda-data`** (`/coda/data/desktop`); refreshed when `coda-slot install` runs from a live ISO | **Required on data**, not duplicated into every OS slot. Live session still uses the ISO root. |
 | **Apps / extras** | Disposable Arch roots (`pacman --root`) run with `bwrap` | `coda-sandbox install` (repeatable into the same env) | **Default place for extra software.** One env = many packages. |
 
 ### Why bubblewrap (not Docker or Firejail)
@@ -180,15 +180,15 @@ A named sandbox is **one Arch root**, not one app. Create `dev` once, then `coda
 ### Folder mapping (target)
 
 ```
-Core (future RO A/B slots — not implemented)
-  /usr          OS userland (read-only when A/B lands)
+Core (A/B slots — RO remount later)
+  /usr          Arch core userland
   /boot         UKI / systemd-boot + kernel
-  /etc          Base OS config (or a small writable overlay)
+  /etc          Base OS config (fstab, users, slot marker)
 
 Data (writable, survives OS slot swaps)
-  /home         Users (includes ~/.coda/sandbox)
-  /var          Logs and host caches
-  /etc overlay  Host-specific bits if /etc is split later
+  /home              Users (includes ~/.coda/sandbox)
+  /var               Logs and host caches
+  /coda/data/desktop Hyprland + AGS + session (merged at boot)
 
 Sandboxes (user-owned under $HOME, no sudo)
   ~/.coda/sandbox/<env>/           sandbox directory (documented path)
@@ -201,11 +201,11 @@ Default store is **`~/.coda/sandbox`** (singular), not `/var/coda/…` and not X
 
 ### Phases
 
-1. **Now (this tree):** `bubblewrap` on the desktop live/install image; `coda-sandbox` wired into `/usr/local/bin`; docs. Desktop stays. Host is still a single mutable ext4 root.
-2. **Installer:** partition or subvolumes for **core vs data**; put `~/.coda/sandbox` and `/home` on data.
-3. **Later:** read-only A/B core images, gated OS updates, optional Distrobox or Flatpak **alongside** bwrap — not instead of it.
+1. **Now (this tree):** `bubblewrap` on the desktop live ISO; `coda-sandbox` wired into `/usr/local/bin`; ESP+A+B+data; **core-only slots** + desktop on `coda-data`. Live ISO stays a full desktop image.
+2. **Installer (done):** operator picks one disk; `/home`, `/var`, and `/coda/data/desktop` on data.
+3. **Later:** read-only remount of the running slot, gated OS updates, optional Distrobox or Flatpak **alongside** bwrap — not instead of it.
 
-Do not claim A/B or a core-only ISO exists until those land. Picture: [architecture.md](architecture.md). Commands: [docs/sandbox.md](docs/sandbox.md).
+Do not claim a core-only *live ISO* or a read-only running slot exists until those land. Picture: [architecture.md](architecture.md). Commands: [docs/sandbox.md](docs/sandbox.md).
 
 ## Repository layout assumptions
 
@@ -232,6 +232,7 @@ These are scaffolding choices, not product-stack changes. Prefer this convention
 - Lists are plain text, one official package per line. `#` comments and blank lines are ignored.
 - [`scripts/compose-package-lists.sh`](scripts/compose-package-lists.sh) concatenates the default sets into `archiso/packages.x86_64`, `install/packages.txt`, and the `packages` array in `install/user_configuration.json`.
 - `packages/sandbox.txt` (`bubblewrap`) is in the default compose (live + install).
+- `packages/core-slot.txt` is **not** in the ISO compose. The installer reads it (plus `base.txt`) to classify the live airootfs into core vs desktop.
 - `packages/nvidia.txt` and `packages/optional-cups.txt` are **not** in the default compose.
 - `packages/ags-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-ags.sh` on the Arch ISO builder).
 - `packages/hyprbars-build-deps.txt` is **not** in the live ISO default set (build-only; used by `scripts/vendor-hyprbars.sh`).
@@ -284,7 +285,7 @@ Live systemd-boot `archiso/efiboot/loader/loader.conf` uses `timeout 1` (editor 
 | Live session | greetd autologins user `live` into `/usr/local/bin/coda-hyprland` on tty1; tty2 is a root rescue console | Live ISO |
 | Installed users | `user` / `1` (sudo); root `1` | Env override |
 
-Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; `CODA_INSTALL_DISK=/dev/vda` or `auto` (first `lsblk` disk) is the silent path. Layout is ESP + OS-A + OS-B + data (see [architecture.md](architecture.md)). The live airootfs is copied **offline** into OS-A — no pacstrap, no mirrors. Default login is **`user` / `1`** (root password `1`). `coda-install-post.sh` still wires greetd autologin for `user` (not `live`), QGA, and sshd. `coda-slot` writes the same payload into the inactive slot; `boot-test` is a systemd-boot oneshot; `promote` flips the default after a successful boot. Host e2e: `scripts/qemu-install-e2e.sh`.
+Locale, keymap, and timezone are **Bozeman, Montana defaults**. The live image writes `/etc/localtime` → `America/Denver`, `/etc/locale.conf`, and `/etc/vconsole.conf` via a pacman hook plus `coda-live-setup.service`. `coda-install` must not prompt for region, timezone, locale, or keymap. Disk is asked only when `CODA_INSTALL_DISK` is unset; `CODA_INSTALL_DISK=/dev/vda` or `auto` (first `lsblk` disk) is the silent path. Layout is ESP + OS-A + OS-B + data (see [architecture.md](architecture.md)). The live airootfs is split **offline** into OS-A (core) and `/coda/data/desktop` — no pacstrap, no mirrors. Default login is **`user` / `1`** (root password `1`). `coda-install-post.sh` still wires greetd autologin for `user` (not `live`) on the desktop tree, plus QGA and sshd on the slot. `coda-slot` writes **core** into the inactive slot and refreshes desktop on data; `boot-test` is a systemd-boot oneshot; `promote` flips the default after a successful boot. Host e2e: `scripts/qemu-install-e2e.sh` (local ISO only).
 
 Live overlay size is **`cow_spacesize=4G`** on the systemd-boot entry (tmpfs limit for `/run/archiso/cowspace`). Stock 256M is too small for `coda-sandbox create` (~500M+ `base`).
 
@@ -337,7 +338,7 @@ Do not add `bios.syslinux.*`.
 - A default firewall
 - NetworkManager
 - Docker / Distrobox / Firejail as the required app runtime
-- Claiming a read-only A/B core is already shipping
+- Claiming a read-only running slot or a core-only *live ISO* is already shipping
 
 ## Next steps
 

@@ -20,11 +20,13 @@
 | `vendor-ags.sh` | Compile pinned AGS/Astal into airootfs `/usr/local` (works unprivileged via a staging sysroot) |
 | `vendor-hyprbars.sh` | Compile pinned hyprbars against official `hyprland` headers into `/usr/local/lib/hyprland` |
 | `coda-install` | Live helper: disk pick / `CODA_INSTALL_DISK=auto`, space check, offline A/B install into OS-A |
-| `coda-install-layout.py` | Size planner + `check` / `minimums` (v1 floor ~22 GiB; recommend 32G) |
-| `coda-install-ab.sh` | GPT ESP+A+B+data, rsync airootfs into A, systemd-boot, post-install |
-| `coda-install-post.sh` | After the offline copy: live desktop, greetd autologin `user`, QGA+sshd |
-| `coda-slot` | Inactive-slot install, oneshot `boot-test`, `promote` |
-| `coda-install-verify.sh` | Guest layout / Hyprland checks (`ID=codalinux` for `--boot`) |
+| `coda-install-layout.py` | Size planner + `check` / `minimums` (4 GiB core slots + 8 GiB data; ~17 GiB min; recommend 32G) |
+| `coda-install-split.py` | Classify live airootfs into core vs desktop file lists (offline) |
+| `coda-desktop-mount` | Boot-time merge of `/coda/data/desktop` onto the core slot |
+| `coda-install-ab.sh` | GPT ESP+A+B+data, core → A, desktop → data, systemd-boot, post-install |
+| `coda-install-post.sh` | After the split: desktop onto `coda-data`, greetd autologin `user`, QGA+sshd on the slot |
+| `coda-slot` | Inactive-slot **core** install, refresh desktop on data, oneshot `boot-test`, `promote` |
+| `coda-install-verify.sh` | Guest layout / Hyprland-from-data checks (`ID=codalinux` for `--boot`) |
 | `qemu-install-e2e.sh` | Host QEMU+QGA loop for steps 1–8 (local ISO, no prompts, no NIC) |
 | `coda-pacman-init.sh` | Live keyring oneshot (after graphical; no-ops if already populated) |
 | `coda-hyprland` | greetd session wrapper (VM-safe env, execs `start-hyprland`) |
