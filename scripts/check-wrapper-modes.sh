@@ -192,6 +192,18 @@ fi
 if ! grep -q 'coda_purge_leaked_desktop' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must purge leaked desktop files from the slot"
 fi
+if ! grep -q 'coda_ensure_usr_merge' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must recreate usr-merge /lib so kmod sees modules"
+fi
+if ! grep -q 'coda_sync_kernel_modules' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must copy usr/lib/modules onto the core slot"
+fi
+if ! grep -q 'coda_assert_kernel_modules' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must assert ext4/vfat/virtio modules before mkinitcpio"
+fi
+if ! grep -q 'USR_MERGE_LINKS' "${root}/scripts/coda-install-split.py"; then
+  log_fail "coda-install-split.py must keep usr-merge symlinks on the core list"
+fi
 if grep -qE 'arg.: \[.-lc' "${root}/scripts/qemu-install-e2e.sh"; then
   log_fail "qemu-install-e2e.sh qga_exec must use bash -c, not bash -lc"
 fi

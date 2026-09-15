@@ -119,6 +119,11 @@ SKIP_EXACT = {
 DATA_TREE_PREFIXES = ("/home/", "/var/")
 DATA_TREE_EXACT = {"/home", "/var"}
 
+# filesystem ships these as symlinks (usr-merge). Pacman may list them
+# as lib/ with a trailing slash; they must still be copied so kmod can
+# resolve /lib/modules (mkinitcpio autodetect + add_module).
+USR_MERGE_LINKS = ("/bin", "/lib", "/lib64", "/sbin")
+
 
 def parse_pkg_list(text: str) -> list[str]:
     out: list[str] = []
@@ -266,22 +271,33 @@ def relpath(path: str) -> str:
     return path[1:] if path.startswith("/") else path
 
 
+def is_usr_merge_link(path: str) -> bool:
+    rel = relpath(path.rstrip("/") if path != "/" else path)
+    return f"/{rel}" in USR_MERGE_LINKS or rel in {p[1:] for p in USR_MERGE_LINKS}
+
+
 def is_directory_entry(path: str, root: Path | None = None) -> bool:
-    """True for pacman dir nodes (trailing slash) or real directories.
+    """True for real directories only. File lists must be files/symlinks.
 
     rsync -a --files-from recurses a listed directory, so a core
     ``filesystem`` entry like ``usr/local/bin/`` would copy coda-hyprland.
-    File lists must be files/symlinks only.
+
+    Trailing slash is not enough: usr-merge ``lib/`` is a symlink and
+    must stay on the core list so ``/lib/modules`` resolves in chroot.
     """
-    if path.endswith("/"):
-        return True
-    if root is None:
+    if is_usr_merge_link(path):
         return False
-    try:
-        p = root / relpath(path)
-        return p.is_dir() and not p.is_symlink()
-    except OSError:
-        return False
+    rel = relpath(path.rstrip("/") if path != "/" else path)
+    if root is not None:
+        try:
+            p = root / rel
+            if p.is_symlink():
+                return False
+            if p.is_dir():
+                return True
+        except OSError:
+            pass
+    return path.endswith("/")
 
 
 def keep_rsync_leaf(path: str, root: Path | None = None) -> bool:
@@ -378,11 +394,19 @@ def classify(
                     if rel not in owned and not should_skip(rel):
                         extra_desktop.append(rel)
 
-    core_files = sorted(set(core_files + extra_core))
+    core_files = sorted(set(core_files + extra_core + collect_usr_merge(root)))
     desktop_files = sorted(set(desktop_files + extra_desktop) - set(core_files))
     core_files, desktop_files = apply_desktop_priority(core_files, desktop_files)
-    core_files = [f for f in core_files if keep_rsync_leaf(f, root)]
-    desktop_files = [f for f in desktop_files if keep_rsync_leaf(f, root)]
+    core_files = sorted({
+        (f.rstrip("/") if f != "/" and f.endswith("/") else f)
+        for f in core_files
+        if keep_rsync_leaf(f, root)
+    })
+    desktop_files = sorted({
+        (f.rstrip("/") if f != "/" and f.endswith("/") else f)
+        for f in desktop_files
+        if keep_rsync_leaf(f, root)
+    })
 
     return {
         "core_packages": core_pkgs,
@@ -419,13 +443,28 @@ def find_seed_file(name: str) -> Path | None:
     return None
 
 
+def collect_usr_merge(root: Path) -> list[str]:
+    """Always keep usr-merge compat symlinks on the core slot."""
+    out: list[str] = []
+    if not root.is_dir():
+        return out
+    for abs_path in USR_MERGE_LINKS:
+        p = root / relpath(abs_path)
+        try:
+            if p.exists() or p.is_symlink():
+                out.append(abs_path)
+        except OSError:
+            continue
+    return out
+
+
 def write_list(path: Path, files: list[str], root: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
         for f in files:
             if not keep_rsync_leaf(f, root):
                 continue
-            fh.write(relpath(f) + "\n")
+            fh.write(relpath(f.rstrip("/") if f != "/" else f) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:

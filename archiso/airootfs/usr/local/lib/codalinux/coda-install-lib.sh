@@ -242,6 +242,94 @@ coda_rsync_filelist() {
   rsync "${args[@]}" "${src}/" "${dest}/"
 }
 
+coda_ensure_usr_merge() {
+  # kmod/modprobe/modinfo resolve MODULEDIR via /lib/modules/$kver.
+  # Files-only rsync drops pacman dir nodes; filesystem lists lib/ as a
+  # directory even when it is the usr-merge symlink. Recreate the four
+  # compat links so offline mkinitcpio can see the module tree.
+  local dest="$1"
+  local name target destpath
+  [[ -d "${dest}/usr/lib" || -L "${dest}/usr/lib" ]] \
+    || coda_die "slot missing /usr/lib (usr-merge target)"
+  [[ -d "${dest}/usr/bin" || -L "${dest}/usr/bin" ]] \
+    || coda_die "slot missing /usr/bin (usr-merge target)"
+  mkdir -p "${dest}/usr/sbin"
+  for spec in "bin:usr/bin" "lib:usr/lib" "lib64:usr/lib" "sbin:usr/sbin"; do
+    name="${spec%%:*}"
+    target="${spec#*:}"
+    destpath="${dest}/${name}"
+    if [[ -L "${destpath}" ]]; then
+      continue
+    fi
+    if [[ -d "${destpath}" ]]; then
+      if [[ -z "$(find "${destpath}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true)" ]]; then
+        rmdir "${destpath}"
+      else
+        coda_die "slot /${name} is a directory; expected usr-merge symlink → ${target}"
+      fi
+    elif [[ -e "${destpath}" ]]; then
+      coda_die "slot /${name} exists and is not a usr-merge symlink"
+    fi
+    ln -s "${target}" "${destpath}"
+  done
+}
+
+coda_modtree_has_kos() {
+  local tree="$1"
+  [[ -d "${tree}" ]] || return 1
+  [[ -n "$(find "${tree}" -type f \( -name '*.ko' -o -name '*.ko.*' \) -print -quit 2>/dev/null || true)" ]]
+}
+
+coda_sync_kernel_modules() {
+  # File-list rsync is files/symlinks only and has no -r. The linux
+  # package tree is large; copy usr/lib/modules as a real directory so
+  # .ko* + modules.dep always land on the slot (no session-wrapper leak).
+  local src="$1" dest="$2"
+  local from="" candidate
+  for candidate in \
+    "${src}/usr/lib/modules" \
+    /usr/lib/modules \
+    /run/archiso/airootfs/usr/lib/modules
+  do
+    if coda_modtree_has_kos "${candidate}"; then
+      from="${candidate}"
+      break
+    fi
+  done
+  [[ -n "${from}" ]] \
+    || coda_die "no kernel modules (*.ko*) under ${src}/usr/lib/modules or live /usr/lib/modules"
+  mkdir -p "${dest}/usr/lib/modules"
+  coda_log "offline kernel modules ${from} → ${dest}/usr/lib/modules"
+  rsync -aHAX --numeric-ids --info=stats1 "${from}/" "${dest}/usr/lib/modules/"
+}
+
+coda_assert_kernel_modules() {
+  local dest="$1" kver="$2"
+  local tree="${dest}/usr/lib/modules/${kver}"
+  local name found
+  [[ -n "${kver}" ]] || coda_die "kernel version required to assert module tree"
+  [[ -d "${tree}" ]] || coda_die "missing module tree ${tree}"
+  if [[ ! -e "${dest}/lib/modules/${kver}" ]]; then
+    coda_die "usr-merge /lib does not resolve ${dest}/lib/modules/${kver} (kmod looks here)"
+  fi
+  for name in vfat fat ext4; do
+    found="$(find "${tree}" -type f \( -name "${name}.ko" -o -name "${name}.ko.*" \) -print -quit 2>/dev/null || true)"
+    [[ -n "${found}" ]] || coda_die "core slot missing ${name} module under ${tree}"
+  done
+  found="$(find "${tree}" -type f \( -name 'virtio*.ko' -o -name 'virtio*.ko.*' \) -print -quit 2>/dev/null || true)"
+  [[ -n "${found}" ]] || coda_die "core slot missing virtio* modules under ${tree}"
+}
+
+coda_prepare_slot_modules() {
+  local dest="$1"
+  local src="${2:-}"
+  if [[ -z "${src}" ]]; then
+    src="$(coda_find_source)"
+  fi
+  coda_ensure_usr_merge "${dest}"
+  coda_sync_kernel_modules "${src}" "${dest}"
+}
+
 coda_purge_leaked_desktop() {
   local dest="$1" desktop_list="$2"
   local rel wrap
@@ -372,6 +460,7 @@ coda_split_offline() {
   coda_log "offline core ${src} → ${dest}"
   coda_rsync_filelist "${src}" "${dest}" "${core_list}" 0 core
   coda_purge_leaked_desktop "${dest}" "${desktop_list}"
+  coda_prepare_slot_modules "${dest}" "${src}"
   coda_log "offline desktop ${src} → ${data}/desktop"
   coda_rsync_filelist "${src}" "${data}/desktop" "${desktop_list}" 1
   if [[ "${seed_home_var}" == 1 ]]; then
@@ -543,13 +632,22 @@ coda_copy_ucode() {
 coda_install_boot_files() {
   local dest="$1" slot="$2" esp="${3:-${dest}/boot}"
   local kpath kver
+  coda_prepare_slot_modules "${dest}"
   kpath="$(coda_find_kernel "${dest}")" || coda_die "no vmlinuz found under ${dest} or live ISO"
   kver="$(coda_kver_from_kernel "${kpath}")"
+  coda_assert_kernel_modules "${dest}" "${kver}"
   mkdir -p "${esp}/coda/${slot}"
   cp -a "${kpath}" "${esp}/coda/${slot}/vmlinuz-linux"
   coda_copy_ucode "${esp}/coda/${slot}"
   coda_write_mkinitcpio "${dest}"
   coda_write_linux_preset "${dest}" "${slot}"
+  coda_log "depmod ${kver} for slot ${slot}"
+  if ! coda_chroot "${dest}" depmod -a "${kver}"; then
+    coda_die "depmod failed for slot ${slot} (kver=${kver})"
+  fi
+  [[ -f "${dest}/usr/lib/modules/${kver}/modules.dep" \
+    || -f "${dest}/usr/lib/modules/${kver}/modules.dep.bin" ]] \
+    || coda_die "depmod did not write modules.dep for ${kver}"
   coda_log "mkinitcpio for slot ${slot} (kver=${kver})"
   if ! coda_chroot "${dest}" mkinitcpio -k "${kver}" -g "/boot/coda/${slot}/initramfs-linux.img"; then
     coda_die "mkinitcpio failed for slot ${slot}"
