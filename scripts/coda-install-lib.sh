@@ -486,6 +486,98 @@ EOF
     "${dest}/etc/systemd/system/multi-user.target.wants/coda-desktop-mount.service"
   ln -sfn /etc/systemd/system/coda-desktop-mount.service \
     "${dest}/etc/systemd/system/graphical.target.wants/coda-desktop-mount.service"
+  # greetd.service + PAM must live on the slot. The greetd *binary* stays
+  # on coda-data and appears after coda-desktop-mount. A wants symlink to
+  # /usr/lib/systemd/system/greetd.service is dangling until sysext merge,
+  # so systemd drops greetd from the boot transaction and Hyprland never
+  # starts.
+  coda_install_slot_greetd "${dest}"
+}
+
+coda_install_slot_greetd() {
+  # Unit file + PAM only. Do not copy /usr/bin/greetd or Hyprland.
+  local dest="$1"
+  mkdir -p "${dest}/etc/systemd/system/greetd.service.d" \
+    "${dest}/etc/pam.d" \
+    "${dest}/etc/systemd/system/multi-user.target.wants" \
+    "${dest}/etc/systemd/system/graphical.target.wants"
+
+  local src_unit=""
+  local p
+  for p in \
+    /usr/lib/systemd/system/greetd.service \
+    /lib/systemd/system/greetd.service
+  do
+    if [[ -f "${p}" ]]; then
+      src_unit="${p}"
+      break
+    fi
+  done
+
+  if [[ -n "${src_unit}" && ! -L "${src_unit}" ]]; then
+    cp -a "${src_unit}" "${dest}/etc/systemd/system/greetd.service"
+  elif [[ -n "${src_unit}" ]]; then
+    # Follow a vendor symlink once; never leave a dangling /usr/lib link.
+    cp -aL "${src_unit}" "${dest}/etc/systemd/system/greetd.service" 2>/dev/null \
+      || src_unit=""
+  fi
+  if [[ ! -f "${dest}/etc/systemd/system/greetd.service" \
+     || -L "${dest}/etc/systemd/system/greetd.service" ]]; then
+    cat >"${dest}/etc/systemd/system/greetd.service" <<'EOF'
+[Unit]
+Description=Greeter daemon
+Documentation=man:greetd(1)
+After=systemd-user-sessions.service plymouth-quit-wait.service
+After=getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/greetd
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+TimeoutStopSec=30
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=graphical.target
+Alias=display-manager.service
+EOF
+  fi
+
+  # Do not condition on the greetd binary path: that file appears only
+  # after the late sysext merge. A failed condition skips the unit for
+  # the whole boot (ConditionResult=no, no start job) — the e2e failure
+  # mode. After= the mount unit is enough; Restart= covers a too-early
+  # ExecStart.
+  rm -f "${dest}/etc/systemd/system/greetd.service.d/coda.conf"
+  cat >"${dest}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf" <<'EOF'
+[Unit]
+# Binary and session wrappers come from /coda/data/desktop after merge.
+After=coda-desktop-mount.service
+Wants=coda-desktop-mount.service
+EOF
+
+  if [[ -f /etc/pam.d/greetd ]]; then
+    cp -a /etc/pam.d/greetd "${dest}/etc/pam.d/greetd"
+  else
+    cat >"${dest}/etc/pam.d/greetd" <<'EOF'
+#%PAM-1.0
+auth       include      system-login
+account    include      system-login
+password   include      system-login
+session    include      system-login
+EOF
+  fi
+
+  # Resolve on the slot before sysext. Do not point at /usr/lib (desktop).
+  ln -sfn /etc/systemd/system/greetd.service \
+    "${dest}/etc/systemd/system/display-manager.service"
+  ln -sfn /etc/systemd/system/greetd.service \
+    "${dest}/etc/systemd/system/multi-user.target.wants/greetd.service"
+  ln -sfn /etc/systemd/system/greetd.service \
+    "${dest}/etc/systemd/system/graphical.target.wants/greetd.service"
 }
 
 coda_split_offline() {
@@ -534,11 +626,35 @@ coda_split_offline() {
   rm -rf "${work}"
 }
 
+coda_scrub_live_greetd() {
+  # Live ISO drop-in Wants=coda-live-setup. Confext would re-apply it
+  # from /coda/data/desktop/etc and leave greetd waiting on a removed
+  # live unit. Dangling /usr/lib DM wants are invisible at first boot.
+  local dest="$1"
+  local link dest_link
+  rm -f "${dest}/etc/systemd/system/coda-live-setup.service"
+  rm -f "${dest}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
+  rm -f "${dest}/etc/systemd/system/greetd.service.d/coda.conf"
+  for link in \
+    etc/systemd/system/display-manager.service \
+    etc/systemd/system/multi-user.target.wants/greetd.service \
+    etc/systemd/system/graphical.target.wants/greetd.service
+  do
+    dest_link="${dest}/${link}"
+    if [[ -L "${dest_link}" ]]; then
+      case "$(readlink "${dest_link}")" in
+        /usr/lib/systemd/system/greetd.service|/lib/systemd/system/greetd.service)
+          rm -f "${dest_link}"
+          ;;
+      esac
+    fi
+  done
+}
+
 coda_wipe_live_bits() {
   local dest="$1"
   rm -f "${dest}/etc/mkinitcpio.conf.d/archiso.conf"
-  rm -f "${dest}/etc/systemd/system/coda-live-setup.service"
-  rm -f "${dest}/etc/systemd/system/multi-user.target.wants/coda-live-setup.service"
+  coda_scrub_live_greetd "${dest}"
   rm -f "${dest}/etc/systemd/system/getty@tty2.service.d/autologin.conf"
   rm -rf "${dest}/etc/systemd/system/getty@tty2.service.d"
   rm -f "${dest}/etc/machine-id"

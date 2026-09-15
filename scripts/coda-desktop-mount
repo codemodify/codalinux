@@ -6,79 +6,126 @@ set -euo pipefail
 DESKTOP="${CODA_DESKTOP_ROOT:-/coda/data/desktop}"
 log() { printf 'coda-desktop-mount: %s\n' "$*"; }
 
-if [[ ! -d /coda/data ]]; then
-  log "no /coda/data — live ISO or uninstalled root; nothing to merge"
-  exit 0
-fi
-
-if [[ ! -d "${DESKTOP}/usr" ]]; then
-  log "desktop payload missing at ${DESKTOP}/usr — core continues without Hyprland/AGS/greetd"
-  exit 0
-fi
-
-modprobe overlay 2>/dev/null || true
-
-merged_usr=0
-if command -v systemd-sysext >/dev/null 2>&1; then
-  mkdir -p /run/extensions
-  ln -sfn "${DESKTOP}" /run/extensions/coda-desktop
-  if systemd-sysext merge >/dev/null 2>&1; then
-    merged_usr=1
-    log "merged /usr via systemd-sysext from ${DESKTOP}"
+coda_start_merged_session() {
+  # greetd is a desktop package. After a late sysext/overlay merge its
+  # binary appears under /usr, but PID 1 may not have the unit in the
+  # current transaction (dangling /usr/lib wants). Reload if needed and
+  # start --no-block so we do not deadlock with Before=greetd.service.
+  local data_dir="${CODA_DATA_DIR:-/coda/data}"
+  local greetd_bin="${CODA_GREETD_BIN:-/usr/bin/greetd}"
+  if [[ "${CODA_SKIP_SESSION_START:-}" == 1 ]]; then
+    return 0
+  fi
+  if [[ ! -d "${data_dir}" ]]; then
+    return 0
+  fi
+  if ! command -v systemctl >/dev/null 2>&1; then
+    log "systemctl missing; cannot start greetd after merge"
+    return 0
+  fi
+  if systemctl is-active --quiet greetd.service \
+     || systemctl is-active --quiet display-manager.service; then
+    log "greetd already active"
+    return 0
+  fi
+  if [[ ! -x "${greetd_bin}" ]]; then
+    log "WARNING: ${greetd_bin} missing after merge; session will not start"
+    return 0
+  fi
+  # The vendor unit lives under the desktop /usr tree. systemd planned
+  # (and skipped) display-manager before the merge; reload + start is
+  # the same path as the working manual `systemctl start greetd`.
+  # --no-block avoids a deadlock with Before=greetd.service.
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  if systemctl start --no-block greetd.service >/dev/null 2>&1; then
+    log "started greetd.service after desktop merge"
+  elif systemctl start --no-block display-manager.service >/dev/null 2>&1; then
+    log "started display-manager.service after desktop merge"
   else
-    log "systemd-sysext merge failed; falling back to overlay"
+    log "WARNING: could not start greetd after desktop merge"
   fi
-fi
+}
 
-if [[ "${merged_usr}" -eq 0 ]]; then
-  if findmnt -n /usr 2>/dev/null | grep -Eq 'overlay|sysext'; then
-    log "/usr already merged"
-    merged_usr=1
-  elif mount -t overlay coda-desktop-usr \
-      -o "lowerdir=${DESKTOP}/usr:/usr,index=off,metacopy=off" \
-      /usr; then
-    merged_usr=1
-    log "merged /usr via overlay (desktop over core) from ${DESKTOP}"
-  else
-    log "WARNING: could not merge /usr from ${DESKTOP} — core continues without desktop"
-    exit 0
+coda_merge_desktop() {
+  if [[ ! -d /coda/data ]]; then
+    log "no /coda/data — live ISO or uninstalled root; nothing to merge"
+    return 0
   fi
-fi
 
-if [[ -d "${DESKTOP}/etc" ]]; then
-  merged_etc=0
-  if command -v systemd-confext >/dev/null 2>&1; then
-    mkdir -p /run/confexts
-    ln -sfn "${DESKTOP}" /run/confexts/coda-desktop
-    if systemd-confext merge >/dev/null 2>&1; then
-      merged_etc=1
-      log "merged /etc via systemd-confext from ${DESKTOP}"
-    fi
+  if [[ ! -d "${DESKTOP}/usr" ]]; then
+    log "desktop payload missing at ${DESKTOP}/usr — core continues without Hyprland/AGS/greetd"
+    return 0
   fi
-  if [[ "${merged_etc}" -eq 0 ]]; then
-    if findmnt -n /etc 2>/dev/null | grep -Eq 'overlay|confext'; then
-      log "/etc already merged"
-    elif mount -t overlay coda-desktop-etc \
-        -o "lowerdir=${DESKTOP}/etc:/etc,index=off,metacopy=off" \
-        /etc; then
-      log "merged /etc via overlay (desktop over core) from ${DESKTOP}"
+
+  modprobe overlay 2>/dev/null || true
+
+  local merged_usr=0
+  if command -v systemd-sysext >/dev/null 2>&1; then
+    mkdir -p /run/extensions
+    ln -sfn "${DESKTOP}" /run/extensions/coda-desktop
+    if systemd-sysext merge >/dev/null 2>&1; then
+      merged_usr=1
+      log "merged /usr via systemd-sysext from ${DESKTOP}"
     else
-      log "WARNING: /etc desktop merge failed (greetd config may be missing)"
+      log "systemd-sysext merge failed; falling back to overlay"
     fi
   fi
-fi
 
-if [[ -d "${DESKTOP}/opt" ]] && [[ -d /opt ]]; then
-  if ! findmnt -n /opt 2>/dev/null | grep -Eq 'overlay|sysext'; then
-    mount -t overlay coda-desktop-opt \
-      -o "lowerdir=${DESKTOP}/opt:/opt,index=off,metacopy=off" \
-      /opt 2>/dev/null || true
+  if [[ "${merged_usr}" -eq 0 ]]; then
+    if findmnt -n /usr 2>/dev/null | grep -Eq 'overlay|sysext'; then
+      log "/usr already merged"
+      merged_usr=1
+    elif mount -t overlay coda-desktop-usr \
+        -o "lowerdir=${DESKTOP}/usr:/usr,index=off,metacopy=off" \
+        /usr; then
+      merged_usr=1
+      log "merged /usr via overlay (desktop over core) from ${DESKTOP}"
+    else
+      log "WARNING: could not merge /usr from ${DESKTOP} — core continues without desktop"
+      return 0
+    fi
   fi
-fi
 
-if command -v ldconfig >/dev/null 2>&1; then
-  ldconfig -X >/dev/null 2>&1 || true
-fi
+  if [[ -d "${DESKTOP}/etc" ]]; then
+    local merged_etc=0
+    if command -v systemd-confext >/dev/null 2>&1; then
+      mkdir -p /run/confexts
+      ln -sfn "${DESKTOP}" /run/confexts/coda-desktop
+      if systemd-confext merge >/dev/null 2>&1; then
+        merged_etc=1
+        log "merged /etc via systemd-confext from ${DESKTOP}"
+      fi
+    fi
+    if [[ "${merged_etc}" -eq 0 ]]; then
+      if findmnt -n /etc 2>/dev/null | grep -Eq 'overlay|confext'; then
+        log "/etc already merged"
+      elif mount -t overlay coda-desktop-etc \
+          -o "lowerdir=${DESKTOP}/etc:/etc,index=off,metacopy=off" \
+          /etc; then
+        log "merged /etc via overlay (desktop over core) from ${DESKTOP}"
+      else
+        log "WARNING: /etc desktop merge failed (greetd config may be missing)"
+      fi
+    fi
+  fi
 
-log "desktop available from ${DESKTOP}"
-exit 0
+  if [[ -d "${DESKTOP}/opt" ]] && [[ -d /opt ]]; then
+    if ! findmnt -n /opt 2>/dev/null | grep -Eq 'overlay|sysext'; then
+      mount -t overlay coda-desktop-opt \
+        -o "lowerdir=${DESKTOP}/opt:/opt,index=off,metacopy=off" \
+        /opt 2>/dev/null || true
+    fi
+  fi
+
+  if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig -X >/dev/null 2>&1 || true
+  fi
+
+  log "desktop available from ${DESKTOP}"
+  coda_start_merged_session
+  return 0
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  coda_merge_desktop
+fi

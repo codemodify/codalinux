@@ -194,6 +194,25 @@ check_boot() {
   else
     fail "greetd config missing"
   fi
+  if [[ ! -x /usr/local/bin/coda-hyprland ]]; then
+    fail "merged /usr/local/bin/coda-hyprland missing"
+  else
+    pass "coda-hyprland visible on merged /usr"
+  fi
+  if ! command -v start-hyprland >/dev/null 2>&1 \
+     && [[ ! -x /usr/bin/start-hyprland ]]; then
+    fail "start-hyprland missing after desktop merge"
+  else
+    pass "start-hyprland visible after merge"
+  fi
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl is-active --quiet greetd.service \
+       || systemctl is-active --quiet display-manager.service; then
+      pass "greetd.service active"
+    else
+      fail "greetd.service is not active after desktop merge"
+    fi
+  fi
   local uid runtime his=""
   uid="$(id -u "${user}")"
   runtime="/run/user/${uid}"
