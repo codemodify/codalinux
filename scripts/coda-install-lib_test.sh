@@ -6,6 +6,20 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "${root}/scripts/coda-install-lib.sh"
 
 fail=0
+
+# Stale env guard must not skip reload when helpers are missing.
+unset -f coda_need_root
+CODA_INSTALL_LIB_SOURCED=1
+# shellcheck source=coda-install-lib.sh
+. "${root}/scripts/coda-install-lib.sh"
+if ! declare -F coda_need_root >/dev/null 2>&1; then
+  echo "coda-install-lib_test: stale CODA_INSTALL_LIB_SOURCED skipped helper reload" >&2
+  fail=1
+fi
+if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-slot" --help >/dev/null; then
+  echo "coda-install-lib_test: coda-slot --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
+  fail=1
+fi
 dest="$(mktemp -d)"
 trap 'rm -rf "${dest}"' EXIT
 
@@ -101,6 +115,21 @@ if ( coda_assert_kernel_modules "${dest}" "${kver}" ) >/dev/null 2>&1; then
   fail=1
 fi
 rm -rf "${src}"
+
+# Live ISO /boot/loader is not the disk ESP unless coda-*.conf is there.
+esp_work="$(mktemp -d)"
+mkdir -p "${esp_work}/boot/loader/entries"
+if coda_pick_esp "${esp_work}" >/dev/null 2>&1; then
+  echo "coda-install-lib_test: coda_pick_esp must fail without coda-*.conf" >&2
+  fail=1
+fi
+: >"${esp_work}/boot/loader/entries/coda-b.conf"
+picked="$(coda_pick_esp "${esp_work}")"
+if [[ "${picked}" != "${esp_work}/boot" ]]; then
+  echo "coda-install-lib_test: coda_pick_esp=${picked} (want ${esp_work}/boot)" >&2
+  fail=1
+fi
+rm -rf "${esp_work}"
 
 # greetd unit + PAM on the slot (not a dangling /usr/lib symlink).
 coda_install_slot_greetd "${dest}"
