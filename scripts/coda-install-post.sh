@@ -303,9 +303,17 @@ if [[ "${same_root}" -eq 0 ]]; then
   done
   copy_if /usr/local/lib/codalinux/coda-desktop-mount \
     "${target}/usr/local/lib/codalinux/coda-desktop-mount"
+  local helper
+  for helper in coda-install-lib.sh coda-install-post.sh coda-install-ab.sh \
+                coda-install-split.py coda-install-layout.py \
+                coda-install-verify.sh coda-install-config.py; do
+    copy_if "/usr/local/lib/codalinux/${helper}" \
+      "${target}/usr/local/lib/codalinux/${helper}"
+  done
   chmod 0755 "${target}/usr/local/bin/coda-install" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/coda-slot" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/coda-desktop-mount" 2>/dev/null || true
+  chmod 0755 "${target}/usr/local/lib/codalinux/"coda-install* 2>/dev/null || true
 
   copy_if /etc/systemd/network/20-wired.network \
     "${target}/etc/systemd/network/20-wired.network"
@@ -362,6 +370,10 @@ if grep -q 'user = "live"' "${session}/etc/greetd/config.toml"; then
 fi
 if [[ -n "${desktop_root}" && -x "${target}/usr/local/bin/coda-hyprland" ]]; then
   echo "coda-install-post: coda-hyprland must not be installed on the core slot" >&2
+  exit 1
+fi
+if [[ ! -f "${target}/usr/local/lib/codalinux/coda-install-lib.sh" ]]; then
+  echo "coda-install-post: coda-install-lib.sh missing on the core slot (boot-test/promote need it)" >&2
   exit 1
 fi
 if [[ ! -f "${target}/etc/systemd/system/greetd.service" \

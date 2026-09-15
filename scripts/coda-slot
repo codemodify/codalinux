@@ -5,13 +5,25 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f /usr/local/lib/codalinux/coda-install-lib.sh ]]; then
-  # shellcheck source=coda-install-lib.sh
-  . /usr/local/lib/codalinux/coda-install-lib.sh
-else
-  # shellcheck source=coda-install-lib.sh
-  . "${here}/coda-install-lib.sh"
-fi
+coda_slot_load_lib() {
+  unset CODA_INSTALL_LIB_SOURCED
+  local f
+  for f in \
+    /usr/local/lib/codalinux/coda-install-lib.sh \
+    "${here}/coda-install-lib.sh" \
+    /usr/share/codalinux/install/coda-install-lib.sh
+  do
+    [[ -f "${f}" ]] || continue
+    # shellcheck source=coda-install-lib.sh
+    . "${f}"
+    if declare -F coda_need_root >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  printf 'coda-slot: coda-install-lib.sh did not provide coda_need_root\n' >&2
+  exit 1
+}
+coda_slot_load_lib
 CODA_INSTALL_LOG_PREFIX=coda-slot
 
 usage() {
@@ -82,8 +94,9 @@ resolve_disk_if_needed() {
 }
 
 esp_path() {
-  if [[ -d /boot/loader ]]; then
-    printf '%s' /boot
+  local picked
+  if picked="$(coda_pick_esp "${target}")"; then
+    printf '%s' "${picked}"
     return 0
   fi
   printf '%s' "${target}/boot"
@@ -110,16 +123,15 @@ cmd_status() {
   else
     echo "inactive: (unknown — pass --slot)"
   fi
-  local esp=/boot
-  if [[ ! -d /boot/loader && -n "${disk:-}" ]]; then
-    mkdir -p "${target}"
-    if ! mountpoint -q "${target}"; then
-      local ed
-      ed="$(coda_wait_partlabel coda-esp)"
+  local esp
+  if ! esp="$(coda_pick_esp "${target}")"; then
+    if [[ -n "${disk:-}" ]]; then
       mkdir -p "${target}/boot"
-      mount "${ed}" "${target}/boot"
+      if ! mountpoint -q "${target}/boot"; then
+        mount "$(coda_wait_partlabel coda-esp)" "${target}/boot" 2>/dev/null || true
+      fi
     fi
-    esp="${target}/boot"
+    esp="$(coda_pick_esp "${target}" || printf '%s' "${target}/boot")"
   fi
   default="$(read_default_entry "${esp}")"
   echo "boot-default: ${default:-unknown}"
@@ -245,14 +257,17 @@ cmd_boot_test() {
     fi
   fi
   local esp
-  if [[ -d /boot/loader ]]; then
-    esp=/boot
+  if esp="$(coda_pick_esp "${target}")"; then
+    :
   else
-    prepare_mounts_for_slot "${s}"
-    # Only need the ESP; mounts are already up.
+    resolve_disk_if_needed || coda_die "cannot find coda disk (pass --disk)"
+    mkdir -p "${target}/boot"
+    if ! mountpoint -q "${target}/boot"; then
+      mount "$(coda_wait_partlabel coda-esp)" "${target}/boot"
+    fi
     esp="${target}/boot"
   fi
-  [[ -f "${esp}/loader/entries/coda-${s}.conf" ]] || coda_die "missing coda-${s}.conf"
+  [[ -f "${esp}/loader/entries/coda-${s}.conf" ]] || coda_die "missing coda-${s}.conf on ${esp}"
   [[ -f "${esp}/coda/${s}/vmlinuz-linux" ]] || coda_die "slot ${s} has no kernel; run coda-slot install first"
   local before
   before="$(read_default_entry "${esp}")"
@@ -269,8 +284,8 @@ cmd_promote() {
   fi
   [[ -n "${s}" ]] || coda_die "pass --slot a|b (cannot infer current slot)"
   local esp
-  if [[ -d /boot/loader ]]; then
-    esp=/boot
+  if esp="$(coda_pick_esp "${target}")"; then
+    :
   else
     resolve_disk_if_needed || coda_die "pass --disk"
     mkdir -p "${target}/boot"
