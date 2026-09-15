@@ -280,10 +280,43 @@ coda_modtree_has_kos() {
   [[ -n "$(find "${tree}" -type f \( -name '*.ko' -o -name '*.ko.*' \) -print -quit 2>/dev/null || true)" ]]
 }
 
+coda_module_ko() {
+  local tree="$1" name="$2"
+  find "${tree}" -type f \( -name "${name}.ko" -o -name "${name}.ko.*" \) -print -quit 2>/dev/null || true
+}
+
+coda_module_is_builtin() {
+  # modules.builtin lines look like kernel/fs/ext4/ext4.ko (no compression).
+  local tree="$1" name="$2"
+  local builtin="${tree}/modules.builtin"
+  [[ -f "${builtin}" ]] || return 1
+  grep -Eq "(^|/)${name}\.ko(\.|$)" "${builtin}"
+}
+
+coda_module_present() {
+  local tree="$1" name="$2"
+  [[ -n "$(coda_module_ko "${tree}" "${name}")" ]] && return 0
+  coda_module_is_builtin "${tree}" "${name}"
+}
+
+coda_modtree_bootable() {
+  # A kver dir is bootable if vfat/fat/ext4 are loadable or built-in.
+  local root="$1" kdir
+  [[ -d "${root}" ]] || return 1
+  for kdir in "${root}"/*; do
+    [[ -d "${kdir}" ]] || continue
+    coda_module_present "${kdir}" vfat || continue
+    coda_module_present "${kdir}" fat || continue
+    coda_module_present "${kdir}" ext4 || continue
+    return 0
+  done
+  return 1
+}
+
 coda_sync_kernel_modules() {
-  # File-list rsync is files/symlinks only and has no -r. The linux
-  # package tree is large; copy usr/lib/modules as a real directory so
-  # .ko* + modules.dep always land on the slot (no session-wrapper leak).
+  # File-list rsync may already have dropped a partial modules tree onto
+  # the slot. Never merge onto it with -H (hardlink speedup against stubs).
+  # Wipe dest and copy a known-good source as real files.
   local src="$1" dest="$2"
   local from="" candidate
   for candidate in \
@@ -291,16 +324,29 @@ coda_sync_kernel_modules() {
     /usr/lib/modules \
     /run/archiso/airootfs/usr/lib/modules
   do
-    if coda_modtree_has_kos "${candidate}"; then
+    if coda_modtree_bootable "${candidate}"; then
       from="${candidate}"
       break
     fi
   done
+  if [[ -z "${from}" ]]; then
+    for candidate in \
+      "${src}/usr/lib/modules" \
+      /usr/lib/modules \
+      /run/archiso/airootfs/usr/lib/modules
+    do
+      if coda_modtree_has_kos "${candidate}"; then
+        from="${candidate}"
+        break
+      fi
+    done
+  fi
   [[ -n "${from}" ]] \
     || coda_die "no kernel modules (*.ko*) under ${src}/usr/lib/modules or live /usr/lib/modules"
+  rm -rf "${dest}/usr/lib/modules"
   mkdir -p "${dest}/usr/lib/modules"
-  coda_log "offline kernel modules ${from} → ${dest}/usr/lib/modules"
-  rsync -aHAX --numeric-ids --info=stats1 "${from}/" "${dest}/usr/lib/modules/"
+  coda_log "offline kernel modules ${from} → ${dest}/usr/lib/modules (replace, no hardlinks)"
+  rsync -aAX --numeric-ids --info=stats1 "${from}/" "${dest}/usr/lib/modules/"
 }
 
 coda_assert_kernel_modules() {
@@ -313,11 +359,24 @@ coda_assert_kernel_modules() {
     coda_die "usr-merge /lib does not resolve ${dest}/lib/modules/${kver} (kmod looks here)"
   fi
   for name in vfat fat ext4; do
-    found="$(find "${tree}" -type f \( -name "${name}.ko" -o -name "${name}.ko.*" \) -print -quit 2>/dev/null || true)"
-    [[ -n "${found}" ]] || coda_die "core slot missing ${name} module under ${tree}"
+    found="$(coda_module_ko "${tree}" "${name}")"
+    if [[ -n "${found}" ]]; then
+      continue
+    fi
+    if coda_module_is_builtin "${tree}" "${name}"; then
+      coda_log "${name} is built-in (${kver})"
+      continue
+    fi
+    coda_die "core slot missing ${name} module (and not in modules.builtin) under ${tree}"
   done
   found="$(find "${tree}" -type f \( -name 'virtio*.ko' -o -name 'virtio*.ko.*' \) -print -quit 2>/dev/null || true)"
-  [[ -n "${found}" ]] || coda_die "core slot missing virtio* modules under ${tree}"
+  if [[ -z "${found}" ]]; then
+    if coda_module_is_builtin "${tree}" virtio_blk || coda_module_is_builtin "${tree}" virtio_pci; then
+      coda_log "virtio block/pci is built-in (${kver})"
+    else
+      coda_die "core slot missing virtio* modules under ${tree}"
+    fi
+  fi
 }
 
 coda_prepare_slot_modules() {
