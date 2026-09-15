@@ -107,11 +107,16 @@ if ! bash "${root}/scripts/coda-install-lib_test.sh" >/tmp/coda-lib-test.out 2>&
   log_fail "coda-install-lib_test.sh failed"
   cat /tmp/coda-lib-test.out >&2 || true
 fi
+if ! bash "${root}/scripts/coda-desktop-mount_test.sh" >/tmp/coda-mount-test.out 2>&1; then
+  log_fail "coda-desktop-mount_test.sh failed"
+  cat /tmp/coda-mount-test.out >&2 || true
+fi
 if ! grep -q 'mkdir -p "${dest}/etc/mkinitcpio.d"' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must mkdir mkinitcpio.d before writing linux.preset"
 fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
-          coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount; do
+          coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount \
+          coda-desktop-mount_test.sh coda-install-post.sh; do
   if ! bash -n "${root}/scripts/${sh}"; then
     log_fail "bash -n failed: scripts/${sh}"
   fi
@@ -185,6 +190,36 @@ fi
 if ! grep -q 'coda-hyprland must not be installed on the core slot' \
     "${root}/scripts/coda-install-post.sh"; then
   log_fail "coda-install-post.sh must keep the core-slot coda-hyprland guard"
+fi
+if ! grep -q 'coda_install_slot_greetd' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must install a real greetd.service on the slot"
+fi
+if ! grep -q 'coda_install_slot_greetd' "${root}/scripts/coda-install-post.sh"; then
+  log_fail "coda-install-post.sh must call coda_install_slot_greetd"
+fi
+if grep -q 'ln -sfn /usr/lib/systemd/system/greetd.service' \
+    "${root}/scripts/coda-install-post.sh"; then
+  log_fail "coda-install-post.sh must not want greetd via a dangling /usr/lib symlink"
+fi
+if ! grep -q 'start --no-block greetd.service' "${root}/scripts/coda-desktop-mount"; then
+  log_fail "coda-desktop-mount must start greetd --no-block after merge"
+fi
+if ! grep -q 'daemon-reload' "${root}/scripts/coda-desktop-mount"; then
+  log_fail "coda-desktop-mount must daemon-reload after merge before starting greetd"
+fi
+if grep -q '^ConditionPathExists=' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must not emit a greetd ConditionPathExists drop-in"
+fi
+if ! grep -q 'coda_scrub_live_greetd' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must scrub live greetd drop-in and dangling /usr/lib wants"
+fi
+if ! grep -q 'greetd.service is not active after desktop merge' \
+    "${root}/scripts/coda-install-verify.sh"; then
+  log_fail "coda-install-verify.sh must fail when greetd is inactive"
+fi
+if ! grep -q 'start-hyprland missing after desktop merge' \
+    "${root}/scripts/coda-install-verify.sh"; then
+  log_fail "coda-install-verify.sh must require start-hyprland after merge"
 fi
 if ! grep -q 'is_directory_entry' "${root}/scripts/coda-install-split.py"; then
   log_fail "coda-install-split.py must skip directory nodes (rsync recurse leak)"
