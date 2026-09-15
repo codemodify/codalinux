@@ -125,6 +125,33 @@ if ! grep -q 'After=coda-desktop-mount.service' \
   echo "coda-install-lib_test: greetd drop-in must After=coda-desktop-mount" >&2
   fail=1
 fi
+if grep -q 'ConditionPathExists' \
+    "${dest}/etc/systemd/system/greetd.service.d/coda-desktop-mount.conf"; then
+  echo "coda-install-lib_test: greetd drop-in must not ConditionPathExists (skips before merge)" >&2
+  fail=1
+fi
+
+# Confext must not re-apply live dangling /usr/lib wants or coda-live-setup.
+desk="$(mktemp -d)"
+mkdir -p "${desk}/etc/systemd/system/greetd.service.d" \
+  "${desk}/etc/systemd/system/multi-user.target.wants" \
+  "${desk}/etc/systemd/system/graphical.target.wants"
+printf '[Unit]\nWants=coda-live-setup.service\n' \
+  >"${desk}/etc/systemd/system/greetd.service.d/coda.conf"
+ln -sfn /usr/lib/systemd/system/greetd.service \
+  "${desk}/etc/systemd/system/display-manager.service"
+ln -sfn /usr/lib/systemd/system/greetd.service \
+  "${desk}/etc/systemd/system/multi-user.target.wants/greetd.service"
+coda_wipe_live_bits "${desk}"
+if [[ -e "${desk}/etc/systemd/system/greetd.service.d/coda.conf" ]]; then
+  echo "coda-install-lib_test: live greetd drop-in must be wiped from desktop" >&2
+  fail=1
+fi
+if [[ -L "${desk}/etc/systemd/system/display-manager.service" ]]; then
+  echo "coda-install-lib_test: dangling /usr/lib display-manager must be wiped from desktop" >&2
+  fail=1
+fi
+rm -rf "${desk}"
 if [[ ! -f "${dest}/etc/pam.d/greetd" ]]; then
   echo "coda-install-lib_test: /etc/pam.d/greetd missing on the slot" >&2
   fail=1

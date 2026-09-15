@@ -40,30 +40,18 @@ export PATH="${mock_bin}:${PATH}"
 export CODA_DATA_DIR="${work}/data"
 export CODA_GREETD_BIN="${work}/greetd-ok/greetd"
 
-# Happy path: greetd unit known, binary present → start --no-block.
+# After merge: always daemon-reload then start --no-block (late /usr unit).
 export CODA_SYSTEMCTL_LOG="${work}/start.log"
 : >"${CODA_SYSTEMCTL_LOG}"
 coda_start_merged_session
+if ! grep -qx 'daemon-reload' "${CODA_SYSTEMCTL_LOG}"; then
+  log_fail "expected systemctl daemon-reload after merge"
+  cat "${CODA_SYSTEMCTL_LOG}" >&2 || true
+fi
 if ! grep -qx 'start --no-block greetd.service' "${CODA_SYSTEMCTL_LOG}"; then
   log_fail "expected systemctl start --no-block greetd.service"
   cat "${CODA_SYSTEMCTL_LOG}" >&2 || true
 fi
-if grep -q 'daemon-reload' "${CODA_SYSTEMCTL_LOG}"; then
-  log_fail "must not daemon-reload when greetd.service is already known"
-fi
-
-# Late unit: cat fails → daemon-reload then start.
-export CODA_SYSTEMCTL_CAT_FAIL=1
-export CODA_SYSTEMCTL_LOG="${work}/reload.log"
-: >"${CODA_SYSTEMCTL_LOG}"
-coda_start_merged_session
-if ! grep -qx 'daemon-reload' "${CODA_SYSTEMCTL_LOG}"; then
-  log_fail "expected daemon-reload when greetd.service is unknown"
-fi
-if ! grep -qx 'start --no-block greetd.service' "${CODA_SYSTEMCTL_LOG}"; then
-  log_fail "expected start after daemon-reload"
-fi
-unset CODA_SYSTEMCTL_CAT_FAIL
 
 # Missing binary: do not start greetd (core continues).
 export CODA_GREETD_BIN="${work}/missing-greetd"
