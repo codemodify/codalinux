@@ -148,14 +148,21 @@ printf '1\n' >/tmp/coda-empty-b/etc/coda/empty
 umount /tmp/coda-empty-b
 rmdir /tmp/coda-empty-b 2>/dev/null || true
 
+live_helper_snap="${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}"
+coda_snapshot_live_helpers "${live_helper_snap}"
+
 post="$(coda_find_post || true)"
 if [[ -n "${post}" ]]; then
   coda_log "running ${post}"
   CODA_INSTALL_USER="${CODA_INSTALL_USER:-user}" \
   CODA_DESKTOP_ROOT="${data_mnt}/desktop" \
+  CODA_LIVE_HELPER_SNAP="${live_helper_snap}" \
     "${post}" --user "${CODA_INSTALL_USER:-user}" --target "${target}"
 else
   coda_die "coda-install-post.sh missing"
+fi
+if ! coda_restore_live_helpers_if_broken "${live_helper_snap}"; then
+  coda_die "live coda-install-lib.sh lost coda_need_root after install"
 fi
 
 coda_write_fstab "${target}" a

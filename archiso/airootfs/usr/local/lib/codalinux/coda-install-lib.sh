@@ -5,6 +5,8 @@
 
 # Re-load if a stale CODA_INSTALL_LIB_SOURCED=1 leaked into the environment
 # without the helpers (fresh qga_exec of coda-slot boot-test/promote).
+# When this file is sourced from a function, `return` pops that function —
+# callers must source us at script top-level so a stub cannot skip fallbacks.
 if declare -F coda_need_root >/dev/null 2>&1; then
   return 0
 fi
@@ -12,6 +14,89 @@ CODA_INSTALL_LIB_SOURCED=1
 
 coda_log() { printf '%s: %s\n' "${CODA_INSTALL_LOG_PREFIX:-coda-install}" "$*"; }
 coda_die() { printf '%s: %s\n' "${CODA_INSTALL_LOG_PREFIX:-coda-install}" "$*" >&2; exit 1; }
+
+coda_live_lib_path() {
+  printf '%s' /usr/local/lib/codalinux/coda-install-lib.sh
+}
+
+coda_share_lib_path() {
+  printf '%s' /usr/share/codalinux/install/coda-install-lib.sh
+}
+
+coda_lib_file_has_need_root() {
+  local f="$1"
+  [[ -f "${f}" && -s "${f}" ]] || return 1
+  grep -q 'coda_need_root()' "${f}"
+}
+
+coda_same_inode() {
+  local a="$1" b="$2"
+  [[ -e "${a}" || -L "${a}" ]] || return 1
+  [[ -e "${b}" || -L "${b}" ]] || return 1
+  [[ "$(stat -c '%d:%i' "${a}" 2>/dev/null || echo x)" == "$(stat -c '%d:%i' "${b}" 2>/dev/null || echo y)" ]]
+}
+
+# cp of a file onto itself (same inode via bind/overlay) opens dest O_TRUNC
+# first and empties the live helper. Copy via a temp + rename instead.
+coda_copy_file_safe() {
+  local src="$1" dest="$2"
+  [[ -e "${src}" || -L "${src}" ]] || return 0
+  mkdir -p "$(dirname "${dest}")"
+  if coda_same_inode "${src}" "${dest}"; then
+    return 0
+  fi
+  local tmp
+  tmp="$(mktemp "${dest}.XXXXXX")"
+  cp -a "${src}" "${tmp}"
+  mv -f "${tmp}" "${dest}"
+}
+
+coda_copy_tree_safe() {
+  local src="$1" dest="$2"
+  [[ -d "${src}" ]] || return 0
+  mkdir -p "${dest}"
+  if coda_same_inode "${src}" "${dest}"; then
+    return 0
+  fi
+  cp -a "${src}/." "${dest}/"
+}
+
+coda_snapshot_live_helpers() {
+  local dest="${1:-${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}}"
+  local src share
+  src="$(coda_live_lib_path)"
+  share="$(coda_share_lib_path)"
+  mkdir -p "${dest}"
+  if coda_lib_file_has_need_root "${src}"; then
+    coda_copy_file_safe "${src}" "${dest}/coda-install-lib.sh"
+    if ! coda_lib_file_has_need_root "${share}"; then
+      mkdir -p "$(dirname "${share}")"
+      coda_copy_file_safe "${src}" "${share}" || true
+    fi
+  elif coda_lib_file_has_need_root "${share}"; then
+    coda_copy_file_safe "${share}" "${dest}/coda-install-lib.sh"
+  fi
+}
+
+coda_restore_live_helpers_if_broken() {
+  local snap="${1:-${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}}"
+  local live share from=""
+  live="$(coda_live_lib_path)"
+  share="$(coda_share_lib_path)"
+  if coda_lib_file_has_need_root "${live}"; then
+    return 0
+  fi
+  if coda_lib_file_has_need_root "${snap}/coda-install-lib.sh"; then
+    from="${snap}/coda-install-lib.sh"
+  elif coda_lib_file_has_need_root "${share}"; then
+    from="${share}"
+  fi
+  [[ -n "${from}" ]] || return 1
+  mkdir -p "$(dirname "${live}")"
+  coda_copy_file_safe "${from}" "${live}"
+  coda_log "restored ${live} from ${from} (next coda-slot must still load helpers)"
+  coda_lib_file_has_need_root "${live}"
+}
 
 coda_need_root() {
   if [[ "${EUID}" -ne 0 ]]; then
@@ -222,6 +307,9 @@ coda_rsync_filelist() {
   local src="$1" dest="$2" list="$3" delete="${4:-0}" kind="${5:-}"
   [[ -d "${src}" ]] || coda_die "source root missing: ${src}"
   [[ -f "${list}" ]] || coda_die "file list missing: ${list}"
+  if coda_same_inode / "${dest}"; then
+    coda_die "refusing to rsync onto the live root (would clobber running helpers)"
+  fi
   mkdir -p "${dest}"
   # -a includes -r; a listed directory would recurse (filesystem owns
   # /usr/local/bin/). Lists are files/symlinks only; drop -r anyway.
@@ -411,6 +499,10 @@ coda_purge_leaked_desktop() {
   local dest="$1" desktop_list="$2"
   local rel wrap
   [[ -d "${dest}" ]] || return 0
+  if coda_same_inode / "${dest}"; then
+    coda_log "refusing to purge desktop leaks from the live root"
+    return 0
+  fi
   if [[ -f "${desktop_list}" ]]; then
     while IFS= read -r rel; do
       [[ -n "${rel}" ]] || continue

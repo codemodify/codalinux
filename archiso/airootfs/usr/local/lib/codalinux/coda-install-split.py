@@ -28,6 +28,8 @@ CORE_EXTRA_PREFIXES = (
     "/usr/local/lib/codalinux/coda-install-layout.py",
     "/usr/local/lib/codalinux/coda-install-verify.sh",
     "/usr/local/lib/codalinux/coda-install-config.py",
+    "/usr/share/codalinux/install/coda-install-lib.sh",
+    "/usr/share/codalinux/install/coda-install-post.sh",
     "/usr/local/lib/codalinux/coda-slot",
     "/usr/local/lib/codalinux/coda-desktop-mount",
     "/usr/local/lib/codalinux/apply-os-release.sh",

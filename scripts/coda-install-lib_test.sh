@@ -20,6 +20,27 @@ if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-slot" --help >/dev/nu
   echo "coda-install-lib_test: coda-slot --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
   fail=1
 fi
+
+# Same-inode copy (bind/overlay alias) must not empty the helper.
+_same="$(mktemp -d)"
+printf 'coda_need_root() { :; }\nMARKER\n' >"${_same}/lib.sh"
+ln -f "${_same}/lib.sh" "${_same}/other.sh"
+coda_copy_file_safe "${_same}/lib.sh" "${_same}/other.sh"
+if ! grep -q MARKER "${_same}/lib.sh"; then
+  echo "coda-install-lib_test: coda_copy_file_safe emptied a same-inode helper" >&2
+  fail=1
+fi
+rm -rf "${_same}"
+
+# Restore a stub live file from a snapshot (paths under work/, not /usr).
+if ! coda_lib_file_has_need_root "${root}/scripts/coda-install-lib.sh"; then
+  echo "coda-install-lib_test: real lib must define coda_need_root()" >&2
+  fail=1
+fi
+if coda_lib_file_has_need_root /dev/null; then
+  echo "coda-install-lib_test: /dev/null must not look like a helper" >&2
+  fail=1
+fi
 dest="$(mktemp -d)"
 trap 'rm -rf "${dest}"' EXIT
 
