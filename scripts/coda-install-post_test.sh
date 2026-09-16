@@ -64,6 +64,31 @@ for helper in coda-install-lib.sh coda-install-post.sh; do
   fi
 done
 
+# Same-inode helper copy must not empty the live file (overlay/bind alias).
+# shellcheck source=coda-install-lib.sh
+. "${root}/scripts/coda-install-lib.sh"
+same="${work}/same"
+mkdir -p "${same}"
+printf 'coda_need_root() { :; }\nLIVE\n' >"${same}/coda-install-lib.sh"
+ln -f "${same}/coda-install-lib.sh" "${same}/dest-lib.sh"
+coda_copy_file_safe "${same}/coda-install-lib.sh" "${same}/dest-lib.sh"
+if ! grep -q LIVE "${same}/coda-install-lib.sh"; then
+  echo "coda-install-post_test: same-inode copy emptied the live helper" >&2
+  fail=1
+fi
+
+# Emptied live file + snapshot must restore helpers for the next coda-slot.
+snap="${work}/snap"
+mkdir -p "${snap}"
+cp -a "${root}/scripts/coda-install-lib.sh" "${snap}/coda-install-lib.sh"
+emptied="${work}/emptied-live.sh"
+: >"${emptied}"
+coda_copy_file_safe "${snap}/coda-install-lib.sh" "${emptied}"
+if ! grep -q 'coda_need_root()' "${emptied}"; then
+  echo "coda-install-post_test: snapshot restore missed coda_need_root" >&2
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "coda-install-post_test: FAILED" >&2
   exit 1

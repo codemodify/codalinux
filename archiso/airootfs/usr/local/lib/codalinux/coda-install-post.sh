@@ -10,9 +10,17 @@ _post_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f /usr/local/lib/codalinux/coda-install-lib.sh ]]; then
   # shellcheck source=coda-install-lib.sh
   . /usr/local/lib/codalinux/coda-install-lib.sh
+elif [[ -f /usr/share/codalinux/install/coda-install-lib.sh ]]; then
+  # shellcheck source=coda-install-lib.sh
+  . /usr/share/codalinux/install/coda-install-lib.sh
 elif [[ -f "${_post_here}/coda-install-lib.sh" ]]; then
   # shellcheck source=coda-install-lib.sh
   . "${_post_here}/coda-install-lib.sh"
+fi
+
+_live_helper_snap="${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}"
+if declare -F coda_snapshot_live_helpers >/dev/null 2>&1; then
+  coda_snapshot_live_helpers "${_live_helper_snap}"
 fi
 
 user="${CODA_INSTALL_USER:-user}"
@@ -54,16 +62,34 @@ fi
 
 copy_if() {
   local src="$1" dest="$2"
+  if declare -F coda_copy_file_safe >/dev/null 2>&1; then
+    coda_copy_file_safe "${src}" "${dest}"
+    return 0
+  fi
   if [[ -e "${src}" || -L "${src}" ]]; then
     mkdir -p "$(dirname "${dest}")"
-    cp -a "${src}" "${dest}"
+    if [[ -e "${dest}" || -L "${dest}" ]] \
+       && [[ "$(stat -c '%d:%i' "${src}" 2>/dev/null || echo x)" == "$(stat -c '%d:%i' "${dest}" 2>/dev/null || echo y)" ]]; then
+      return 0
+    fi
+    local tmp
+    tmp="$(mktemp "${dest}.XXXXXX")"
+    cp -a "${src}" "${tmp}"
+    mv -f "${tmp}" "${dest}"
   fi
 }
 
 copy_tree() {
   local src="$1" dest="$2"
+  if declare -F coda_copy_tree_safe >/dev/null 2>&1; then
+    coda_copy_tree_safe "${src}" "${dest}"
+    return 0
+  fi
   if [[ -d "${src}" ]]; then
     mkdir -p "${dest}"
+    if [[ "$(stat -c '%d:%i' "${src}" 2>/dev/null || echo x)" == "$(stat -c '%d:%i' "${dest}" 2>/dev/null || echo y)" ]]; then
+      return 0
+    fi
     cp -a "${src}/." "${dest}/"
   fi
 }
@@ -303,16 +329,25 @@ if [[ "${same_root}" -eq 0 ]]; then
   done
   copy_if /usr/local/lib/codalinux/coda-desktop-mount \
     "${target}/usr/local/lib/codalinux/coda-desktop-mount"
+  mkdir -p "${target}/usr/share/codalinux/install"
   for helper in coda-install-lib.sh coda-install-post.sh coda-install-ab.sh \
                 coda-install-split.py coda-install-layout.py \
                 coda-install-verify.sh coda-install-config.py; do
     copy_if "/usr/local/lib/codalinux/${helper}" \
       "${target}/usr/local/lib/codalinux/${helper}"
+    if [[ -f "/usr/share/codalinux/install/${helper}" ]]; then
+      copy_if "/usr/share/codalinux/install/${helper}" \
+        "${target}/usr/share/codalinux/install/${helper}"
+    elif [[ -f "/usr/local/lib/codalinux/${helper}" ]]; then
+      copy_if "/usr/local/lib/codalinux/${helper}" \
+        "${target}/usr/share/codalinux/install/${helper}"
+    fi
   done
   chmod 0755 "${target}/usr/local/bin/coda-install" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/coda-slot" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/coda-desktop-mount" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/"coda-install* 2>/dev/null || true
+  chmod 0755 "${target}/usr/share/codalinux/install/"coda-install* 2>/dev/null || true
 
   copy_if /etc/systemd/network/20-wired.network \
     "${target}/etc/systemd/network/20-wired.network"
@@ -398,6 +433,13 @@ if [[ -L "${_greetd_want}" ]]; then
 elif [[ ! -e "${_greetd_want}" ]]; then
   echo "coda-install-post: greetd.service is not wanted on the core slot" >&2
   exit 1
+fi
+
+if declare -F coda_restore_live_helpers_if_broken >/dev/null 2>&1; then
+  if ! coda_restore_live_helpers_if_broken "${_live_helper_snap}"; then
+    echo "coda-install-post: live coda-install-lib.sh lost coda_need_root (next coda-slot would fail)" >&2
+    exit 1
+  fi
 fi
 
 log "greetd will autologin ${user} via /usr/local/bin/coda-hyprland"

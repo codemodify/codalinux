@@ -121,10 +121,13 @@ prepare_overlay() {
     "${overlay}/usr/local/lib/codalinux/coda-install-config.py"
   install -m 0755 "${root}/scripts/coda-install-post.sh" \
     "${overlay}/usr/local/lib/codalinux/coda-install-post.sh"
+  install -d "${overlay}/usr/share/codalinux/install"
   install -m 0755 "${root}/scripts/coda-install-post.sh" \
     "${overlay}/usr/share/codalinux/install/coda-install-post.sh"
   install -m 0755 "${root}/scripts/coda-install-lib.sh" \
     "${overlay}/usr/local/lib/codalinux/coda-install-lib.sh"
+  install -m 0755 "${root}/scripts/coda-install-lib.sh" \
+    "${overlay}/usr/share/codalinux/install/coda-install-lib.sh"
   install -m 0755 "${root}/scripts/coda-install-layout.py" \
     "${overlay}/usr/local/lib/codalinux/coda-install-layout.py"
   install -m 0755 "${root}/scripts/coda-install-ab.sh" \
