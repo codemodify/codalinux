@@ -48,6 +48,18 @@ func TestNormalizeAndKnownPath(t *testing.T) {
 	}
 }
 
+func TestWatchNotesDocumentFollow(t *testing.T) {
+	if WatchNoteSnapshot == "" || strings.Contains(WatchNoteSnapshot, "stub") {
+		t.Fatalf("snapshot note %q", WatchNoteSnapshot)
+	}
+	if !strings.Contains(WatchNoteSnapshot, "follow") {
+		t.Fatalf("snapshot note should mention follow: %q", WatchNoteSnapshot)
+	}
+	if WatchNoteFollow == "" || WatchNoteObserved == "" || WatchNoteDesired == "" {
+		t.Fatal("watch event notes")
+	}
+}
+
 func TestEncodeDecode(t *testing.T) {
 	line, err := Encode(Request{ID: "1", Op: OpGet, Path: "display"})
 	if err != nil {

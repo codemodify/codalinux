@@ -188,7 +188,7 @@ Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section i
 
 | Daemon | Privilege | Role |
 | --- | --- | --- |
-| `system-configd` | unprivileged | Control plane. Owns the JSON model (**desired** + **observed**). **Only** API clients talk to it. Submodel get / set / watch. Asks **report** to refresh observed; asks **apply** to execute plans. |
+| `system-configd` | unprivileged | Control plane. Owns the JSON model (**desired** + **observed**). **Only** API clients talk to it. Submodel get / set / watch (optional follow stream when observed changes). Asks **report** to refresh observed; asks **apply** to execute plans. |
 | `system-config-apply` | root | Typed, allowlisted executor. Runs **plans from D only**. No model. No client API. |
 | `system-config-report` | mostly unprivileged (root only when a probe needs it) | Hardware / stack inventory + observers. YaST / hwinfo *classed probe* idea; modern *udev event* style. Pushes or pulls **observed** into D. **Never** applies config. |
 
@@ -197,7 +197,7 @@ Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section i
 | Client | Role |
 | --- | --- |
 | `system-config` | CLI |
-| `system-config-tui` | TUI |
+| `system-config-tui` | Terminal Settings (every KnownPath; per-section Apply; D only) |
 | `system-config-gui` | Settings UI on **uitoolkit `dev` (v0.19.x)** — Mail dogfood pattern (splitter + TreeView, pinned Apply, app-level socket client). Enough to ship; remaining gaps in [`core/system-config/docs/uitoolkit-gaps.md`](core/system-config/docs/uitoolkit-gaps.md) do not block. |
 
 Clients never call report or apply. They query **submodels**, not the entire model by default.
@@ -215,7 +215,7 @@ flowchart LR
 
   hw --> report
   report -->|"observed"| d
-  clients -->|"get / set / watch"| d
+  clients -->|"get / set / watch (follow stream)"| d
   d -->|"plans"| apply
   apply --> os
 ```
