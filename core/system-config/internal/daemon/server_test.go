@@ -1,11 +1,17 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/client"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
+	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
 )
 
 func TestGetSetRefreshApply(t *testing.T) {
@@ -63,6 +69,9 @@ func TestGetSetRefreshApply(t *testing.T) {
 	if err != nil || !resp.OK || resp.Note == "" {
 		t.Fatalf("watch: %v %+v", err, resp)
 	}
+	if strings.Contains(resp.Note, "stub") || !strings.Contains(resp.Note, "follow") {
+		t.Fatalf("watch note should document follow stream, got %q", resp.Note)
+	}
 
 	resp, err = c.Set("network", json.RawMessage(`{"wifi":{"device":"wlan0","connect":"Cafe"}}`))
 	if err != nil || !resp.OK {
@@ -94,5 +103,142 @@ func TestRefuseUnknownSet(t *testing.T) {
 	}
 	if resp.OK {
 		t.Fatal("set devices.pci should fail")
+	}
+}
+
+func TestWatchFollowObservedStream(t *testing.T) {
+	dir := t.TempDir()
+	sock := dir + "/d.sock"
+	var n atomic.Int64
+	s := New(Options{
+		Socket: sock,
+		Scan: func(string) (json.RawMessage, error) {
+			return json.RawMessage(`{"n":` + strconv.FormatInt(n.Add(1), 10) + `}`), nil
+		},
+	})
+	if err := s.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	go func() { _ = s.Serve() }()
+
+	w, err := client.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	snap, err := w.WatchFollow("display")
+	if err != nil || !snap.OK {
+		t.Fatalf("watch follow: %v %+v", err, snap)
+	}
+	if snap.Note != protocol.WatchNoteFollow {
+		t.Fatalf("first note %q", snap.Note)
+	}
+
+	other, err := client.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if resp, err := other.Refresh("display"); err != nil || !resp.OK {
+		t.Fatalf("refresh: %v %+v", err, resp)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ev, err := w.Next(ctx)
+	if err != nil || !ev.OK {
+		t.Fatalf("next: %v %+v", err, ev)
+	}
+	if ev.Note != protocol.WatchNoteObserved || ev.Path != protocol.PathDisplay {
+		t.Fatalf("event %+v", ev)
+	}
+	if !strings.Contains(string(ev.Observed), `"n":`) {
+		t.Fatalf("observed %s", ev.Observed)
+	}
+}
+
+func TestWatchFollowDesiredAndFilter(t *testing.T) {
+	dir := t.TempDir()
+	sock := dir + "/d.sock"
+	s := New(Options{
+		Socket: sock,
+		Scan:   func(string) (json.RawMessage, error) { return json.RawMessage(`{}`), nil },
+	})
+	if err := s.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	go func() { _ = s.Serve() }()
+
+	w, err := client.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if _, err := w.WatchFollow("audio"); err != nil {
+		t.Fatal(err)
+	}
+
+	other, err := client.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if resp, err := other.Set("display", json.RawMessage(`{"outputs":[]}`)); err != nil || !resp.OK {
+		t.Fatalf("set display: %v %+v", err, resp)
+	}
+	if resp, err := other.Set("audio", json.RawMessage(`{"volume":0.4}`)); err != nil || !resp.OK {
+		t.Fatalf("set audio: %v %+v", err, resp)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ev, err := w.Next(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Path != protocol.PathAudio || ev.Note != protocol.WatchNoteDesired {
+		t.Fatalf("expected audio desired, got %+v", ev)
+	}
+}
+
+func TestWatchFollowPutObserved(t *testing.T) {
+	dir := t.TempDir()
+	sock := dir + "/d.sock"
+	s := New(Options{Socket: sock, Scan: func(string) (json.RawMessage, error) { return json.RawMessage(`{}`), nil }})
+	if err := s.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	go func() { _ = s.Serve() }()
+
+	w, err := client.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if _, err := w.WatchFollow(""); err != nil {
+		t.Fatal(err)
+	}
+
+	other, err := rpc.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	resp, err := other.Call(protocol.Request{Op: protocol.OpPutObserved, Path: "storage", Data: json.RawMessage(`{"block":[{"name":"sda"}]}`)})
+	if err != nil || !resp.OK {
+		t.Fatalf("put-observed: %v %+v", err, resp)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ev, err := w.Next(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Path != protocol.PathStorage || ev.Note != protocol.WatchNoteObserved {
+		t.Fatalf("event %+v", ev)
 	}
 }

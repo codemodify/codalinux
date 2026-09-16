@@ -4,7 +4,9 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
+	"time"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/model"
 	"github.com/codemodify/codalinux/core/system-config/internal/plan"
@@ -49,6 +51,7 @@ func New(opt Options) *Server {
 			return uid == opt.AllowUID || uid == 0 || uid == os.Getuid()
 		},
 		Handle: s.handle,
+		Stream: s.streamWatch,
 	}
 	return s
 }
@@ -66,7 +69,7 @@ func (s *Server) handle(_ int, req protocol.Request) protocol.Response {
 		return s.set(req)
 	case protocol.OpWatch:
 		resp := s.get(req)
-		resp.Note = "watch stub: single snapshot (no event stream yet)"
+		resp.Note = protocol.WatchNoteSnapshot
 		return resp
 	case protocol.OpRefresh:
 		return s.refresh(req)
@@ -76,6 +79,72 @@ func (s *Server) handle(_ int, req protocol.Request) protocol.Response {
 		return s.putObserved(req)
 	default:
 		return protocol.Response{OK: false, Error: "unknown op " + req.Op + " (get|set|watch|refresh|apply)"}
+	}
+}
+
+func (s *Server) streamWatch(_ int, req protocol.Request, conn net.Conn) bool {
+	if req.Op != protocol.OpWatch {
+		return false
+	}
+	var opts protocol.WatchOpts
+	if len(req.Data) > 0 {
+		_ = json.Unmarshal(req.Data, &opts)
+	}
+	if !opts.Follow {
+		return false
+	}
+	write := func(resp protocol.Response) error {
+		resp.ID = req.ID
+		return rpc.Write(conn, resp)
+	}
+	ch, cancel := s.st.Subscribe()
+	defer cancel()
+
+	snap := s.get(req)
+	snap.Note = protocol.WatchNoteFollow
+	if err := write(snap); err != nil {
+		return true
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		buf := make([]byte, 1)
+		_, _ = conn.Read(buf)
+		close(closed)
+	}()
+
+	var timer <-chan time.Time
+	if opts.TimeoutMS > 0 {
+		t := time.NewTimer(time.Duration(opts.TimeoutMS) * time.Millisecond)
+		defer t.Stop()
+		timer = t.C
+	}
+
+	path := protocol.NormalizePath(req.Path)
+	matchAll := path == "" || path == protocol.PathSubmodels
+	for {
+		select {
+		case <-closed:
+			return true
+		case <-timer:
+			return true
+		case ev, ok := <-ch:
+			if !ok {
+				return true
+			}
+			if !matchAll && ev.Path != path {
+				continue
+			}
+			d, o, st := s.st.Get(ev.Path)
+			note := protocol.WatchNoteObserved
+			if ev.Kind == "desired" {
+				note = protocol.WatchNoteDesired
+			}
+			resp := protocol.Response{OK: true, Path: ev.Path, Desired: d, Observed: o, Status: &st, Note: note}
+			if err := write(resp); err != nil {
+				return true
+			}
+		}
 	}
 }
 
