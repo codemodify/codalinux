@@ -103,11 +103,17 @@ class SplitTests(unittest.TestCase):
             (root / "usr/local/bin").mkdir(parents=True)
             (root / "usr/local/bin/coda-slot").write_text("slot\n", encoding="utf-8")
             (root / "usr/local/bin/coda-hyprland").write_text("hypr\n", encoding="utf-8")
+            (root / "usr/share/codalinux/install").mkdir(parents=True)
+            (root / "usr/share/codalinux/install/coda-install-lib.sh").write_text(
+                "coda_need_root() { :; }\n", encoding="utf-8"
+            )
 
             pkgs, provides = mod.read_pacman_local(local)
             result = mod.classify(root, ["filesystem"], pkgs, provides, include_unpackaged=True)
             self.assertIn("/usr/local/lib/codalinux/coda-install-lib.sh", result["core_files"])
             self.assertNotIn("/usr/local/lib/codalinux/coda-install-lib.sh", result["desktop_files"])
+            self.assertIn("/usr/share/codalinux/install/coda-install-lib.sh", result["core_files"])
+            self.assertNotIn("/usr/share/codalinux/install/coda-install-lib.sh", result["desktop_files"])
             self.assertIn("/usr/local/bin/coda-slot", result["core_files"])
             self.assertIn("/usr/local/lib/codalinux/coda-desktop-mount", result["core_files"])
             self.assertNotIn("/usr/local/bin/coda-hyprland", result["core_files"])

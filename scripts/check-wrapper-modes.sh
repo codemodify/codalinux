@@ -107,6 +107,10 @@ if ! bash "${root}/scripts/coda-install-lib_test.sh" >/tmp/coda-lib-test.out 2>&
   log_fail "coda-install-lib_test.sh failed"
   cat /tmp/coda-lib-test.out >&2 || true
 fi
+if ! bash "${root}/scripts/coda-slot_test.sh" >/tmp/coda-slot-test.out 2>&1; then
+  log_fail "coda-slot_test.sh failed"
+  cat /tmp/coda-slot-test.out >&2 || true
+fi
 if ! bash "${root}/scripts/coda-desktop-mount_test.sh" >/tmp/coda-mount-test.out 2>&1; then
   log_fail "coda-desktop-mount_test.sh failed"
   cat /tmp/coda-mount-test.out >&2 || true
@@ -121,7 +125,7 @@ fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
           coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount \
           coda-desktop-mount_test.sh coda-install-post.sh \
-          coda-install-post_test.sh; do
+          coda-install-post_test.sh coda-slot_test.sh; do
   if ! bash -n "${root}/scripts/${sh}"; then
     log_fail "bash -n failed: scripts/${sh}"
   fi
@@ -204,6 +208,45 @@ if ! grep -q 'coda-install-lib.sh' "${root}/scripts/coda-install-split.py"; then
 fi
 if ! grep -q 'coda_slot_load_lib' "${root}/scripts/coda-slot"; then
   log_fail "coda-slot must load helpers via coda_slot_load_lib"
+fi
+if ! grep -q 'coda_slot_lib_candidates' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot must list load paths via coda_slot_lib_candidates"
+fi
+if ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
+    "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot must fall back to /usr/share/codalinux/install/coda-install-lib.sh"
+fi
+if ! grep -q 'coda_snapshot_live_helpers' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot install must snapshot live helpers before mutating the tree"
+fi
+if ! grep -q 'coda_restore_live_helpers_if_broken' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot install must restore live helpers if install emptied them"
+fi
+if ! grep -q 'coda-install-lib.sh' "${root}/scripts/build-iso.sh" \
+    || ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
+      "${root}/scripts/build-iso.sh"; then
+  log_fail "build-iso.sh must install coda-install-lib.sh under /usr/share (ISO fallback)"
+fi
+if ! grep -qF "[\"/usr/share/codalinux/install/coda-install-lib.sh\"]=\"0:0:755\"" \
+    "${root}/archiso/profiledef.sh"; then
+  log_fail "profiledef.sh missing 755 for /usr/share/codalinux/install/coda-install-lib.sh"
+fi
+if ! grep -q 'coda_copy_file_safe' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must copy helpers via temp+rename (no same-inode truncate)"
+fi
+if ! grep -q 'coda_archiso_airootfs_candidates' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must search more than /run/archiso/airootfs for the squashfs"
+fi
+if ! grep -q 'using writable live /' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must log when falling back to writable live /"
+fi
+if ! grep -q 'for f in /usr/local/lib/codalinux/coda-install-lib.sh' \
+    "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must log live helper files before boot-test"
+fi
+if ! grep -q 'usr/share/codalinux/install/coda-install-lib.sh' \
+    "${root}/scripts/coda-install-split.py"; then
+  log_fail "coda-install-split.py must keep the /usr/share helper fallback on core"
 fi
 if ! grep -q 'coda_pick_esp' "${root}/scripts/coda-slot"; then
   log_fail "coda-slot boot-test/promote must use coda_pick_esp (not live ISO /boot/loader)"
