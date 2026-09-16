@@ -35,7 +35,7 @@
 | `coda-hyprlock` | Start hyprlock with `/etc/xdg/hypr/hyprlock.conf` |
 | `coda-hyprpaper` | Start hyprpaper with the xdg config (`monitor = *`); log `/tmp/hyprpaper.log` + `/var/log` |
 | `coda-wallpaper` | Session wallpaper: hyprpaper first, `swaybg` fallback; logs which backend won |
-| `coda-sync-desktop-from-host.sh` | Guest helper: copy hypr / wallpaper / AGS from the 9p share and restart |
+| `coda-sync-desktop-from-host.sh` | Guest helper: copy hypr / wallpaper / AGS from the 9p share; restart AGS as the seat user (tty2/root must not inherit `/run/user/0`) |
 | `import-wallpaper.sh` | Copy a host still into `branding/wallpapers/default.png` (never generates) |
 | `gen-wallpaper.py` | Fallback still only; refuses to overwrite a committed PNG |
 | `coda-settings` | Settings hub helpers: display, hypr gaps/animations, workspaces, wallpaper, Wi-Fi, BT, audio, power, about |
