@@ -105,7 +105,7 @@ Locked **greenfield** target. Implemented in [`core/system-config/`](core/system
 | Control plane | Unprivileged `system-configd` owns desired + observed JSON. **Only** API clients talk to it. |
 | Apply | Root `system-config-apply` executes **D’s plans only** (typed allowlist, no arbitrary shell). |
 | Report | `system-config-report` inventory / observers → observed. Never writes config. |
-| Clients | `system-config` (CLI), `system-config-tui` (every KnownPath; per-section Apply), `system-config-gui` (uitoolkit Mail/Settings; TreeView per domain). All talk to D only. |
+| Clients | `system-config` (CLI), `system-config-tui` (every KnownPath; per-section Apply), `system-config-gui` (composed ListView prefs shell per domain). All talk to D only. |
 
 Canonical architecture (daemons, flow, L0–L3 detection, submodels, rules): [architecture.md — system-config](architecture.md#system-config). Implementation (Go): [`core/system-config/`](core/system-config/README.md).
 
