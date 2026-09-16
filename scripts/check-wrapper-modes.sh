@@ -234,6 +234,9 @@ fi
 if ! grep -q 'coda_copy_file_safe' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must copy helpers via temp+rename (no same-inode truncate)"
 fi
+if ! grep -q 'coda_delete_unlisted_dest' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must drop nested dest leftovers on desktop --delete (rsync -r is forbidden)"
+fi
 if ! grep -q 'coda_archiso_airootfs_candidates' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must search more than /run/archiso/airootfs for the squashfs"
 fi
