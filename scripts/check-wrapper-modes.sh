@@ -119,13 +119,19 @@ if ! bash "${root}/scripts/coda-install-post_test.sh" >/tmp/coda-post-test.out 2
   log_fail "coda-install-post_test.sh failed"
   cat /tmp/coda-post-test.out >&2 || true
 fi
+if ! bash "${root}/scripts/coda-sync-desktop-from-host_test.sh" >/tmp/coda-sync-desktop-test.out 2>&1; then
+  log_fail "coda-sync-desktop-from-host_test.sh failed"
+  cat /tmp/coda-sync-desktop-test.out >&2 || true
+fi
 if ! grep -q 'mkdir -p "${dest}/etc/mkinitcpio.d"' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must mkdir mkinitcpio.d before writing linux.preset"
 fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
           coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount \
           coda-desktop-mount_test.sh coda-install-post.sh \
-          coda-install-post_test.sh coda-slot_test.sh; do
+          coda-install-post_test.sh coda-slot_test.sh \
+          coda-sync-desktop-from-host.sh coda-sync-desktop-from-host_test.sh \
+          coda-ags; do
   if ! bash -n "${root}/scripts/${sh}"; then
     log_fail "bash -n failed: scripts/${sh}"
   fi
