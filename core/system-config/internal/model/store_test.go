@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestSetGetObserved(t *testing.T) {
 	s := New()
@@ -69,5 +72,41 @@ func TestChangedWhenDesiredDiffers(t *testing.T) {
 	_, _, st := s.Get("display")
 	if !st.Changed {
 		t.Fatal("expected changed")
+	}
+}
+
+func TestSubscribeObservedSkipsIdentical(t *testing.T) {
+	s := New()
+	ch, cancel := s.Subscribe()
+	defer cancel()
+	if err := s.PutObserved("network", []byte(`{"airplane":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-ch:
+		if ev.Path != "network" || ev.Kind != "observed" {
+			t.Fatalf("%+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing first event")
+	}
+	if err := s.PutObserved("network", []byte(`{"airplane":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-ch:
+		t.Fatalf("identical put must not emit %+v", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := s.SetDesired("network", []byte(`{"airplane":false}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-ch:
+		if ev.Kind != "desired" {
+			t.Fatalf("%+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing desired event")
 	}
 }

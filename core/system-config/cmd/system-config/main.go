@@ -2,10 +2,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/codemodify/codalinux/core/system-config/internal/client"
 	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
@@ -40,6 +43,13 @@ Observe-only: devices.summary devices.pci devices.usb hardware.dmi
   system-config set datetime '{"timezone":"America/Denver","ntp":true}'
   system-config set locale '{"lang":"en_US.UTF-8","keymap":"us"}'
   system-config refresh display
+  system-config watch display
+  system-config watch display --follow
+
+watch (default): one snapshot; the connection stays request/response.
+watch --follow: snapshot plus further JSON lines when report pushes observed
+(udev/netlink + slow poll) or another client sets desired. Identical
+re-pushes are not emitted. Empty path watches every KnownPath.
 
 Socket: $CODA_SYSTEM_CONFIG_SOCKET or $XDG_RUNTIME_DIR/coda/system-configd.sock
 `, strings.Join(protocol.KnownPaths, " "))
@@ -53,10 +63,7 @@ Socket: $CODA_SYSTEM_CONFIG_SOCKET or $XDG_RUNTIME_DIR/coda/system-configd.sock
 	defer c.Close()
 
 	op := args[0]
-	path := ""
-	if len(args) > 1 {
-		path = args[1]
-	}
+	path, follow := parsePathFollow(args[1:])
 	var resp any
 	var callErr error
 	switch op {
@@ -66,15 +73,19 @@ Socket: $CODA_SYSTEM_CONFIG_SOCKET or $XDG_RUNTIME_DIR/coda/system-configd.sock
 		if len(args) < 3 {
 			return fmt.Errorf("usage: system-config set <path> <json>")
 		}
-		if !json.Valid([]byte(args[2])) {
+		payload := args[2]
+		if !json.Valid([]byte(payload)) {
 			return fmt.Errorf("set data is not JSON")
 		}
-		resp, callErr = c.Set(path, json.RawMessage(args[2]))
+		resp, callErr = c.Set(args[1], json.RawMessage(payload))
 	case "refresh":
 		resp, callErr = c.Refresh(path)
 	case "apply":
 		resp, callErr = c.Apply(path)
 	case "watch":
+		if follow {
+			return watchFollow(c, path)
+		}
 		resp, callErr = c.Watch(path)
 	default:
 		return fmt.Errorf("unknown command %s (try help)", op)
@@ -85,4 +96,42 @@ Socket: $CODA_SYSTEM_CONFIG_SOCKET or $XDG_RUNTIME_DIR/coda/system-configd.sock
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(resp)
+}
+
+func parsePathFollow(args []string) (path string, follow bool) {
+	for _, a := range args {
+		if a == "-f" || a == "--follow" || a == "follow" {
+			follow = true
+			continue
+		}
+		if path == "" {
+			path = a
+		}
+	}
+	return path, follow
+}
+
+func watchFollow(c *client.Client, path string) error {
+	resp, err := c.WatchFollow(path)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(os.Stdout)
+	if err := enc.Encode(resp); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	for {
+		ev, err := c.Next(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if err := enc.Encode(ev); err != nil {
+			return err
+		}
+	}
 }

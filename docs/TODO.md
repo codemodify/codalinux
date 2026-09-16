@@ -70,7 +70,8 @@ Picture: [architecture.md](../architecture.md) (target A/B vs current). Shipped 
 
 Locked in [architecture.md](../architecture.md#system-config). Code: [`core/system-config/`](../core/system-config/README.md).
 
-- [x] Greenfield Go module: `system-configd`, apply, report, CLI, TUI stub, uitoolkit GUI.
+- [x] Greenfield Go module: `system-configd`, apply, report, CLI, TUI (every KnownPath), uitoolkit GUI.
+- [x] `watch` follow stream: default stays one snapshot; `{"follow":true}` emits when observed/desired actually changes.
 - [x] Settings GUI Mail/Settings pattern on uitoolkit `dev` (v0.19.x enough to ship). Remaining gaps in `core/system-config/docs/uitoolkit-gaps.md` — do not block.
 - [x] Wire binaries + systemd units onto the live/install image.
 - [x] Report `--watch` udev netlink (`NETLINK_KOBJECT_UEVENT`); 30s L2 poll remains for Hyprland/PipeWire/timedatectl.

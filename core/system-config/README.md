@@ -59,6 +59,10 @@ mkdir -p "$XDG_RUNTIME_DIR/coda"
 ./bin/system-config get printers
 ./bin/system-config get users
 ./bin/system-config get storage
+./bin/system-config watch display
+./bin/system-config watch display --follow
+./bin/system-config-tui -dump
+./bin/system-config-tui            # TTY: every KnownPath, per-section Apply
 ```
 
 `apply display` needs Hyprland (`hyprctl`). Apply may run as root; it discovers the graphical session (`loginctl` / `/run/user/*/hypr/*`) and runs `hyprctl` as that uid with `XDG_RUNTIME_DIR` + `HYPRLAND_INSTANCE_SIGNATURE` (same env `coda-settings` expects). Report uses the same discovery so `refresh display` fills `observed.outputs`. Eval form is `hl.monitor({ output = "NAME", ... })` — not `name=`, not `keyword`.
@@ -90,12 +94,16 @@ Prints a PASS/FAIL table and exits non-zero on any fail. Never suspends/hibernat
 | `system-config-apply` | Typed executor (plans from D) |
 | `system-config-report` | Inventory → observed (udev/sysfs/DMI + `hyprctl -j monitors`) |
 | `system-config` | CLI → D |
-| `system-config-tui` | Minimal TUI stub → D |
+| `system-config-tui` | Terminal Settings → D (every KnownPath; per-section Apply) |
 | `system-config-gui` | Settings GUI (uitoolkit Mail pattern) → D |
 
 ## Protocol
 
-JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to the same uid (and root). Ops: `get`, `set`, `watch` (single snapshot stub), `refresh` (ask report), `apply` (ask apply).
+JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to the same uid (and root). Ops: `get`, `set`, `watch`, `refresh` (ask report), `apply` (ask apply).
+
+**watch:** default is one snapshot (same fields as `get`) plus a note. The connection stays request/response so CLI `watch` then `set` still works. `data: {"follow":true}` holds the connection and writes further JSON-line responses when D’s store changes — typically `put-observed` from report (udev/netlink + the existing slow poll). Identical re-pushes are not emitted. `timeout_ms` ends the stream. Empty path / `submodels` watches every KnownPath. CLI: `system-config watch display --follow`. TUI uses follow to refresh a clean section live.
+
+**TUI:** `system-config-tui` is a stdlib + `x/sys` terminal UI (no extra TUI module; CGO off). Every KnownPath is a page (refresh / get / edit; Apply only when that section is dirty vs its baseline). Observe-only paths have no Apply. Non-TTY or `-dump` prints the path list. Clients still talk to D only.
 
 **Paths:** `display` `network` `audio` `bluetooth` `input` `datetime` `locale` `session` `power` `printers` `users` `storage` `devices.summary` `devices.pci` `devices.usb` `hardware.dmi`
 
