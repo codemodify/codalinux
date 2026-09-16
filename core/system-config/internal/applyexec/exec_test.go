@@ -190,6 +190,123 @@ func TestLocaleAndDatetime(t *testing.T) {
 	if len(cmds) < 3 {
 		t.Fatalf("%v", cmds)
 	}
+	// Writable /etc: timedatectl set-ntp must succeed without a systemctl fallback.
+	for _, c := range cmds {
+		if len(c) > 0 && c[0] == "systemctl" {
+			t.Fatalf("timedatectl succeeded; must not fall back to systemctl: %v", cmds)
+		}
+	}
+}
+
+func TestDateNTPFallbackRuntimeStart(t *testing.T) {
+	var cmds [][]string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		cmds = append(cmds, append([]string{name}, args...))
+		if name == "timedatectl" {
+			return "Failed to set ntp: File /etc/systemd/system/dbus-org.freedesktop.timesync1.service already exists and is a symlink to /usr/lib/systemd/system/systemd-timesyncd.service.", fmt.Errorf("exit status 1")
+		}
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpDateTimeNTP, Enabled: boolPtr(true),
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	var sawEnable, sawStart bool
+	for _, c := range cmds {
+		if len(c) >= 4 && c[0] == "systemctl" && c[1] == "enable" && c[2] == "--runtime" && c[3] == "systemd-timesyncd.service" {
+			sawEnable = true
+		}
+		if len(c) >= 3 && c[0] == "systemctl" && c[1] == "start" && c[2] == "systemd-timesyncd.service" {
+			sawStart = true
+		}
+	}
+	if !sawEnable || !sawStart {
+		t.Fatalf("want enable --runtime + start systemd-timesyncd, got %v", cmds)
+	}
+}
+
+func TestDateNTPFallbackRuntimeStop(t *testing.T) {
+	var cmds [][]string
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		cmds = append(cmds, append([]string{name}, args...))
+		if name == "timedatectl" {
+			return "Failed to set ntp: File /etc/systemd/system/dbus-org.freedesktop.timesync1.service: Read-only file system", fmt.Errorf("exit status 1")
+		}
+		return "", nil
+	}
+	if err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpDateTimeNTP, Enabled: boolPtr(false),
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	var sawDisable, sawStop bool
+	for _, c := range cmds {
+		if len(c) >= 4 && c[0] == "systemctl" && c[1] == "disable" && c[2] == "--runtime" && c[3] == "systemd-timesyncd.service" {
+			sawDisable = true
+		}
+		if len(c) >= 3 && c[0] == "systemctl" && c[1] == "stop" && c[2] == "systemd-timesyncd.service" {
+			sawStop = true
+		}
+	}
+	if !sawDisable || !sawStop {
+		t.Fatalf("want disable --runtime + stop systemd-timesyncd, got %v", cmds)
+	}
+}
+
+func TestDateNTPImmutableBothFail(t *testing.T) {
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		if name == "timedatectl" {
+			return "Failed to set ntp: File /etc/systemd/system/dbus-org.freedesktop.timesync1.service: Read-only file system", fmt.Errorf("exit status 1")
+		}
+		if name == "systemctl" && len(args) > 0 && args[0] == "start" {
+			return "Failed to start systemd-timesyncd.service: Unit not found", fmt.Errorf("exit status 5")
+		}
+		return "", nil
+	}
+	err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpDateTimeNTP, Enabled: boolPtr(true),
+	}}})
+	if err == nil || !strings.Contains(err.Error(), "/etc immutable") {
+		t.Fatalf("want /etc immutable error, got %v", err)
+	}
+}
+
+func TestNTPEtcBlocked(t *testing.T) {
+	if !ntpEtcBlocked("Failed to set ntp: File /etc/systemd/system/dbus-org.freedesktop.timesync1.service already exists") {
+		t.Fatal("timesync1 alias must count as /etc blocked")
+	}
+	if !ntpEtcBlocked("Read-only file system") {
+		t.Fatal("EROFS must count as /etc blocked")
+	}
+	if ntpEtcBlocked("timedatectl: command not found") {
+		t.Fatal("missing binary is not an /etc immutability signal")
+	}
+}
+
+func TestDateNTPOtherFailureNotImmutable(t *testing.T) {
+	r := New()
+	r.Run = func(name string, args ...string) (string, error) {
+		if name == "timedatectl" {
+			return "timedatectl: command not found", fmt.Errorf("exit status 127")
+		}
+		if name == "systemctl" && len(args) > 0 && args[0] == "start" {
+			return "Unit systemd-timesyncd.service not found", fmt.Errorf("exit status 5")
+		}
+		return "", nil
+	}
+	err := r.Exec(protocol.Plan{Ops: []protocol.PlanOp{{
+		Type: protocol.OpDateTimeNTP, Enabled: boolPtr(true),
+	}}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "/etc immutable") {
+		t.Fatalf("missing timedatectl must not look like /etc immutable: %v", err)
+	}
 }
 
 func TestNetworkAirplaneRfkill(t *testing.T) {
