@@ -247,7 +247,7 @@ Clients ask D for one of these (or a child path), not a dump of the whole tree. 
 | `audio` | PipeWire (`pw-dump` / `wpctl`) full sink/source names | yes |
 | `bluetooth` | BlueZ **D-Bus** (pairing agent); `bluetoothctl --timeout` fallback | yes |
 | `input` | localectl / vconsole + Hyprland `hl.input` (persisted) | yes |
-| `datetime` | timedatectl (timezone, NTP, time) | yes |
+| `datetime` | timedatectl (timezone, NTP, time). NTP falls back to `systemctl --runtime` + start/stop of `systemd-timesyncd` when `/etc` is confext/RO (installed core-only) | yes |
 | `locale` | locale.conf / localectl | yes |
 | `session` | logind (sessions, seats, idle inhibit) | lock only |
 | `power` | logind + backlight sysfs | suspend/hibernate, brightness, lid. **Not** reboot/poweroff |
