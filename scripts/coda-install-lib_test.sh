@@ -32,6 +32,23 @@ if ! grep -q MARKER "${_same}/lib.sh"; then
 fi
 rm -rf "${_same}"
 
+# Nested dest leftovers must drop on delete=1 without rsync -r.
+_unlisted="$(mktemp -d)"
+mkdir -p "${_unlisted}/dest/usr/local/lib/codalinux" "${_unlisted}/dest/usr/bin"
+printf 'keep\n' >"${_unlisted}/dest/usr/bin/Hyprland"
+printf 'drop\n' >"${_unlisted}/dest/usr/local/lib/codalinux/coda-install-lib.sh"
+printf '%s\n' usr/bin/Hyprland >"${_unlisted}/keep.list"
+coda_delete_unlisted_dest "${_unlisted}/dest" "${_unlisted}/keep.list"
+if [[ ! -f "${_unlisted}/dest/usr/bin/Hyprland" ]]; then
+  echo "coda-install-lib_test: delete-unlisted removed a listed desktop file" >&2
+  fail=1
+fi
+if [[ -e "${_unlisted}/dest/usr/local/lib/codalinux/coda-install-lib.sh" ]]; then
+  echo "coda-install-lib_test: delete-unlisted left a nested dest leftover" >&2
+  fail=1
+fi
+rm -rf "${_unlisted}"
+
 # Restore a stub live file from a snapshot (paths under work/, not /usr).
 if ! coda_lib_file_has_need_root "${root}/scripts/coda-install-lib.sh"; then
   echo "coda-install-lib_test: real lib must define coda_need_root()" >&2
