@@ -33,6 +33,12 @@ fi
 cmd="${1:-run}"
 if [[ "${cmd}" == run ]]; then
   shift || true
+  if [[ -n "${XDG_RUNTIME_DIR:-}" && -n "${WAYLAND_DISPLAY:-}" ]]; then
+    if [[ ! -e "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]]; then
+      echo "coda-ags: Wayland display ${WAYLAND_DISPLAY} not ready under ${XDG_RUNTIME_DIR} (Hyprland not up, or session env is for the wrong user — tty2 root must not inherit /run/user/0)" >&2
+      exit 1
+    fi
+  fi
   exec "${ags}" run "${appdir}" "$@"
 fi
 
