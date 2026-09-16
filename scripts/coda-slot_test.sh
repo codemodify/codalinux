@@ -146,6 +146,8 @@ if command -v rsync >/dev/null 2>&1; then
   cp -a "${lib}" "${live}/usr/local/lib/codalinux/coda-install-lib.sh"
   printf 'hypr\n' >"${live}/usr/bin/Hyprland"
   # Leftover from first-install copy_tree of /usr/local/lib onto desktop.
+  # rsync --delete without -r cannot see this nested file; the lib must
+  # still drop it (desktop refresh) without touching the live helper.
   cp -a "${lib}" \
     "${live}/mnt/coda-slot/coda/data/desktop/usr/local/lib/codalinux/coda-install-lib.sh"
   desk_list="${work}/desktop.list"

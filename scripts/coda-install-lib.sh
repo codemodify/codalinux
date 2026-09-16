@@ -319,6 +319,36 @@ coda_session_wrapper_names() {
     system-config-report system-config-tui system-config-gui
 }
 
+coda_delete_unlisted_dest() {
+  # rsync --delete without -r only clears dest's top level. Desktop
+  # refresh (delete=1) must still drop nested leftovers (e.g. a helper
+  # copy_tree left under dest/usr/local/lib). Do not use -r on the
+  # transfer: a listed directory would recurse Hyprland onto the slot.
+  local dest="$1" list="$2"
+  [[ -d "${dest}" && -f "${list}" ]] || return 0
+  if coda_same_inode / "${dest}"; then
+    coda_die "refusing to delete-unlisted on the live root"
+  fi
+  local -A keep=()
+  local rel path live_lib
+  live_lib="$(coda_live_lib_path)"
+  while IFS= read -r rel; do
+    [[ -n "${rel}" ]] || continue
+    keep["${rel}"]=1
+  done <"${list}"
+  while IFS= read -r -d '' path; do
+    rel="${path#"${dest}"/}"
+    [[ -n "${rel}" ]] || continue
+    [[ -n "${keep[${rel}]+x}" ]] && continue
+    # Dest leftover may be the same inode as the running live helper
+    # (bind/overlay alias). Never unlink that file.
+    if coda_same_inode "${path}" "${live_lib}"; then
+      continue
+    fi
+    rm -f "${path}"
+  done < <(find "${dest}" \( -type f -o -type l \) -print0 2>/dev/null)
+}
+
 coda_rsync_filelist() {
   local src="$1" dest="$2" list="$3" delete="${4:-0}" kind="${5:-}"
   [[ -d "${src}" ]] || coda_die "source root missing: ${src}"
@@ -374,6 +404,9 @@ coda_rsync_filelist() {
     args+=(--exclude="${dest}")
   fi
   rsync "${args[@]}" "${src}/" "${dest}/"
+  if [[ "${delete}" == 1 ]]; then
+    coda_delete_unlisted_dest "${dest}" "${list}"
+  fi
 }
 
 coda_ensure_usr_merge() {
