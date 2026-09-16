@@ -213,20 +213,36 @@ coda_plan_json() {
   python3 "$(coda_layout_bin)" plan "${disk}" --json
 }
 
+coda_archiso_airootfs_candidates() {
+  printf '%s\n' \
+    /run/archiso/airootfs \
+    /run/archiso/sfs/airootfs \
+    /run/archiso/copytoram/airootfs \
+    /run/archiso/copytoram
+}
+
 coda_find_source() {
   if [[ -n "${CODA_INSTALL_SOURCE:-}" ]]; then
     [[ -d "${CODA_INSTALL_SOURCE}" ]] || coda_die "CODA_INSTALL_SOURCE is not a directory"
     printf '%s' "${CODA_INSTALL_SOURCE}"
     return 0
   fi
-  if [[ -d /run/archiso/airootfs/usr ]]; then
-    printf '%s' /run/archiso/airootfs
-    return 0
-  fi
-  if [[ -d /run/archiso/airootfs ]]; then
-    printf '%s' /run/archiso/airootfs
-    return 0
-  fi
+  # Second live boot (e2e step 5) can reach QGA before archiso finishes
+  # mounting the squashfs. Prefer that read-only tree over writable `/`.
+  # Only retry when /run/archiso exists (live ISO); host tests must not sleep.
+  local p n
+  for n in 0 1 2 3 4 5 6 7; do
+    while IFS= read -r p; do
+      if [[ -d "${p}/usr" ]]; then
+        printf '%s' "${p}"
+        return 0
+      fi
+    done < <(coda_archiso_airootfs_candidates)
+    [[ -d /run/archiso ]] || break
+    sleep 1
+  done
+  printf '%s: archiso airootfs not mounted; using writable live / (helpers must stay pinned)\n' \
+    "${CODA_INSTALL_LOG_PREFIX:-coda-install}" >&2
   printf '%s' /
 }
 
@@ -311,10 +327,19 @@ coda_rsync_filelist() {
     coda_die "refusing to rsync onto the live root (would clobber running helpers)"
   fi
   mkdir -p "${dest}"
+  if [[ -L "${dest}/usr" ]]; then
+    case "$(readlink -f "${dest}/usr" 2>/dev/null || true)" in
+      /usr|/usr/)
+        coda_die "refusing to rsync into dest/usr that aliases live /usr"
+        ;;
+    esac
+  fi
   # -a includes -r; a listed directory would recurse (filesystem owns
   # /usr/local/bin/). Lists are files/symlinks only; drop -r anyway.
+  # Do not use -H against a writable live `/` (overlay copy-up / hardlink
+  # of source files). Kernel-module replace already says "no hardlinks".
   local -a args=(
-    -lptgoDHAX
+    -lptgoDAX
     --numeric-ids
     --info=stats1
     --files-from="${list}"
@@ -330,6 +355,9 @@ coda_rsync_filelist() {
     --exclude=/home
     --exclude=/var
   )
+  if [[ "${src}" != / ]]; then
+    args+=(-H)
+  fi
   if [[ "${delete}" == 1 ]]; then
     args+=(--delete)
   fi
