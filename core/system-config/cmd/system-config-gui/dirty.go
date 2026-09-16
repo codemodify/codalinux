@@ -183,13 +183,6 @@ func (s *session) dirtyPath(path string) bool {
 
 func (s *session) dirty() bool { return s.dirtyPath(s.path()) }
 
-func (s *session) syncApply() {
-	if s.applyBtn == nil {
-		return
-	}
-	s.applyBtn.SetEnabled(s.dirtyPath(s.path()) && s.cli != nil)
-}
-
 func (s *session) clearActions(path string) {
 	switch path {
 	case protocol.PathNetwork:

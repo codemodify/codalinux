@@ -1,5 +1,6 @@
-// Command system-config-gui is the Settings client (uitoolkit Mail/Settings pattern).
+// Command system-config-gui is the Settings client (composed prefs shell).
 // App-level Unix socket + JSON-lines RPC. Talks to system-configd only.
+// uitoolkit has no PrefsPage / NavRail; the shell is ListView + section chrome.
 package main
 
 import (
@@ -19,25 +20,6 @@ import (
 )
 
 const pciCap = 256
-
-var nav = []struct {
-	Label string
-	Path  string
-}{
-	{"Display", protocol.PathDisplay},
-	{"Network", protocol.PathNetwork},
-	{"Audio", protocol.PathAudio},
-	{"Bluetooth", protocol.PathBluetooth},
-	{"Input", protocol.PathInput},
-	{"Date & time", protocol.PathDateTime},
-	{"Locale", protocol.PathLocale},
-	{"Devices", protocol.PathDevicesSummary},
-	{"Session", protocol.PathSession},
-	{"Power", protocol.PathPower},
-	{"Printers", protocol.PathPrinters},
-	{"Users", protocol.PathUsers},
-	{"Storage", protocol.PathStorage},
-}
 
 func main() {
 	headless := flag.Bool("headless", false, "paint offscreen and write system-config-gui.png")
@@ -150,6 +132,7 @@ type session struct {
 
 	status   *widgets.StatusBar
 	applyBtn *widgets.Button
+	navList  *widgets.ListView
 	scaleLbl *widgets.Label
 	volLbl   *widgets.Label
 }
@@ -328,52 +311,6 @@ func (s *session) note(msg string) {
 }
 
 func (s *session) rebuild() { s.win.SetContent(s.build()) }
-
-func (s *session) build() uitoolkit.Component {
-	nodes := make([]*widgets.TreeNode, len(nav))
-	for i, n := range nav {
-		nodes[i] = uitoolkit.NewTreeNode(n.Label)
-	}
-	tree := uitoolkit.NewTreeView(nodes...)
-	if s.page >= 0 && s.page < len(nodes) {
-		tree.Selected = nodes[s.page]
-	}
-	tree.OnSelect = func(n *widgets.TreeNode) {
-		if n == nil {
-			return
-		}
-		for i, item := range nav {
-			if n.Label == item.Label && i != s.page {
-				s.page = i
-				s.rebuild()
-				return
-			}
-		}
-	}
-
-	side := uitoolkit.NewColumn(
-		uitoolkit.NewTitle("Settings"),
-		uitoolkit.NewLabel("system-config"),
-		tree,
-	)
-	side.WithGap(8).WithPad(10)
-	side.AddFlex(tree, 1)
-
-	page := s.pageFor(s.path())
-	split := uitoolkit.NewSplitter(true, side, uitoolkit.NewPad(12, page))
-	split.Ratio = 0.22
-
-	st := "system-configd connected"
-	if s.cli == nil {
-		st = "system-configd not running — CLI/GUI still paint; Apply is disabled"
-	}
-	s.status = uitoolkit.NewStatusBar(st, sockpath.Daemon(), "v1")
-
-	chrome := uitoolkit.NewTitleBar("Coda Settings", "Apply is per section — staged edits stay until that section’s Apply or Refresh")
-	root := uitoolkit.NewColumn(chrome, split, s.status)
-	root.AddFlex(split, 1)
-	return root
-}
 
 func (s *session) apply() { s.applyPath(s.path()) }
 

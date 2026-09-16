@@ -198,7 +198,7 @@ Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section i
 | --- | --- |
 | `system-config` | CLI |
 | `system-config-tui` | Terminal Settings (every KnownPath; per-section Apply; D only) |
-| `system-config-gui` | Settings UI on **uitoolkit `dev` (v0.19.x)** — Mail dogfood pattern (splitter + TreeView, pinned Apply, app-level socket client). Enough to ship; remaining gaps in [`core/system-config/docs/uitoolkit-gaps.md`](core/system-config/docs/uitoolkit-gaps.md) do not block. |
+| `system-config-gui` | Settings UI on **uitoolkit `dev` (v0.19.x)** — composed prefs shell (`ListView` rail + section chrome, per-section Apply, app-level socket client). No PrefsPage/NavRail in the toolkit; remaining gaps in [`core/system-config/docs/uitoolkit-gaps.md`](core/system-config/docs/uitoolkit-gaps.md) do not block. |
 
 Clients never call report or apply. They query **submodels**, not the entire model by default.
 
