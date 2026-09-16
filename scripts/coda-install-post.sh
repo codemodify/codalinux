@@ -303,7 +303,6 @@ if [[ "${same_root}" -eq 0 ]]; then
   done
   copy_if /usr/local/lib/codalinux/coda-desktop-mount \
     "${target}/usr/local/lib/codalinux/coda-desktop-mount"
-  local helper
   for helper in coda-install-lib.sh coda-install-post.sh coda-install-ab.sh \
                 coda-install-split.py coda-install-layout.py \
                 coda-install-verify.sh coda-install-config.py; do
