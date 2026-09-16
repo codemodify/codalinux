@@ -234,6 +234,16 @@ fi
 if ! grep -q 'coda_copy_file_safe' "${root}/scripts/coda-install-lib.sh"; then
   log_fail "coda-install-lib.sh must copy helpers via temp+rename (no same-inode truncate)"
 fi
+if ! grep -q 'coda_archiso_airootfs_candidates' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must search more than /run/archiso/airootfs for the squashfs"
+fi
+if ! grep -q 'using writable live /' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must log when falling back to writable live /"
+fi
+if ! grep -q 'for f in /usr/local/lib/codalinux/coda-install-lib.sh' \
+    "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must log live helper files before boot-test"
+fi
 if ! grep -q 'usr/share/codalinux/install/coda-install-lib.sh' \
     "${root}/scripts/coda-install-split.py"; then
   log_fail "coda-install-split.py must keep the /usr/share helper fallback on core"

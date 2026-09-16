@@ -135,6 +135,42 @@ if ! coda_lib_file_has_need_root "${work}/emptied.sh"; then
   fail=1
 fi
 
+# Ground truth from abox e2e on 4dd58cfa: step 5 used source `/`
+# (no /run/archiso/airootfs) then desktop --delete. Live helper must stay.
+if command -v rsync >/dev/null 2>&1; then
+  live="${work}/live-root"
+  mkdir -p \
+    "${live}/usr/local/lib/codalinux" \
+    "${live}/usr/bin" \
+    "${live}/mnt/coda-slot/coda/data/desktop/usr/local/lib/codalinux"
+  cp -a "${lib}" "${live}/usr/local/lib/codalinux/coda-install-lib.sh"
+  printf 'hypr\n' >"${live}/usr/bin/Hyprland"
+  # Leftover from first-install copy_tree of /usr/local/lib onto desktop.
+  cp -a "${lib}" \
+    "${live}/mnt/coda-slot/coda/data/desktop/usr/local/lib/codalinux/coda-install-lib.sh"
+  desk_list="${work}/desktop.list"
+  printf '%s\n' usr/bin/Hyprland >"${desk_list}"
+  coda_rsync_filelist \
+    "${live}" \
+    "${live}/mnt/coda-slot/coda/data/desktop" \
+    "${desk_list}" \
+    1
+  if ! grep -q 'coda_need_root()' "${live}/usr/local/lib/codalinux/coda-install-lib.sh"; then
+    echo "coda-slot_test: desktop --delete from live root emptied the live helper" >&2
+    fail=1
+  fi
+  if [[ -e "${live}/mnt/coda-slot/coda/data/desktop/usr/local/lib/codalinux/coda-install-lib.sh" ]]; then
+    echo "coda-slot_test: desktop --delete must drop leftover helper from dest" >&2
+    fail=1
+  fi
+fi
+
+src_got="$(coda_find_source)"
+if [[ "${src_got}" != / ]]; then
+  echo "coda-slot_test: host find_source=${src_got} (want / when archiso is absent)" >&2
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "coda-slot_test: FAILED" >&2
   exit 1
