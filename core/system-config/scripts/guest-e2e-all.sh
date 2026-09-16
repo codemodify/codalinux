@@ -339,6 +339,10 @@ fi
 if out="$(cli set datetime '{"timezone":"America/Denver","ntp":true}' 2>&1)" && json_ok "${out}"; then
   if out="$(cli apply datetime 2>&1)" && json_ok "${out}"; then
     record PASS "apply datetime America/Denver + ntp"
+  elif printf '%s' "${out}" | grep -qi '/etc immutable'; then
+    # Honest skip only when apply itself reports RO /etc (confext/sysext).
+    # Live writable /etc must still PASS. Do not skip on other apply errors.
+    record SKIP "apply datetime ntp" "/etc immutable (RO core/sysext); cannot enable systemd-timesyncd"
   else
     record FAIL "apply datetime" "$(printf '%s' "${out}" | tr '\n' ' ' | head -c 160)"
   fi

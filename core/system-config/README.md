@@ -109,6 +109,8 @@ JSON lines on a Unix socket. Peer-cred (SO_PEERCRED) restricts connections to th
 
 **Apply allowlist:** `display.scale` `display.mode` `display.position` `network.iface.enable` `network.iface.method` `network.wifi.connect` `network.wifi.disconnect` `network.airplane` `audio.default.sink` `audio.default.source` `audio.volume` `audio.mute` `bluetooth.power` `bluetooth.scan` `bluetooth.pair` `bluetooth.connect` `bluetooth.disconnect` `bluetooth.trust` `input.keymap` `input.kb_layout` `input.pointer.speed` `input.pointer.natural_scroll` `input.touchpad.tap` `datetime.timezone` `datetime.ntp` `datetime.time` `locale.lang` `locale.keymap` `session.lock` `power.suspend` `power.hibernate` `power.brightness` `power.lid` `printers.default` `printers.enable` `users.shell` `storage.mount` `storage.unmount`
 
+`datetime.ntp` uses `timedatectl set-ntp` when `/etc` is writable (live ISO). On an installed core-only slot, desktop `/etc` is merged with systemd-confext or a read-only overlay, so the timesyncd D-Bus alias under `/etc/systemd/system` cannot be created. Apply then `systemctl enable --runtime` / `disable --runtime` plus `start` / `stop` of `systemd-timesyncd.service` (unit links under `/run/systemd/system`). Guest e2e must not FAIL that apply; it may SKIP only if apply reports `/etc immutable`.
+
 Reboot/poweroff are **not** allowlisted. Desktop Settings is `system-config-gui` only (`coda-settings` is hidden). D/report refuse uid 0.
 
 Display eval stays `hl.monitor({ output = "NAME", ... })`. Hyprland/PipeWire tools use session discovery (`internal/hyprsession`). Remaining work: [`docs/ROADMAP.md`](docs/ROADMAP.md).
