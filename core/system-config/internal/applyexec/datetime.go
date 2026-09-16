@@ -19,12 +19,62 @@ func (r *Runner) dateTimezone(op protocol.PlanOp) error {
 	return nil
 }
 
+const timesyncdUnit = "systemd-timesyncd.service"
+
 func (r *Runner) dateNTP(op protocol.PlanOp) error {
 	out, err := r.runHost("timedatectl", "set-ntp", trueFalse(op.Enabled))
+	if err == nil {
+		return nil
+	}
+	td := strings.TrimSpace(out)
+	// Live ISO has a writable overlay /etc, so timedatectl (EnableUnitFiles)
+	// can create dbus-org.freedesktop.timesync1.service. Installed core-only
+	// merges desktop /etc via systemd-confext or a read-only overlay: that
+	// path is not writable, and set-ntp fails with
+	// "File /etc/systemd/system/dbus-org.freedesktop.timesync1.service …".
+	// Runtime enablement lives under /run/systemd/system, which systemd
+	// honors and which stays writable on RO core + coda-data.
+	if err2 := r.dateNTPRuntime(op.Enabled != nil && *op.Enabled); err2 == nil {
+		return nil
+	} else if ntpEtcBlocked(td) || ntpEtcBlocked(err2.Error()) {
+		return fmt.Errorf("datetime.ntp: /etc immutable (RO core/sysext); %v; timedatectl: %s", err2, td)
+	} else {
+		return fmt.Errorf("timedatectl set-ntp: %w (%s); %v", err, td, err2)
+	}
+}
+
+func (r *Runner) dateNTPRuntime(enable bool) error {
+	if enable {
+		_, _ = r.runHost("systemctl", "enable", "--runtime", timesyncdUnit)
+		out, err := r.runHost("systemctl", "start", timesyncdUnit)
+		if err != nil {
+			return fmt.Errorf("systemctl start %s: %w (%s)", timesyncdUnit, err, strings.TrimSpace(out))
+		}
+		return nil
+	}
+	_, _ = r.runHost("systemctl", "disable", "--runtime", timesyncdUnit)
+	out, err := r.runHost("systemctl", "stop", timesyncdUnit)
 	if err != nil {
-		return fmt.Errorf("timedatectl set-ntp: %w (%s)", err, strings.TrimSpace(out))
+		return fmt.Errorf("systemctl stop %s: %w (%s)", timesyncdUnit, err, strings.TrimSpace(out))
 	}
 	return nil
+}
+
+func ntpEtcBlocked(s string) bool {
+	low := strings.ToLower(s)
+	switch {
+	case strings.Contains(low, "timesync1"),
+		strings.Contains(low, "dbus-org.freedesktop.timesync"),
+		strings.Contains(low, "read-only"),
+		strings.Contains(low, "erofs"),
+		strings.Contains(low, "/etc immutable"):
+		return true
+	case strings.Contains(low, "/etc/systemd/system") &&
+		(strings.Contains(low, "file ") || strings.Contains(low, "symlink") || strings.Contains(low, "immutable")):
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Runner) dateTime(op protocol.PlanOp) error {
