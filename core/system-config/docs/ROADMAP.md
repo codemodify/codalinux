@@ -17,6 +17,10 @@ External probes have hard timeouts so D’s accept loop cannot hang. Hyprland di
 
 `system-config-report` serves scan RPCs **and** watches `NETLINK_KOBJECT_UEVENT` by default (`--no-watch` / `--watch`). Mapped paths include block→storage. A **slow poll** remains for L2 stacks that do not emit kobject uevents.
 
+**TUI:** `system-config-tui` covers every KnownPath (refresh / edit / per-section Apply, D only). Non-TTY `-dump` lists paths. Interactive UI is stdlib + `golang.org/x/sys` (no bubbletea/tview).
+
+**watch:** default remains one snapshot. `{"follow":true}` streams further JSON lines when observed (or desired) actually changes. Report’s udev/netlink + slow poll still `put-observed` into D; D fans that out to follow watchers.
+
 ## Later work (intentional; not incomplete product code)
 
 - uitoolkit PrefsPage / NavRail ([`uitoolkit-gaps.md`](uitoolkit-gaps.md)) — still composed from TreeView + Splitter.

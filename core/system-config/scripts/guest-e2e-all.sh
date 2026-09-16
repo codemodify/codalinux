@@ -225,6 +225,26 @@ paths=(
   devices.summary devices.pci devices.usb hardware.dmi
 )
 
+echo "=== system-config-tui dump ==="
+if ! command -v system-config-tui >/dev/null 2>&1; then
+  record FAIL "tui dump KnownPaths" "system-config-tui not on PATH"
+else
+  tout="$(as_session system-config-tui -dump 2>&1)" || tout="ERR:${tout}"
+  missing=""
+  for p in "${paths[@]}"; do
+    if ! printf '%s' "${tout}" | grep -q "${p}"; then
+      missing="${missing} ${p}"
+    fi
+  done
+  if [[ "${tout}" == ERR:* ]] || [[ -n "${missing}" ]]; then
+    record FAIL "tui dump KnownPaths" "missing:${missing} $(printf '%s' "${tout}" | tr '\n' ' ' | head -c 120)"
+  elif printf '%s' "${tout}" | grep -qi "not implemented"; then
+    record FAIL "tui dump KnownPaths" "still a stub"
+  else
+    record PASS "tui dump KnownPaths"
+  fi
+fi
+
 echo "=== get submodels ==="
 subs="$(cli get submodels 2>&1)" || subs="ERR:${subs}"
 if [[ "${subs}" == ERR:* ]] || ! json_ok "${subs}"; then

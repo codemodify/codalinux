@@ -1,48 +1,49 @@
-// Command system-config-tui is a minimal text client. Talks to D only.
+// Command system-config-tui is the terminal Settings client. Talks to D only.
 package main
 
 import (
-	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
-
-	"github.com/codemodify/codalinux/core/system-config/internal/client"
-	"github.com/codemodify/codalinux/core/system-config/internal/protocol"
-	"github.com/codemodify/codalinux/core/system-config/internal/sockpath"
 )
 
 func main() {
-	sock := sockpath.Daemon()
-	c, err := client.Dial(sock)
+	dump := flag.Bool("dump", false, "print every KnownPath (non-interactive)")
+	path := flag.String("path", "", "start on this KnownPath")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: system-config-tui [-dump] [-path PATH]
+
+Terminal Settings. Talks to system-configd only (never report or apply).
+Every KnownPath has a page: refresh / get / edit / per-section Apply.
+
+  -dump          print all paths (scripts / non-TTY)
+  -path PATH     start on PATH (display, network, …)
+
+TTY keys:
+  ↑↓ j k     move          ←→ h l   sidebar ↔ fields
+  Enter      edit/stage    Space    toggle
+  r refresh  a apply       u revert section
+  q quit     ? help
+`)
+	}
+	flag.Parse()
+
+	s, err := newSession(*path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "system-config-tui: %v\n(start system-configd first)\n", err)
 		os.Exit(1)
 	}
-	defer c.Close()
+	defer s.close()
 
-	fmt.Println("Coda system-config (TUI stub) — D only")
-	fmt.Println("Submodels:")
-	for _, p := range protocol.StarterPaths {
-		resp, err := c.Get(p)
-		if err != nil {
-			fmt.Printf("  %s  error: %v\n", p, err)
-			continue
+	if *dump || !isTTY(int(os.Stdin.Fd())) {
+		if err := s.dump(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "system-config-tui: %v\n", err)
+			os.Exit(1)
 		}
-		if !resp.OK {
-			fmt.Printf("  %s  %s\n", p, resp.Error)
-			continue
-		}
-		st := ""
-		if resp.Status != nil {
-			st = fmt.Sprintf(" present=%v configured=%v changed=%v", resp.Status.Present, resp.Status.Configured, resp.Status.Changed)
-		}
-		fmt.Printf("  %s%s\n", p, st)
-		if len(resp.Observed) > 0 {
-			var pretty any
-			_ = json.Unmarshal(resp.Observed, &pretty)
-			b, _ := json.MarshalIndent(pretty, "    ", "  ")
-			fmt.Printf("    observed %s\n", b)
-		}
+		return
 	}
-	fmt.Println("Full TUI pages are not implemented; use system-config CLI or system-config-gui.")
+	if err := s.runUI(); err != nil {
+		fmt.Fprintf(os.Stderr, "system-config-tui: %v\n", err)
+		os.Exit(1)
+	}
 }

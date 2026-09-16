@@ -66,6 +66,27 @@ var KnownPaths = []string{
 // StarterPaths is the list advertised on get submodels (alias of KnownPaths).
 var StarterPaths = KnownPaths
 
+// Watch notes. Default watch (no data / follow=false) is one snapshot so
+// the same connection can keep doing get/set/apply. follow=true holds the
+// connection and writes further responses when the store changes.
+const (
+	WatchNoteSnapshot = "watch: snapshot; set data {\"follow\":true} for an observed event stream"
+	WatchNoteFollow   = "watch: snapshot; further observed events follow on this connection until close"
+	WatchNoteObserved = "watch: observed"
+	WatchNoteDesired  = "watch: desired"
+)
+
+// WatchOpts is optional JSON on op=watch.
+//
+//	follow=false (default): one snapshot, same as get plus a note.
+//	follow=true: snapshot, then more JSON-line responses when report
+//	pushes observed (udev/netlink + slow poll) or a client sets desired.
+//	Identical re-pushes are not emitted. timeout_ms>0 ends the stream.
+type WatchOpts struct {
+	Follow    bool `json:"follow,omitempty"`
+	TimeoutMS int  `json:"timeout_ms,omitempty"`
+}
+
 type Request struct {
 	ID      string          `json:"id"`
 	Op      string          `json:"op"`

@@ -8,12 +8,19 @@ import (
 	"github.com/codemodify/codalinux/core/system-config/internal/rpc"
 )
 
+// Event is a store change watchers can subscribe to.
+type Event struct {
+	Path string
+	Kind string // "observed" | "desired"
+}
+
 // Store holds desired + observed per submodel path.
 type Store struct {
 	mu       sync.Mutex
 	desired  map[string]json.RawMessage
 	observed map[string]json.RawMessage
 	status   map[string]protocol.Status
+	subs     []chan Event
 }
 
 func New() *Store {
@@ -21,6 +28,41 @@ func New() *Store {
 		desired:  map[string]json.RawMessage{},
 		observed: map[string]json.RawMessage{},
 		status:   map[string]protocol.Status{},
+	}
+}
+
+// Subscribe receives observed/desired changes. Slow subscribers drop events.
+func (s *Store) Subscribe() (<-chan Event, func()) {
+	ch := make(chan Event, 32)
+	s.mu.Lock()
+	s.subs = append(s.subs, ch)
+	s.mu.Unlock()
+	var once sync.Once
+	cancel := func() {
+		once.Do(func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			for i, c := range s.subs {
+				if c == ch {
+					s.subs = append(s.subs[:i], s.subs[i+1:]...)
+					close(ch)
+					break
+				}
+			}
+		})
+	}
+	return ch, cancel
+}
+
+func (s *Store) emit(ev Event) {
+	s.mu.Lock()
+	subs := append([]chan Event(nil), s.subs...)
+	s.mu.Unlock()
+	for _, ch := range subs {
+		select {
+		case ch <- ev:
+		default:
+		}
 	}
 }
 
@@ -46,14 +88,19 @@ func (s *Store) SetDesired(path string, data json.RawMessage) error {
 		return errInvalidJSON
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	path = protocol.NormalizePath(path)
+	prev := s.desired[path]
+	same := string(prev) == string(data)
 	s.desired[path] = append(json.RawMessage(nil), data...)
 	st := s.status[path]
 	st.Configured = true
 	st.Changed = changed(s.desired[path], s.observed[path])
 	st.ApplyError = ""
 	s.status[path] = st
+	s.mu.Unlock()
+	if !same {
+		s.emit(Event{Path: path, Kind: "desired"})
+	}
 	return nil
 }
 
@@ -62,13 +109,18 @@ func (s *Store) PutObserved(path string, data json.RawMessage) error {
 		return errInvalidJSON
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	path = protocol.NormalizePath(path)
+	prev := s.observed[path]
+	same := string(prev) == string(data)
 	s.observed[path] = append(json.RawMessage(nil), data...)
 	st := s.status[path]
 	st.Present = presentFor(path, data)
 	st.Changed = changed(s.desired[path], s.observed[path])
 	s.status[path] = st
+	s.mu.Unlock()
+	if !same {
+		s.emit(Event{Path: path, Kind: "observed"})
+	}
 	return nil
 }
 

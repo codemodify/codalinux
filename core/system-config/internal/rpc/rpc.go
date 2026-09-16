@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,10 +21,15 @@ const maxLine = 8 << 20
 
 type Handler func(peerUID int, req protocol.Request) protocol.Response
 
+// StreamHandler may take over a connection. Return true if the request was
+// consumed (typically watch follow). The server then closes the connection.
+type StreamHandler func(peerUID int, req protocol.Request, conn net.Conn) bool
+
 type Server struct {
 	Socket string
 	Allow  func(uid int) bool
 	Handle Handler
+	Stream StreamHandler
 
 	ln   net.Listener
 	once sync.Once
@@ -89,6 +95,9 @@ func (s *Server) serveConn(c net.Conn) {
 		if err != nil {
 			_ = Write(c, protocol.Response{OK: false, Error: err.Error()})
 			continue
+		}
+		if s.Stream != nil && s.Stream(uid, req, c) {
+			return
 		}
 		resp := s.Handle(uid, req)
 		resp.ID = req.ID
@@ -167,6 +176,29 @@ func (c *Client) Call(req protocol.Request) (protocol.Response, error) {
 	_ = c.c.SetDeadline(time.Now().Add(c.Timeout))
 	if err := Write(c.c, req); err != nil {
 		return protocol.Response{}, err
+	}
+	if !c.rd.Scan() {
+		if err := c.rd.Err(); err != nil {
+			return protocol.Response{}, err
+		}
+		return protocol.Response{}, io.EOF
+	}
+	return protocol.DecodeResponse(c.rd.Bytes())
+}
+
+// Next reads the next JSON-line response (watch follow events).
+func (c *Client) Next(ctx context.Context) (protocol.Response, error) {
+	if err := c.ensure(); err != nil {
+		return protocol.Response{}, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.c.SetDeadline(deadline)
+	} else {
+		_ = c.c.SetDeadline(time.Time{})
+		stop := context.AfterFunc(ctx, func() { _ = c.c.SetDeadline(time.Now()) })
+		defer stop()
 	}
 	if !c.rd.Scan() {
 		if err := c.rd.Err(); err != nil {
