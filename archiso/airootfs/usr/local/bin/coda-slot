@@ -5,25 +5,53 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-coda_slot_load_lib() {
-  unset CODA_INSTALL_LIB_SOURCED
-  local f
-  for f in \
+
+# Candidate list only. Do not source the lib from a function: a stub that
+# `return`s would pop the function and skip later paths. After install the
+# live ISO may have an empty/stub at /usr/local/lib (same-inode cp on
+# overlayfs); /usr/share and $here must still be tried.
+coda_slot_lib_candidates() {
+  local p
+  if [[ -n "${CODA_SLOT_LIB_PATHS:-}" ]]; then
+    # shellcheck disable=SC2086
+    for p in ${CODA_SLOT_LIB_PATHS}; do
+      printf '%s\n' "${p}"
+    done
+    return 0
+  fi
+  [[ -n "${CODA_INSTALL_LIB:-}" ]] && printf '%s\n' "${CODA_INSTALL_LIB}"
+  printf '%s\n' \
     /usr/local/lib/codalinux/coda-install-lib.sh \
-    "${here}/coda-install-lib.sh" \
-    /usr/share/codalinux/install/coda-install-lib.sh
-  do
-    [[ -f "${f}" ]] || continue
-    # shellcheck source=coda-install-lib.sh
-    . "${f}"
-    if declare -F coda_need_root >/dev/null 2>&1; then
-      return 0
-    fi
-  done
+    /usr/share/codalinux/install/coda-install-lib.sh \
+    "${here}/coda-install-lib.sh"
+}
+
+coda_slot_load_lib() {
+  # Name kept for check-wrapper-modes. Real load is the top-level loop.
+  true
+}
+
+unset CODA_INSTALL_LIB_SOURCED
+unset -f coda_need_root 2>/dev/null || true
+_coda_slot_lib=""
+_coda_slot_lib_ok=0
+while IFS= read -r _coda_slot_lib; do
+  [[ -n "${_coda_slot_lib}" && -f "${_coda_slot_lib}" && -s "${_coda_slot_lib}" ]] || continue
+  grep -q 'coda_need_root()' "${_coda_slot_lib}" 2>/dev/null || continue
+  unset CODA_INSTALL_LIB_SOURCED
+  unset -f coda_need_root 2>/dev/null || true
+  # shellcheck source=coda-install-lib.sh
+  . "${_coda_slot_lib}"
+  if declare -F coda_need_root >/dev/null 2>&1; then
+    _coda_slot_lib_ok=1
+    break
+  fi
+done < <(coda_slot_lib_candidates)
+if [[ "${_coda_slot_lib_ok}" -ne 1 ]]; then
   printf 'coda-slot: coda-install-lib.sh did not provide coda_need_root\n' >&2
   exit 1
-}
-coda_slot_load_lib
+fi
+unset _coda_slot_lib _coda_slot_lib_ok
 CODA_INSTALL_LOG_PREFIX=coda-slot
 
 usage() {
@@ -157,6 +185,8 @@ prepare_mounts_for_slot() {
 
 cmd_install() {
   coda_need_root
+  local live_helper_snap="${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}"
+  coda_snapshot_live_helpers "${live_helper_snap}"
   resolve_disk_if_needed || coda_die "cannot find coda disk (pass --disk)"
   local active inactive
   active="$(coda_active_slot 2>/dev/null || true)"
@@ -236,12 +266,16 @@ cmd_install() {
   if [[ -n "${post}" ]]; then
     CODA_INSTALL_USER="${CODA_INSTALL_USER:-user}" \
     CODA_DESKTOP_ROOT="${target}/coda/data/desktop" \
+    CODA_LIVE_HELPER_SNAP="${live_helper_snap}" \
       "${post}" --user "${CODA_INSTALL_USER:-user}" --target "${target}"
   else
     coda_die "coda-install-post.sh missing"
   fi
   coda_write_fstab "${target}" "${inactive}"
 
+  if ! coda_restore_live_helpers_if_broken "${live_helper_snap}"; then
+    coda_die "live coda-install-lib.sh lost coda_need_root after install (boot-test would fail)"
+  fi
   coda_log "inactive slot ${inactive} installed (default boot entry unchanged)"
   coda_log "next: coda-slot boot-test --slot ${inactive}   then reboot"
 }

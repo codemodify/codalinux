@@ -593,6 +593,9 @@ qga_exec "test -f /mnt/coda-slot/boot/coda/b/vmlinuz-linux && test -f /mnt/coda-
   || qga_exec "mkdir -p /mnt/coda-esp && mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp && test -f /mnt/coda-esp/coda/b/vmlinuz-linux && test -f /mnt/coda-esp/coda/b/initramfs-linux.img && umount /mnt/coda-esp" 60
 
 step "6 oneshot-boot slot B (default remains A) and verify desktop"
+# Ground truth (4dd58cfa): install can leave the first load path empty/stub.
+# Log helper files so a load failure is diagnosable.
+qga_exec 'for f in /usr/local/lib/codalinux/coda-install-lib.sh /usr/share/codalinux/install/coda-install-lib.sh; do echo "LIB $f"; ls -l "$f" 2>&1 || true; wc -c "$f" 2>&1 || true; grep -c "coda_need_root()" "$f" 2>&1 || true; done' 15 || true
 qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot boot-test --disk ${first_disk} --slot b" 60
 # Proof that failure would keep A: default is still coda-a.conf after oneshot.
 qga_exec 'esp=/mnt/coda-slot/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-a.conf" $esp/loader/loader.conf' 30
