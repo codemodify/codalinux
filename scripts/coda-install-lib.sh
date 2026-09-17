@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Shared helpers for coda-install / coda-slot. Sourced, not executed.
-# Offline payload = live airootfs split (core → slot, desktop → coda-data).
-# Never pacstrap.
+# Shared helpers for coda-install / coda-slot / coda-update. Sourced, not executed.
+# First install is an offline airootfs split (core → slot, desktop → coda-data).
+# coda-update core uses pacman --root into the inactive slot (Arch repos).
+# Do not teach host `pacman -Syu` on the running root.
 
 # Re-load if a stale CODA_INSTALL_LIB_SOURCED=1 leaked into the environment
 # without the helpers (fresh qga_exec of coda-slot boot-test/promote).
@@ -317,6 +318,10 @@ coda_session_wrapper_names() {
     ags astal \
     system-config system-configd system-config-apply \
     system-config-report system-config-tui system-config-gui
+}
+
+coda_core_wrapper_names() {
+  printf '%s\n' coda-install coda-slot coda-update
 }
 
 coda_delete_unlisted_dest() {
@@ -1156,4 +1161,451 @@ coda_mount_existing() {
   mount --bind "${dest}/coda/data/home" "${dest}/home"
   mount --bind "${dest}/coda/data/var" "${dest}/var"
   coda_bind_dev "${dest}"
+}
+
+# --- coda-update helpers (Arch repos → inactive slot / coda-data) ---
+
+coda_find_packages_dir() {
+  local here p
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  for p in \
+    "${CODA_PACKAGES_DIR:-}" \
+    /usr/local/share/codalinux/packages \
+    "${here}/../packages" \
+    "${here}/packages" \
+    /usr/share/codalinux/packages
+  do
+    if [[ -n "${p}" && -d "${p}" && -f "${p}/base.txt" && -f "${p}/core-slot.txt" ]]; then
+      printf '%s' "${p}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+coda_read_package_names() {
+  local f="$1"
+  [[ -f "${f}" ]] || return 0
+  grep -vE '^\s*(#|$)' "${f}" || true
+}
+
+coda_core_package_names() {
+  local dir
+  dir="$(coda_find_packages_dir)" || coda_die "package lists not found (base.txt + core-slot.txt)"
+  {
+    coda_read_package_names "${dir}/base.txt"
+    coda_read_package_names "${dir}/core-slot.txt"
+  } | awk 'NF && !seen[$0]++'
+}
+
+coda_desktop_package_names() {
+  local dir
+  dir="$(coda_find_packages_dir)" || coda_die "package lists not found"
+  {
+    coda_read_package_names "${dir}/hardware.txt"
+    coda_read_package_names "${dir}/network.txt"
+    coda_read_package_names "${dir}/desktop.txt"
+    coda_read_package_names "${dir}/apps.txt"
+    coda_read_package_names "${dir}/sandbox.txt"
+  } | awk 'NF && !seen[$0]++'
+}
+
+coda_resolve_coda_disk() {
+  local preset="${1:-${CODA_INSTALL_DISK:-}}"
+  case "${preset}" in
+    auto|first|AUTO|FIRST)
+      coda_first_disk || return 1
+      return 0
+      ;;
+    "")
+      if preset="$(coda_resolve_disk 2>/dev/null)"; then
+        printf '%s' "${preset}"
+        return 0
+      fi
+      if [[ -e /dev/disk/by-partlabel/coda-a ]]; then
+        lsblk -ndo PKNAME "$(readlink -f /dev/disk/by-partlabel/coda-a)" \
+          | awk '{print "/dev/"$1}'
+        return 0
+      fi
+      return 1
+      ;;
+    *)
+      if [[ ! -b "${preset}" ]]; then
+        coda_die "disk ${preset} is not a block device"
+      fi
+      printf '%s' "${preset}"
+      return 0
+      ;;
+  esac
+}
+
+coda_read_default_entry() {
+  local esp="$1"
+  if [[ -f "${esp}/loader/loader.conf" ]]; then
+    awk '/^default / {print $2; exit}' "${esp}/loader/loader.conf"
+  fi
+}
+
+coda_default_slot_letter() {
+  local entry="$1"
+  local s="${entry#coda-}"
+  s="${s%.conf}"
+  case "${s}" in
+    a|b) printf '%s' "${s}" ;;
+    *) return 1 ;;
+  esac
+}
+
+coda_refuse_running_slot() {
+  local want="$1" active="$2"
+  if [[ -n "${active}" && -n "${want}" && "${want}" == "${active}" ]]; then
+    coda_die "refusing to write the running slot (${active})"
+  fi
+}
+
+coda_pick_inactive_slot() {
+  local explicit="${1:-}" active="${2:-}"
+  if [[ -n "${explicit}" ]]; then
+    case "${explicit}" in
+      a|b) printf '%s' "${explicit}"; return 0 ;;
+      *) coda_die "slot must be a or b (got ${explicit})" ;;
+    esac
+  fi
+  if [[ -n "${active}" ]]; then
+    coda_other_slot "${active}"
+    return
+  fi
+  printf 'b'
+}
+
+coda_pacman_cache() {
+  printf '%s' "${CODA_PACMAN_CACHE:-/var/cache/pacman/pkg}"
+}
+
+coda_prepare_pacman_root() {
+  local dest="$1"
+  mkdir -p "${dest}/var/lib/pacman" "${dest}/etc/pacman.d" "${dest}/etc"
+  if [[ ! -f "${dest}/etc/pacman.conf" && -f /etc/pacman.conf ]]; then
+    coda_copy_file_safe /etc/pacman.conf "${dest}/etc/pacman.conf"
+  fi
+  if [[ -f /etc/pacman.d/mirrorlist && ! -f "${dest}/etc/pacman.d/mirrorlist" ]]; then
+    coda_copy_file_safe /etc/pacman.d/mirrorlist "${dest}/etc/pacman.d/mirrorlist"
+  fi
+  if [[ -d /etc/pacman.d/gnupg && ! -d "${dest}/etc/pacman.d/gnupg" ]]; then
+    mkdir -p "${dest}/etc/pacman.d/gnupg"
+    cp -a /etc/pacman.d/gnupg/. "${dest}/etc/pacman.d/gnupg/" 2>/dev/null || true
+  fi
+  if [[ -e /etc/resolv.conf ]]; then
+    if [[ -L "${dest}/etc/resolv.conf" ]]; then
+      rm -f "${dest}/etc/resolv.conf"
+    fi
+    cat /etc/resolv.conf >"${dest}/etc/resolv.conf" 2>/dev/null \
+      || printf 'nameserver 1.1.1.1\n' >"${dest}/etc/resolv.conf"
+  fi
+}
+
+coda_pacman_into_root() {
+  local dest="$1"
+  shift
+  [[ -n "${dest}" ]] || coda_die "pacman destination required"
+  if [[ "${dest}" == / ]]; then
+    coda_die "refusing pacman --root on the running root (use coda-update)"
+  fi
+  if coda_same_inode / "${dest}"; then
+    coda_die "refusing pacman --root on the running root (use coda-update)"
+  fi
+  command -v pacman >/dev/null 2>&1 \
+    || coda_die "pacman not found (need Arch/CodaLinux). Do not sudo pacman -Syu on /"
+  coda_prepare_pacman_root "${dest}"
+  local cache
+  cache="$(coda_pacman_cache)"
+  mkdir -p "${cache}"
+  local -a args=(
+    --noconfirm
+    --needed
+    --root "${dest}"
+    --cachedir "${cache}"
+  )
+  if [[ -f "${dest}/etc/pacman.conf" ]]; then
+    args+=(--config "${dest}/etc/pacman.conf")
+  elif [[ -f /etc/pacman.conf ]]; then
+    args+=(--config /etc/pacman.conf)
+  fi
+  if [[ -d "${dest}/etc/pacman.d/gnupg" ]]; then
+    args+=(--gpgdir "${dest}/etc/pacman.d/gnupg")
+  elif [[ -d /etc/pacman.d/gnupg ]]; then
+    args+=(--gpgdir /etc/pacman.d/gnupg)
+  fi
+  coda_log "pacman --root ${dest} $*"
+  set +o pipefail
+  yes | pacman "${args[@]}" "$@"
+  local rc=$?
+  set -o pipefail
+  return "${rc}"
+}
+
+coda_copy_core_helpers() {
+  local dest="$1"
+  local wrap helper
+  mkdir -p "${dest}/usr/local/bin" \
+    "${dest}/usr/local/lib/codalinux" \
+    "${dest}/usr/share/codalinux/install" \
+    "${dest}/usr/local/share/codalinux/packages"
+  while IFS= read -r wrap; do
+    if [[ -x "/usr/local/bin/${wrap}" ]]; then
+      coda_copy_file_safe "/usr/local/bin/${wrap}" "${dest}/usr/local/bin/${wrap}"
+      chmod 0755 "${dest}/usr/local/bin/${wrap}" 2>/dev/null || true
+    fi
+  done < <(coda_core_wrapper_names)
+  for helper in \
+    coda-install-lib.sh coda-install-post.sh coda-install-ab.sh \
+    coda-install-split.py coda-install-layout.py \
+    coda-install-verify.sh coda-install-config.py \
+    coda-desktop-mount coda-desktop-mount.service \
+    apply-os-release.sh apply-locale.sh coda-pacman-init.sh
+  do
+    if [[ -e "/usr/local/lib/codalinux/${helper}" ]]; then
+      coda_copy_file_safe "/usr/local/lib/codalinux/${helper}" \
+        "${dest}/usr/local/lib/codalinux/${helper}"
+    fi
+    if [[ -e "/usr/share/codalinux/install/${helper}" ]]; then
+      coda_copy_file_safe "/usr/share/codalinux/install/${helper}" \
+        "${dest}/usr/share/codalinux/install/${helper}"
+    fi
+  done
+  chmod 0755 "${dest}/usr/local/lib/codalinux/"coda-install* 2>/dev/null || true
+  chmod 0755 "${dest}/usr/share/codalinux/install/"coda-install* 2>/dev/null || true
+  chmod 0755 "${dest}/usr/local/lib/codalinux/coda-desktop-mount" 2>/dev/null || true
+  local pkgdir
+  if pkgdir="$(coda_find_packages_dir)"; then
+    local f
+    for f in "${pkgdir}"/*.txt; do
+      [[ -f "${f}" ]] || continue
+      coda_copy_file_safe "${f}" "${dest}/usr/local/share/codalinux/packages/$(basename "${f}")"
+    done
+  fi
+}
+
+coda_enable_core_services() {
+  local dest="$1"
+  coda_install_desktop_mount_unit "${dest}"
+  coda_install_slot_greetd "${dest}"
+  install -d "${dest}/etc/systemd/system-preset"
+  cat >"${dest}/etc/systemd/system-preset/80-codalinux.preset" <<'EOF'
+enable greetd.service
+enable systemd-networkd.service
+enable systemd-resolved.service
+enable qemu-guest-agent.service
+enable sshd.service
+disable NetworkManager.service
+disable firewalld.service
+disable cups.service
+disable coda-live-setup.service
+EOF
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --root="${dest}" enable systemd-networkd.service \
+      systemd-resolved.service qemu-guest-agent.service sshd.service \
+      greetd.service 2>/dev/null || true
+    systemctl --root="${dest}" disable NetworkManager.service \
+      firewalld.service cups.service coda-live-setup.service 2>/dev/null || true
+  fi
+}
+
+coda_mount_slot_for_update() {
+  # Slot + ESP + data. Do not bind data /var over the slot (shared pacman db).
+  local dest="$1" slot="$2"
+  local slot_dev esp_dev data_dev
+  slot_dev="$(coda_wait_partlabel "coda-${slot}")"
+  esp_dev="$(coda_wait_partlabel coda-esp)"
+  data_dev="$(coda_wait_partlabel coda-data)"
+  coda_umount_tree "${dest}"
+  mkdir -p "${dest}"
+  mount "${slot_dev}" "${dest}"
+  mkdir -p "${dest}/boot" "${dest}/coda/data" "${dest}/home" "${dest}/var"
+  mount "${esp_dev}" "${dest}/boot"
+  mount "${data_dev}" "${dest}/coda/data"
+  mkdir -p "${dest}/coda/data/home" "${dest}/coda/data/var" "${dest}/coda/data/desktop"
+  coda_bind_dev "${dest}"
+}
+
+coda_clone_running_slot() {
+  local dest="$1" active="$2"
+  local src_mnt src_dev
+  [[ -n "${active}" ]] || return 1
+  src_dev="$(coda_wait_partlabel "coda-${active}")"
+  src_mnt="$(mktemp -d /tmp/coda-running.XXXXXX)"
+  mount -o ro "${src_dev}" "${src_mnt}"
+  coda_log "clone running slot ${active} → inactive (core files only)"
+  rsync -aHAX --numeric-ids \
+    --exclude=/proc \
+    --exclude=/sys \
+    --exclude=/dev \
+    --exclude=/run \
+    --exclude=/tmp \
+    --exclude=/mnt \
+    --exclude=/media \
+    --exclude=/lost+found \
+    --exclude=/boot \
+    --exclude=/home \
+    --exclude=/var \
+    --exclude=/coda \
+    "${src_mnt}/" "${dest}/"
+  umount "${src_mnt}"
+  rmdir "${src_mnt}"
+  mkdir -p "${dest}/boot" "${dest}/home" "${dest}/var" "${dest}/coda/data"
+}
+
+coda_sync_core_from_arch() {
+  local dest="$1" slot="$2"
+  local -a pkgs=()
+  mapfile -t pkgs < <(coda_core_package_names)
+  if [[ "${#pkgs[@]}" -lt 8 ]]; then
+    coda_die "core package list is too small (${#pkgs[@]})"
+  fi
+  coda_log "syncing ${#pkgs[@]} core packages from Arch into slot ${slot} (not the running root)"
+  coda_pacman_into_root "${dest}" -Sy
+  coda_pacman_into_root "${dest}" -S --needed "${pkgs[@]}" \
+    || coda_die "pacman --root failed for core packages (need network + keyring)"
+  coda_ensure_usr_merge "${dest}"
+  coda_wipe_live_bits "${dest}"
+  coda_write_fstab "${dest}" "${slot}"
+  coda_bozeman "${dest}"
+  coda_write_slot_marker "${dest}" "${slot}" 0
+  coda_copy_core_helpers "${dest}"
+  coda_enable_core_services "${dest}"
+}
+
+coda_sync_desktop_from_arch() {
+  local data="$1"
+  local desktop="${data}/desktop"
+  local staging="${CODA_DESKTOP_STAGING:-${data}/var/cache/coda-update/desktop-root}"
+  local -a pkgs=()
+  mapfile -t pkgs < <(coda_desktop_package_names)
+  if [[ "${#pkgs[@]}" -lt 5 ]]; then
+    coda_die "desktop package list is too small (${#pkgs[@]})"
+  fi
+  if [[ ! -d "${data}" ]]; then
+    coda_die "coda-data is not mounted at ${data}"
+  fi
+  mkdir -p "${staging}" "${desktop}" "${data}/home"
+  if coda_same_inode / "${staging}"; then
+    coda_die "refusing desktop staging on the running root"
+  fi
+  coda_log "syncing ${#pkgs[@]} desktop packages from Arch (staging on coda-data; /home untouched)"
+  coda_pacman_into_root "${staging}" -Sy
+  coda_pacman_into_root "${staging}" -S --needed "${pkgs[@]}" \
+    || coda_die "pacman --root failed for desktop packages (need network + keyring)"
+  local work core_list desktop_list
+  work="$(mktemp -d /tmp/coda-desktop-split.XXXXXX)"
+  core_list="${work}/core.list"
+  desktop_list="${work}/desktop.list"
+  python3 "$(coda_find_split)" \
+    --root "${staging}" \
+    --core-list "${core_list}" \
+    --desktop-list "${desktop_list}" \
+    --no-unpackaged \
+    || coda_die "coda-install-split.py failed on desktop staging root"
+  local desktop_n
+  desktop_n="$(wc -l <"${desktop_list}" | tr -d ' ')"
+  if [[ "${desktop_n}" -lt 10 ]]; then
+    rm -rf "${work}"
+    coda_die "desktop file list is too small (${desktop_n}) after Arch sync"
+  fi
+  # delete=0: keep vendored /usr/local AGS/hyprbars and session wrappers.
+  coda_rsync_filelist "${staging}" "${desktop}" "${desktop_list}" 0
+  coda_write_extension_release "${desktop}"
+  rm -rf "${work}"
+  coda_log "desktop payload refreshed at ${desktop} (/home left alone)"
+}
+
+coda_ensure_esp_mounted() {
+  local target="$1" disk="${2:-}"
+  local esp
+  if esp="$(coda_pick_esp "${target}")"; then
+    printf '%s' "${esp}"
+    return 0
+  fi
+  mkdir -p "${target}/boot"
+  if ! mountpoint -q "${target}/boot"; then
+    [[ -n "${disk}" ]] || coda_resolve_coda_disk >/dev/null || coda_die "cannot find coda disk (pass --disk)"
+    mount "$(coda_wait_partlabel coda-esp)" "${target}/boot"
+  fi
+  printf '%s' "${target}/boot"
+}
+
+coda_boot_test_slot() {
+  local slot="$1" target="$2" disk="${3:-}"
+  local esp before
+  esp="$(coda_ensure_esp_mounted "${target}" "${disk}")"
+  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] \
+    || coda_die "missing coda-${slot}.conf on ${esp}"
+  [[ -f "${esp}/coda/${slot}/vmlinuz-linux" ]] \
+    || coda_die "slot ${slot} has no kernel; run coda-update core first"
+  before="$(coda_read_default_entry "${esp}")"
+  bootctl set-oneshot "coda-${slot}.conf" --esp-path="${esp}"
+  coda_log "oneshot coda-${slot}.conf (default remains ${before:-coda-a.conf})"
+  coda_log "a failed boot consumes the oneshot and keeps ${before:-the previous default}"
+  coda_log "after a good reboot on slot ${slot}: coda-update core --promote"
+}
+
+coda_promote_slot() {
+  local slot="$1" target="$2" disk="${3:-}"
+  local esp
+  esp="$(coda_ensure_esp_mounted "${target}" "${disk}")"
+  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] \
+    || coda_die "missing coda-${slot}.conf"
+  bootctl set-default "coda-${slot}.conf" --esp-path="${esp}"
+  coda_write_loader_conf "${esp}" "${slot}"
+  sync "${esp}/loader/loader.conf" 2>/dev/null || sync
+  if ! grep -q "^default coda-${slot}.conf" "${esp}/loader/loader.conf"; then
+    coda_die "ESP ${esp}/loader/loader.conf default is not coda-${slot}.conf after promote"
+  fi
+  coda_log "default boot entry is now coda-${slot}.conf (verified on ESP)"
+}
+
+coda_print_slot_status() {
+  local target="$1" disk="${2:-}"
+  local active inactive default esp
+  active="$(coda_active_slot 2>/dev/null || true)"
+  if [[ -z "${active}" ]]; then
+    echo "active: (live ISO or unknown)"
+  else
+    echo "active: ${active}"
+  fi
+  if inactive="$(coda_other_slot "${active}" 2>/dev/null)"; then
+    echo "inactive: ${inactive}"
+  else
+    echo "inactive: (unknown — pass --slot)"
+  fi
+  if ! esp="$(coda_pick_esp "${target}")"; then
+    if [[ -n "${disk}" ]] || coda_resolve_coda_disk >/dev/null 2>&1; then
+      mkdir -p "${target}/boot"
+      if ! mountpoint -q "${target}/boot"; then
+        mount "$(coda_wait_partlabel coda-esp)" "${target}/boot" 2>/dev/null || true
+      fi
+    fi
+    esp="$(coda_pick_esp "${target}" || printf '%s' "${target}/boot")"
+  fi
+  default="$(coda_read_default_entry "${esp}")"
+  echo "boot-default: ${default:-unknown}"
+  if command -v bootctl >/dev/null 2>&1; then
+    bootctl status --esp-path="${esp}" 2>/dev/null | awk '
+      /Default Boot Entry/ || /One-shot Boot Entry/ {print}
+    ' || true
+  fi
+  echo "slots:"
+  lsblk -o NAME,SIZE,FSTYPE,LABEL,PARTLABEL,MOUNTPOINT /dev/disk/by-partlabel/coda-* 2>/dev/null || true
+}
+
+coda_find_slot_bin() {
+  local here p
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  for p in \
+    "${CODA_SLOT_BIN:-}" \
+    /usr/local/bin/coda-slot \
+    "${here}/coda-slot"
+  do
+    [[ -n "${p}" && -x "${p}" ]] && { printf '%s' "${p}"; return 0; }
+  done
+  return 1
 }

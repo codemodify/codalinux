@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# A/B slot helper: status, install into inactive, boot-test (oneshot), promote.
+# Low-level A/B helper (e2e / recovery). Prefer the product CLI:
+#   coda-update core | desktop | status
 # Offline payload is the live ISO airootfs split: core → slot, desktop → data.
 # Does not mutate the running slot.
 set -euo pipefail
@@ -58,9 +59,15 @@ usage() {
   cat <<'EOF'
 Usage: coda-slot <command> [options]
 
-Commands:
+Low-level A/B helper. Prefer the product CLI:
+  coda-update core       # Arch repos → inactive slot, then oneshot
+  coda-update desktop    # Arch repos → /coda/data/desktop
+  coda-update status
+  coda-update core --promote   # after a good oneshot reboot
+
+Commands (compat / e2e):
   status                 show active / inactive / boot default
-  install                write core into the inactive slot; refresh desktop on data
+  install                write core into the inactive slot from the live ISO
   boot-test              systemd-boot oneshot the inactive slot (default stays)
   promote                make the given/current slot the boot default
 
@@ -277,7 +284,8 @@ cmd_install() {
     coda_die "live coda-install-lib.sh lost coda_need_root after install (boot-test would fail)"
   fi
   coda_log "inactive slot ${inactive} installed (default boot entry unchanged)"
-  coda_log "next: coda-slot boot-test --slot ${inactive}   then reboot"
+  coda_log "next: coda-update core (oneshot) or coda-slot boot-test --slot ${inactive}"
+  coda_log "after a good reboot: coda-update core --promote"
 }
 
 cmd_boot_test() {

@@ -8,7 +8,7 @@ Install time is **offline**: the live ISO already contains the system. Nothing i
 
 | | Target (required) | Current |
 | --- | --- | --- |
-| OS-A / OS-B | **Arch core only** (base + linux + firmware + mkinitcpio + microcode + systemd + boot) | Install / `coda-slot` **split** the live airootfs: core → slot, desktop → `coda-data`. Before this split, both tools copied the **full** live desktop into every slot — that is no longer the model. |
+| OS-A / OS-B | **Arch core only** (base + linux + firmware + mkinitcpio + microcode + systemd + boot) | Install **split**s the live airootfs: core → slot, desktop → `coda-data`. Later updates: `coda-update core` (Arch repos → inactive slot). |
 | Desktop | Hyprland + AGS + greetd chrome + the rest of the session on **`coda-data`** | `/coda/data/desktop`, merged at boot by `coda-desktop-mount.service`. Hyprland success still means a running session; the binary must come from **data**, not from the slot root payload. |
 | Live ISO | (unchanged) full desktop image for the live session | Still a full desktop airootfs. Do not rip Hyprland/AGS out of the ISO. |
 | ESP | ~1 GiB | 1 GiB (`ESP_MIB = 1024`) |
@@ -25,7 +25,7 @@ Operator picks **one disk**. Locale/timezone/keymap stay Bozeman (`en_US.UTF-8`,
 | --- | --- | --- | --- | --- |
 | ESP | `coda-esp` | FAT32 | 1 GiB | `/boot` |
 | OS-A | `coda-a` | ext4 | 4 GiB floor | `/` on first install (**core only**) |
-| OS-B | `coda-b` | ext4 | 4 GiB floor | inactive (empty until `coda-slot install`) |
+| OS-B | `coda-b` | ext4 | 4 GiB floor | inactive (empty until `coda-update core`) |
 | data | `coda-data` | ext4 | remainder (≥ 8 GiB) | `/coda/data` + bind `/home` + `/var` + **`/coda/data/desktop`** |
 
 **Minimum disk ~17 GiB** (1+4+4+8 + GPT slack). Recommend **32 GiB** for QEMU. The planner refuses smaller disks with a clear error.
@@ -56,19 +56,27 @@ Root password is also `1`. Override with `CODA_INSTALL_USER` / `CODA_INSTALL_PAS
 
 ## Updates (inactive slot)
 
-From the **live ISO** (offline payload) with the installed disk attached:
+Product CLI:
 
 ```bash
-coda-slot --disk /dev/vda status
-coda-slot --disk /dev/vda install          # core → inactive slot; refresh /coda/data/desktop
-coda-slot --disk /dev/vda boot-test        # systemd-boot oneshot; default unchanged
-# reboot into the oneshot slot; if it fails, next boot is still the old default
-coda-slot promote --slot b                 # only after a successful boot-test
+coda-update status
+coda-update core                 # Arch repos → inactive slot; oneshot next reboot
+# reboot; if it looks good:
+coda-update core --promote       # only while running on the new slot
+coda-update desktop              # Arch repos → /coda/data/desktop; /home stays
 ```
 
-From a running installed system, `--disk` is optional. `install` refuses to write the running slot. Kernels live at `/boot/coda/a/` and `/boot/coda/b/` so A and B do not share one `vmlinuz-linux`.
+Do not `sudo pacman -Syu` on the running root.
 
-`coda-slot install` refreshes `/coda/data/desktop` from the same ISO. Desktop is **not** A/B’d: a failed B boot-test leaves the new desktop with the previous default core (see architecture.md failure modes).
+Offline / current QEMU e2e (no NIC):
+
+```bash
+coda-update core --from-iso --disk /dev/vda
+```
+
+`coda-slot` remains the low-level helper (`install` / `boot-test` / `promote`). From a running installed system, `--disk` is optional. `coda-update core` refuses to write the running slot. Kernels live at `/boot/coda/a/` and `/boot/coda/b/` so A and B do not share one `vmlinuz-linux`.
+
+Desktop is **not** A/B’d: a failed B oneshot leaves a new desktop (if you also ran `coda-update desktop`) with the previous default core (see architecture.md failure modes).
 
 ## Automated e2e (abox)
 
@@ -79,7 +87,7 @@ One host command, no guest TTY, **local ISO only** (never download GitHub Action
 # or: ./scripts/qemu-install-e2e.sh --phase install
 ```
 
-Uses `out/codalinux-*.iso` (or `--build`). QEMU has **no NIC**. Guest disk is the first virtio disk (`/dev/vda`). Steps 1–8: pick disk → layout → offline **core** install A + desktop on data → reboot Hyprland `user`/`1` → write core B (refresh desktop) → oneshot-boot B → promote → reboot B.
+Uses `out/codalinux-*.iso` (or `--build`). QEMU has **no NIC**. Guest disk is the first virtio disk (`/dev/vda`). Steps 1–8: pick disk → layout → offline **core** install A + desktop on data → reboot Hyprland `user`/`1` → `coda-update core --from-iso` into B (oneshot) → reboot B → `coda-update core --promote` → reboot B. Arch-repo pull is later (`CODA_E2E_CORE_FROM=repos` + a NIC); not claimed green here.
 
 Success signal: `/etc/coda/slot` matches, `/home` and `/var` bind `coda-data`, **`/coda/data/desktop` holds Hyprland**, `/usr` is merged from that tree, greetd autologin `user`, Hyprland instance under `/run/user/<uid>/hypr`.
 

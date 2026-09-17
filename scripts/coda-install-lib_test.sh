@@ -20,6 +20,10 @@ if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-slot" --help >/dev/nu
   echo "coda-install-lib_test: coda-slot --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
   fail=1
 fi
+if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-update" --help >/dev/null; then
+  echo "coda-install-lib_test: coda-update --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
+  fail=1
+fi
 
 # Same-inode copy (bind/overlay alias) must not empty the helper.
 _same="$(mktemp -d)"

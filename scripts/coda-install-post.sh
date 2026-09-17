@@ -324,7 +324,7 @@ if [[ "${same_root}" -eq 0 ]]; then
   copy_if /usr/local/lib/codalinux/apply-locale.sh \
     "${target}/usr/local/lib/codalinux/apply-locale.sh"
   chmod 0755 "${target}/usr/local/lib/codalinux/"apply-*.sh 2>/dev/null || true
-  for core_bin in coda-install coda-slot; do
+  for core_bin in coda-install coda-slot coda-update; do
     copy_if "/usr/local/bin/${core_bin}" "${target}/usr/local/bin/${core_bin}"
   done
   copy_if /usr/local/lib/codalinux/coda-desktop-mount \
@@ -345,6 +345,7 @@ if [[ "${same_root}" -eq 0 ]]; then
   done
   chmod 0755 "${target}/usr/local/bin/coda-install" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/bin/coda-slot" 2>/dev/null || true
+  chmod 0755 "${target}/usr/local/bin/coda-update" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/coda-desktop-mount" 2>/dev/null || true
   chmod 0755 "${target}/usr/local/lib/codalinux/"coda-install* 2>/dev/null || true
   chmod 0755 "${target}/usr/share/codalinux/install/"coda-install* 2>/dev/null || true

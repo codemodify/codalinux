@@ -14,7 +14,7 @@ Compose default sets into ISO and installer consumers:
 | File | In default compose? | Purpose |
 | --- | --- | --- |
 | `base.txt` | yes | Kernel, firmware, microcode, filesystem tools, sudo, openssh, qemu-guest-agent |
-| `core-slot.txt` | no (install split only) | Extra OS-A/B seeds on top of `base.txt` (`rsync`, `efibootmgr`). Not Hyprland/AGS. |
+| `core-slot.txt` | no (install split + `coda-update core`) | Extra OS-A/B seeds on top of `base.txt` (`rsync`, `efibootmgr`). Not Hyprland/AGS. |
 | `hardware.txt` | yes | Mesa, PipeWire, BlueZ |
 | `network.txt` | yes | iwd + resolved-related tools (not NetworkManager) |
 | `desktop.txt` | yes | Hyprland, greetd, hypr*, portals, AGS runtime, system-config-gui Wayland/X11 libs |

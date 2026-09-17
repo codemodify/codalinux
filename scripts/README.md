@@ -4,7 +4,7 @@
 
 - **Desktop UX trial/error** (hypr configs, AGS, wallpaper): `./scripts/qemu-desktop-dev.sh` — GTK QEMU + virtio-9p share of the host tree. No ISO rebuild. An installed qcow2 comes later. virtio-vga is 1920x1080; Hyprland pins `1920x1080@60` (`preferred` on virtio EDID is 640x480@120).
 - **ISO smoke** (boot, greetd, first paint): `./scripts/qemu-boot-test.sh` (same 1920x1080 virtio-vga default)
-- **Install + A/B e2e** (abox, local ISO): `./scripts/qemu-install-e2e.sh` — first disk, offline install, reboot, slot update, promote
+- **Install + A/B e2e** (abox, local ISO): `./scripts/qemu-install-e2e.sh` — first disk, offline install, reboot, `coda-update core --from-iso`, promote
 - **Package / vendor / squashfs changes**: `./scripts/build-iso.sh`
 
 ## Inventory
@@ -25,7 +25,8 @@
 | `coda-desktop-mount` | Boot-time merge of `/coda/data/desktop` onto the core slot |
 | `coda-install-ab.sh` | GPT ESP+A+B+data, core → A, desktop → data, systemd-boot, post-install |
 | `coda-install-post.sh` | After the split: desktop onto `coda-data`, greetd autologin `user`, QGA+sshd on the slot |
-| `coda-slot` | Inactive-slot **core** install, refresh desktop on data, oneshot `boot-test`, `promote` |
+| `coda-update` | Product CLI: `core` (Arch → inactive slot + oneshot; `--promote` after reboot), `desktop` (Arch → coda-data), `status` |
+| `coda-slot` | Low-level A/B helper (ISO `install` / `boot-test` / `promote`). Prefer `coda-update` |
 | `coda-install-verify.sh` | Guest layout / Hyprland-from-data checks (`ID=codalinux` for `--boot`) |
 | `qemu-install-e2e.sh` | Host QEMU+QGA loop for steps 1–8 (local ISO, no prompts, no NIC) |
 | `coda-pacman-init.sh` | Live keyring oneshot (after graphical; no-ops if already populated) |
