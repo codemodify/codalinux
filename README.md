@@ -21,7 +21,7 @@ This repository is a **v1 scaffold**. It captures locked architecture decisions 
 | Delivery | archiso live ISO + offline `coda-install` (not Calamares) |
 | Support | GitHub issues |
 
-The system picture (partitions → layers → `/` → sandboxes → **system-config** → updates) is **[architecture.md](architecture.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**. `system-config` implementation: [`core/system-config/`](core/system-config/README.md) (ISO-wired).
+The system picture (partitions → layers → `/` → sandboxes → **system-config** → updates) is **[architecture.md](architecture.md) · [how-it-works.md](how-it-works.md)** — **Target** vs **Current tree**. Locked choices live in **[DESIGN.md](DESIGN.md)** (decision log). Backlog: **[docs/TODO.md](docs/TODO.md)**. Sandbox commands: **[docs/sandbox.md](docs/sandbox.md)**. `system-config` implementation: [`core/system-config/`](core/system-config/README.md) (ISO-wired).
 
 ## Repository layout
 
@@ -45,7 +45,7 @@ Layout assumptions (airootfs overlay timing, how lists are composed, why AGS is 
 
 ### Read the decisions
 
-1. Skim [architecture.md](architecture.md) for the system picture, then [DESIGN.md](DESIGN.md) before changing the stack.
+1. Skim [architecture.md](architecture.md) · [how-it-works.md](how-it-works.md) for the system picture, then [DESIGN.md](DESIGN.md) before changing the stack.
 2. Edit package sets under [`packages/`](packages/README.md). Do not add AUR packages, unofficial repos, or a Coda `pacman` repo.
 3. Keep ISO and installer consumers in sync with `scripts/compose-package-lists.sh`.
 
@@ -111,7 +111,7 @@ coda-sandbox destroy <env>
 
 Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
-See [architecture.md](architecture.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented (core on A/B, desktop on data). The running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
+See [architecture.md](architecture.md) · [how-it-works.md](how-it-works.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented (core on A/B, desktop on data). The running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
 ## What this repo does not contain
 
