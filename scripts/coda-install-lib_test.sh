@@ -24,6 +24,18 @@ if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-update" --help >/dev/
   echo "coda-install-lib_test: coda-update --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
   fail=1
 fi
+if ! CODA_INSTALL_LIB_SOURCED=1 bash "${root}/scripts/coda-install" --help >/dev/null; then
+  echo "coda-install-lib_test: coda-install --help failed with stale CODA_INSTALL_LIB_SOURCED" >&2
+  fail=1
+fi
+_empty_lib="$(mktemp)"
+: >"${_empty_lib}"
+if ! CODA_INSTALL_LIB_PATHS="${_empty_lib} ${root}/scripts/coda-install-lib.sh" \
+    bash "${root}/scripts/coda-install" --help >/dev/null; then
+  echo "coda-install-lib_test: empty first lib path must not skip coda-install fallback" >&2
+  fail=1
+fi
+rm -f "${_empty_lib}"
 
 # Same-inode copy (bind/overlay alias) must not empty the helper.
 _same="$(mktemp -d)"
@@ -239,6 +251,113 @@ if [[ "${dm_link}" != /etc/systemd/system/greetd.service ]]; then
 fi
 if [[ -x "${dest}/usr/bin/greetd" || -x "${dest}/usr/local/bin/coda-hyprland" ]]; then
   echo "coda-install-lib_test: slot greetd helper must not copy session binaries" >&2
+  fail=1
+fi
+
+# ESP integrity + oneshot must leave loader.conf default.
+esp_ab="$(mktemp -d)"
+mkdir -p "${esp_ab}/boot/loader/entries" \
+  "${esp_ab}/boot/coda/a" "${esp_ab}/boot/coda/b"
+coda_write_loader_conf "${esp_ab}/boot" a
+coda_write_loader_entry "${esp_ab}/boot" a "CodaLinux (slot A)"
+: >"${esp_ab}/boot/coda/a/vmlinuz-linux"
+: >"${esp_ab}/boot/coda/a/initramfs-linux.img"
+: >"${esp_ab}/boot/coda/b/vmlinuz-linux"
+# B entry exists but initramfs is missing — not boot-test ready.
+coda_write_loader_entry "${esp_ab}/boot" b "CodaLinux (slot B)"
+if coda_esp_slot_ready "${esp_ab}/boot" b; then
+  echo "coda-install-lib_test: slot b missing initramfs must not be ready" >&2
+  fail=1
+fi
+if ! coda_esp_slot_ready "${esp_ab}/boot" a; then
+  echo "coda-install-lib_test: slot a with kernel+initramfs+entry must be ready" >&2
+  fail=1
+fi
+if ( coda_assert_esp_slot_ready "${esp_ab}/boot" b ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: assert_esp_slot_ready b must fail without initramfs" >&2
+  fail=1
+fi
+: >"${esp_ab}/boot/coda/b/initramfs-linux.img"
+if ! coda_esp_slot_ready "${esp_ab}/boot" b; then
+  echo "coda-install-lib_test: slot b should be ready after initramfs" >&2
+  fail=1
+fi
+if ! coda_assert_loader_default "${esp_ab}/boot" coda-a.conf; then
+  echo "coda-install-lib_test: loader default should be coda-a.conf" >&2
+  fail=1
+fi
+if ( coda_assert_loader_default "${esp_ab}/boot" coda-b.conf ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: assert_loader_default must fail on mismatch" >&2
+  fail=1
+fi
+# Oneshot must not flip default (bootctl skipped in host tests).
+if ! CODA_TEST_SKIP_BOOTCTL=1 coda_boot_test_slot b "${esp_ab}"; then
+  echo "coda-install-lib_test: boot_test_slot (skip bootctl) failed" >&2
+  fail=1
+fi
+if ! grep -q '^default coda-a.conf' "${esp_ab}/boot/loader/loader.conf"; then
+  echo "coda-install-lib_test: oneshot must leave default coda-a.conf" >&2
+  fail=1
+fi
+# Idempotent promote when already default.
+if ! CODA_TEST_SKIP_BOOTCTL=1 coda_promote_slot a "${esp_ab}"; then
+  echo "coda-install-lib_test: idempotent promote of current default failed" >&2
+  fail=1
+fi
+if ! grep -q '^default coda-a.conf' "${esp_ab}/boot/loader/loader.conf"; then
+  echo "coda-install-lib_test: idempotent promote changed default" >&2
+  fail=1
+fi
+# Real promote of B (skip bootctl writes loader.conf).
+if ! CODA_TEST_SKIP_BOOTCTL=1 coda_promote_slot b "${esp_ab}"; then
+  echo "coda-install-lib_test: promote slot b failed" >&2
+  fail=1
+fi
+if ! grep -q '^default coda-b.conf' "${esp_ab}/boot/loader/loader.conf"; then
+  echo "coda-install-lib_test: promote did not set coda-b.conf" >&2
+  fail=1
+fi
+rm -rf "${esp_ab}"
+
+# Size floors (numeric, no blockdev).
+if ! coda_assert_size_floor 4000000000 3500000000 coda-b; then
+  echo "coda-install-lib_test: size floor 4G >= 3.5G must pass" >&2
+  fail=1
+fi
+if ( coda_assert_size_floor 100 3500 tiny ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: size floor must fail when too small" >&2
+  fail=1
+fi
+esp_floor="$(coda_partlabel_floor_bytes coda-esp)"
+slot_floor="$(coda_partlabel_floor_bytes coda-a)"
+data_floor="$(coda_partlabel_floor_bytes coda-data)"
+if [[ "${esp_floor}" -lt $((800 * 1024 * 1024)) \
+   || "${slot_floor}" -lt $((3000 * 1024 * 1024)) \
+   || "${data_floor}" -lt $((6 * 1024 * 1024 * 1024)) ]]; then
+  echo "coda-install-lib_test: unexpected space floors" >&2
+  fail=1
+fi
+
+# Desktop dest must not be a core slot tree.
+slotish="$(mktemp -d)"
+mkdir -p "${slotish}/usr" "${slotish}/etc/coda"
+printf 'a\n' >"${slotish}/etc/coda/slot"
+if ( coda_refuse_slot_as_desktop_dest "${slotish}" ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: desktop dest that looks like a slot must be refused" >&2
+  fail=1
+fi
+rm -rf "${slotish}"
+dataish="$(mktemp -d)"
+mkdir -p "${dataish}/desktop" "${dataish}/home"
+if ! coda_refuse_slot_as_desktop_dest "${dataish}"; then
+  echo "coda-install-lib_test: coda-data dest must be allowed" >&2
+  fail=1
+fi
+rm -rf "${dataish}"
+
+# Missing PARTLABELs (host has none).
+if ( coda_preflight_partlabels ) >/dev/null 2>&1; then
+  echo "coda-install-lib_test: preflight_partlabels must fail on this host" >&2
   fail=1
 fi
 

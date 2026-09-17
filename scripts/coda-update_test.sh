@@ -306,6 +306,173 @@ else
   fi
 fi
 
+# --- PARTLABEL refuse + live boot-default ---
+# Letter + PARTLABEL agree: the letter guard fires.
+if ( CODA_TEST_RUNNING_PARTLABEL=coda-a coda_refuse_running_slot a "" ) \
+    >/dev/null 2>"${work}/err"; then
+  echo "coda-update_test: PARTLABEL coda-a must refuse write of slot a" >&2
+  fail=1
+else
+  if ! grep -qE 'refusing to write the running (slot \(a\)|PARTLABEL \(coda-a\))' "${work}/err"; then
+    echo "coda-update_test: missing running slot/PARTLABEL refuse message" >&2
+    cat "${work}/err" >&2 || true
+    fail=1
+  fi
+fi
+# Inconsistent marker vs PARTLABEL: PARTLABEL of / wins.
+if ( CODA_TEST_RUNNING_PARTLABEL=coda-a coda_refuse_running_slot a b ) \
+    >/dev/null 2>"${work}/err"; then
+  echo "coda-update_test: PARTLABEL coda-a must refuse slot a even if marker says b" >&2
+  fail=1
+else
+  if ! grep -q 'running PARTLABEL (coda-a)' "${work}/err"; then
+    echo "coda-update_test: missing running PARTLABEL refuse message" >&2
+    cat "${work}/err" >&2 || true
+    fail=1
+  fi
+fi
+if ! ( CODA_TEST_RUNNING_PARTLABEL=coda-a coda_refuse_running_slot b "" ); then
+  echo "coda-update_test: PARTLABEL coda-a must allow write of slot b" >&2
+  fail=1
+fi
+
+if ( coda_refuse_live_default_slot a "" a ) >/dev/null 2>"${work}/err"; then
+  echo "coda-update_test: live ISO must refuse writing boot-default slot" >&2
+  fail=1
+else
+  if ! grep -q 'boot-default slot a' "${work}/err"; then
+    echo "coda-update_test: missing live boot-default refuse message" >&2
+    cat "${work}/err" >&2 || true
+    fail=1
+  fi
+fi
+if ! ( coda_refuse_live_default_slot b "" a ); then
+  echo "coda-update_test: live ISO writing inactive (non-default) must be ok" >&2
+  fail=1
+fi
+if ! ( coda_refuse_live_default_slot a a a ); then
+  echo "coda-update_test: running-on-a writing default a is handled by running-slot, not live-default" >&2
+  fail=1
+fi
+
+# After promote-to-B, live ISO implicit inactive must be A (not hardcoded B).
+got="$(coda_pick_inactive_slot "" "" b)"
+if [[ "${got}" != a ]]; then
+  echo "coda-update_test: pick_inactive with default b must be a (got ${got})" >&2
+  fail=1
+fi
+got="$(coda_pick_inactive_slot "" a "")"
+if [[ "${got}" != b ]]; then
+  echo "coda-update_test: pick_inactive while running a must be b (got ${got})" >&2
+  fail=1
+fi
+got="$(coda_pick_inactive_slot b a a)"
+if [[ "${got}" != b ]]; then
+  echo "coda-update_test: explicit --slot b must win (got ${got})" >&2
+  fail=1
+fi
+
+if CODA_UPDATE_DRY_RUN=1 CODA_UPDATE_TEST_ACTIVE=live \
+    CODA_UPDATE_TEST_DEFAULT=b \
+    CODA_UPDATE_LIB_PATHS="${good}" \
+    bash "${upd}" core --slot b >"${work}/out" 2>"${work}/err"; then
+  echo "coda-update_test: dry-run core --slot b with default b from live must fail" >&2
+  fail=1
+else
+  if ! grep -q 'boot-default slot b' "${work}/err"; then
+    echo "coda-update_test: live --slot b == default b must mention boot-default" >&2
+    cat "${work}/err" >&2 || true
+    fail=1
+  fi
+fi
+
+# Implicit inactive from live after promote-to-B.
+if ! CODA_UPDATE_DRY_RUN=1 CODA_UPDATE_TEST_ACTIVE=live \
+    CODA_UPDATE_TEST_DEFAULT=b \
+    CODA_UPDATE_LIB_PATHS="${good}" \
+    bash "${upd}" core >"${work}/out" 2>"${work}/err"; then
+  echo "coda-update_test: live implicit core with default b must dry-run onto a" >&2
+  cat "${work}/err" >&2 || true
+  fail=1
+fi
+if ! grep -q 'inactive slot a' "${work}/out"; then
+  echo "coda-update_test: live implicit core with default b must name slot a" >&2
+  cat "${work}/out" >&2 || true
+  fail=1
+fi
+
+# Second dry-run into inactive is idempotent (same plan).
+if ! CODA_UPDATE_DRY_RUN=1 CODA_UPDATE_TEST_ACTIVE=a \
+    CODA_UPDATE_LIB_PATHS="${good}" \
+    bash "${upd}" core --slot b >"${work}/out" 2>"${work}/err"; then
+  echo "coda-update_test: second dry-run core --slot b failed" >&2
+  fail=1
+fi
+if ! grep -q 'would preflight PARTLABELs' "${work}/out"; then
+  echo "coda-update_test: dry-run core must mention preflight" >&2
+  fail=1
+fi
+
+# desktop --slot is not a core write
+if CODA_UPDATE_DRY_RUN=1 CODA_UPDATE_LIB_PATHS="${good}" \
+    CODA_PACKAGES_DIR="${root}/packages" \
+    bash "${upd}" desktop --slot b >"${work}/out" 2>"${work}/err"; then
+  echo "coda-update_test: desktop --slot must fail" >&2
+  fail=1
+else
+  if ! grep -q 'does not take --slot' "${work}/err"; then
+    echo "coda-update_test: desktop --slot must explain coda-data" >&2
+    cat "${work}/err" >&2 || true
+    fail=1
+  fi
+fi
+
+# Format-device refuse (test hook, no mkfs)
+if ( CODA_TEST_RUNNING_ROOTDEV=/dev/vda2 coda_refuse_format_device /dev/vda2 ) \
+    >/dev/null 2>"${work}/err"; then
+  echo "coda-update_test: refuse_format_device must fail on running rootdev" >&2
+  fail=1
+else
+  if ! grep -q 'running root device' "${work}/err"; then
+    echo "coda-update_test: missing running root device message" >&2
+    fail=1
+  fi
+fi
+if ! ( CODA_TEST_RUNNING_ROOTDEV=/dev/vda2 coda_refuse_format_device /dev/vda3 ); then
+  echo "coda-update_test: refuse_format_device must allow the other partition" >&2
+  fail=1
+fi
+
+if ( CODA_TEST_RUNNING_DISK=/dev/vda coda_refuse_wipe_running_disk /dev/vda ) \
+    >/dev/null 2>"${work}/err"; then
+  echo "coda-update_test: wipe running disk must be refused" >&2
+  fail=1
+else
+  if ! grep -q 'wipe the running disk' "${work}/err"; then
+    echo "coda-update_test: missing wipe-running-disk message" >&2
+    fail=1
+  fi
+fi
+if ! ( CODA_TEST_RUNNING_DISK=/dev/vda coda_refuse_wipe_running_disk /dev/vdb ); then
+  echo "coda-update_test: wipe of a different disk must be allowed" >&2
+  fail=1
+fi
+
+if declare -F coda_update_cleanup_trap >/dev/null 2>&1 \
+   && declare -F coda_format_inactive_slot >/dev/null 2>&1 \
+   && declare -F coda_preflight_core_write >/dev/null 2>&1; then
+  :
+else
+  echo "coda-update_test: missing cleanup/format/preflight helpers" >&2
+  fail=1
+fi
+
+# umount_tree must not touch /
+if ! coda_umount_tree /; then
+  echo "coda-update_test: umount_tree / must be a no-op success" >&2
+  fail=1
+fi
+
 if [[ "${fail}" -ne 0 ]]; then
   echo "coda-update_test: FAILED" >&2
   exit 1

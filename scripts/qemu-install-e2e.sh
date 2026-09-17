@@ -608,11 +608,17 @@ qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-update sta
 qga_exec "test -f /mnt/coda-slot/boot/coda/b/vmlinuz-linux && test -f /mnt/coda-slot/boot/coda/b/initramfs-linux.img" 30 \
   || qga_exec "mkdir -p /mnt/coda-esp && mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp && test -f /mnt/coda-esp/coda/b/vmlinuz-linux && test -f /mnt/coda-esp/coda/b/initramfs-linux.img && umount /mnt/coda-esp" 60
 
+# Helpers must still define coda_need_root after the live overlay write
+# (empty stub at /usr/local/lib was a past e2e killer). Required before
+# step 6 reboot / later promote.
+qga_exec 'ok=0; test -x /usr/local/bin/coda-update && test -x /usr/local/bin/coda-slot || exit 1; for f in /usr/local/lib/codalinux/coda-install-lib.sh /usr/share/codalinux/install/coda-install-lib.sh; do if grep -q "coda_need_root()" "$f" 2>/dev/null; then ok=1; break; fi; done; test "$ok" = 1' 15 \
+  || die "live helpers lost coda_need_root after coda-update core --from-iso (rebuild ISO / check overlay copy)"
+
 step "6 oneshot-boot slot B (default remains A) and verify desktop"
 # coda-update core already set oneshot unless the guest is an old ISO.
 # Re-assert oneshot so a skipped boot-test is visible in the serial log.
 # Proof that failure would keep A: default is still coda-a.conf after oneshot.
-qga_exec 'esp=/mnt/coda-slot/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-a.conf" $esp/loader/loader.conf' 30
+qga_exec 'esp=/mnt/coda-slot/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-a.conf" $esp/loader/loader.conf && test -f $esp/coda/b/vmlinuz-linux && test -f $esp/loader/entries/coda-b.conf; if mountpoint -q /mnt/coda-esp; then umount /mnt/coda-esp; fi' 30
 stop_qemu
 start_qemu disk
 wait_qga
@@ -622,6 +628,8 @@ qga_exec 'grep -q "default coda-a.conf" /boot/loader/loader.conf' 30
 log "slot B boot-test OK; default still A"
 
 step "7 coda-update core --promote (running on B)"
+# Promote of the other slot must fail while we are on B.
+qga_exec 'if /usr/local/bin/coda-update core --promote --slot a; then echo PROMOTE_WRONG_SLOT; exit 1; fi; echo PROMOTE_REFUSED_OK' 30
 qga_exec '/usr/local/bin/coda-update core --promote' 60
 qga_exec 'sync; grep -q "default coda-b.conf" /boot/loader/loader.conf' 30
 qga_exec 'esp=/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-b.conf" $esp/loader/loader.conf; sync; if mountpoint -q /mnt/coda-esp; then umount /mnt/coda-esp; fi' 30

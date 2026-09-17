@@ -4,8 +4,44 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=coda-install-lib.sh
-. "${CODA_INSTALL_LIB:-${here}/coda-install-lib.sh}"
+
+coda_install_ab_lib_candidates() {
+  local p
+  if [[ -n "${CODA_INSTALL_LIB_PATHS:-${CODA_SLOT_LIB_PATHS:-}}" ]]; then
+    # shellcheck disable=SC2086
+    for p in ${CODA_INSTALL_LIB_PATHS:-${CODA_SLOT_LIB_PATHS:-}}; do
+      printf '%s\n' "${p}"
+    done
+    return 0
+  fi
+  [[ -n "${CODA_INSTALL_LIB:-}" ]] && printf '%s\n' "${CODA_INSTALL_LIB}"
+  printf '%s\n' \
+    /usr/local/lib/codalinux/coda-install-lib.sh \
+    /usr/share/codalinux/install/coda-install-lib.sh \
+    "${here}/coda-install-lib.sh"
+}
+
+unset CODA_INSTALL_LIB_SOURCED
+unset -f coda_need_root 2>/dev/null || true
+_coda_ab_lib=""
+_coda_ab_lib_ok=0
+while IFS= read -r _coda_ab_lib; do
+  [[ -n "${_coda_ab_lib}" && -f "${_coda_ab_lib}" && -s "${_coda_ab_lib}" ]] || continue
+  grep -q 'coda_need_root()' "${_coda_ab_lib}" 2>/dev/null || continue
+  unset CODA_INSTALL_LIB_SOURCED
+  unset -f coda_need_root 2>/dev/null || true
+  # shellcheck source=coda-install-lib.sh
+  . "${_coda_ab_lib}"
+  if declare -F coda_need_root >/dev/null 2>&1; then
+    _coda_ab_lib_ok=1
+    break
+  fi
+done < <(coda_install_ab_lib_candidates)
+if [[ "${_coda_ab_lib_ok}" -ne 1 ]]; then
+  printf 'coda-install-ab: coda-install-lib.sh did not provide coda_need_root\n' >&2
+  exit 1
+fi
+unset _coda_ab_lib _coda_ab_lib_ok
 CODA_INSTALL_LOG_PREFIX=coda-install-ab
 
 usage() {
@@ -44,6 +80,7 @@ disk="${disk:-${CODA_INSTALL_DISK:-}}"
 [[ -b "${disk}" ]] || coda_die "${disk} is not a block device"
 
 coda_need_root
+coda_refuse_wipe_running_disk "${disk}"
 command -v sgdisk >/dev/null || coda_die "sgdisk missing (gptfdisk)"
 command -v rsync >/dev/null || coda_die "rsync missing"
 command -v mkfs.fat >/dev/null || coda_die "mkfs.fat missing (dosfstools)"
@@ -67,6 +104,8 @@ fi
 # lands on coda-data. ENOSPC during the split rsync is the size check.
 
 coda_log "unmounting any existing filesystems on ${disk}"
+trap coda_update_cleanup_trap EXIT
+coda_register_update_cleanup "${target}"
 coda_umount_tree "${target}"
 # Swap or leftover mounts on this disk.
 while read -r mp; do
@@ -167,5 +206,6 @@ fi
 
 coda_write_fstab "${target}" a
 
+CODA_UPDATE_CLEANUP_NEEDED=0
 coda_log "install into OS-A complete (default boot: coda-a.conf)"
 coda_log "leave ${target} mounted for verify, or reboot from disk"
