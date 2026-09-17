@@ -102,6 +102,7 @@ class SplitTests(unittest.TestCase):
             (libdir / "coda-desktop-mount").write_text("mount\n", encoding="utf-8")
             (root / "usr/local/bin").mkdir(parents=True)
             (root / "usr/local/bin/coda-slot").write_text("slot\n", encoding="utf-8")
+            (root / "usr/local/bin/coda-update").write_text("update\n", encoding="utf-8")
             (root / "usr/local/bin/coda-hyprland").write_text("hypr\n", encoding="utf-8")
             (root / "usr/share/codalinux/install").mkdir(parents=True)
             (root / "usr/share/codalinux/install/coda-install-lib.sh").write_text(
@@ -115,6 +116,7 @@ class SplitTests(unittest.TestCase):
             self.assertIn("/usr/share/codalinux/install/coda-install-lib.sh", result["core_files"])
             self.assertNotIn("/usr/share/codalinux/install/coda-install-lib.sh", result["desktop_files"])
             self.assertIn("/usr/local/bin/coda-slot", result["core_files"])
+            self.assertIn("/usr/local/bin/coda-update", result["core_files"])
             self.assertIn("/usr/local/lib/codalinux/coda-desktop-mount", result["core_files"])
             self.assertNotIn("/usr/local/bin/coda-hyprland", result["core_files"])
 
