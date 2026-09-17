@@ -15,6 +15,7 @@ need_bins=(
   coda-wallpaper
   coda-install
   coda-slot
+  coda-update
   coda-settings
   coda-sandbox
   coda-sync-desktop-from-host
@@ -43,7 +44,7 @@ for bin in "${need_bins[@]}"; do
 done
 
 for src in coda-ags coda-hyprland coda-hyprlock coda-hyprpaper coda-wallpaper \
-           coda-hypr-ws coda-install coda-slot coda-settings coda-sandbox system-config-gui; do
+           coda-hypr-ws coda-install coda-slot coda-update coda-settings coda-sandbox system-config-gui; do
   f="${root}/scripts/${src}"
   if [[ ! -f "${f}" ]]; then
     log_fail "missing source wrapper: ${f}"
@@ -111,6 +112,10 @@ if ! bash "${root}/scripts/coda-slot_test.sh" >/tmp/coda-slot-test.out 2>&1; the
   log_fail "coda-slot_test.sh failed"
   cat /tmp/coda-slot-test.out >&2 || true
 fi
+if ! bash "${root}/scripts/coda-update_test.sh" >/tmp/coda-update-test.out 2>&1; then
+  log_fail "coda-update_test.sh failed"
+  cat /tmp/coda-update-test.out >&2 || true
+fi
 if ! bash "${root}/scripts/coda-desktop-mount_test.sh" >/tmp/coda-mount-test.out 2>&1; then
   log_fail "coda-desktop-mount_test.sh failed"
   cat /tmp/coda-mount-test.out >&2 || true
@@ -127,9 +132,9 @@ if ! grep -q 'mkdir -p "${dest}/etc/mkinitcpio.d"' "${root}/scripts/coda-install
   log_fail "coda-install-lib.sh must mkdir mkinitcpio.d before writing linux.preset"
 fi
 for sh in coda-install coda-install-ab.sh coda-install-lib.sh coda-slot \
-          coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount \
+          coda-update coda-install-verify.sh qemu-install-e2e.sh coda-desktop-mount \
           coda-desktop-mount_test.sh coda-install-post.sh \
-          coda-install-post_test.sh coda-slot_test.sh \
+          coda-install-post_test.sh coda-slot_test.sh coda-update_test.sh \
           coda-sync-desktop-from-host.sh coda-sync-desktop-from-host_test.sh \
           coda-ags; do
   if ! bash -n "${root}/scripts/${sh}"; then
@@ -222,6 +227,33 @@ if ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
     "${root}/scripts/coda-slot"; then
   log_fail "coda-slot must fall back to /usr/share/codalinux/install/coda-install-lib.sh"
 fi
+if ! grep -q 'coda_update_load_lib' "${root}/scripts/coda-update"; then
+  log_fail "coda-update must load helpers via coda_update_load_lib"
+fi
+if ! grep -q 'coda_update_lib_candidates' "${root}/scripts/coda-update"; then
+  log_fail "coda-update must list load paths via coda_update_lib_candidates"
+fi
+if ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
+    "${root}/scripts/coda-update"; then
+  log_fail "coda-update must fall back to /usr/share/codalinux/install/coda-install-lib.sh"
+fi
+if ! grep -q 'refusing to write the running slot' "${root}/scripts/coda-update" \
+   && ! grep -q 'refusing to write the running slot' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-update must refuse to write the running slot"
+fi
+if ! grep -q 'coda_refuse_running_slot' "${root}/scripts/coda-update"; then
+  log_fail "coda-update core must call coda_refuse_running_slot"
+fi
+if ! grep -q 'coda-update core --promote' "${root}/scripts/coda-update"; then
+  log_fail "coda-update usage must document core --promote"
+fi
+if ! grep -q 'Prefer the product CLI' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot usage must point at coda-update"
+fi
+if grep -qE 'sudo pacman -Syu' "${root}/scripts/coda-update" \
+   && ! grep -q 'Do not' "${root}/scripts/coda-update"; then
+  log_fail "coda-update must not teach host pacman -Syu as the update path"
+fi
 if ! grep -q 'coda_snapshot_live_helpers' "${root}/scripts/coda-slot"; then
   log_fail "coda-slot install must snapshot live helpers before mutating the tree"
 fi
@@ -256,6 +288,9 @@ fi
 if ! grep -q 'usr/share/codalinux/install/coda-install-lib.sh' \
     "${root}/scripts/coda-install-split.py"; then
   log_fail "coda-install-split.py must keep the /usr/share helper fallback on core"
+fi
+if ! grep -q '/usr/local/bin/coda-update' "${root}/scripts/coda-install-split.py"; then
+  log_fail "coda-install-split.py must keep coda-update on the core list"
 fi
 if ! grep -q 'coda_pick_esp' "${root}/scripts/coda-slot"; then
   log_fail "coda-slot boot-test/promote must use coda_pick_esp (not live ISO /boot/loader)"
@@ -327,11 +362,14 @@ fi
 if grep -q 'status.get("exitcode") or 1' "${root}/scripts/qemu-install-e2e.sh"; then
   log_fail "qemu-install-e2e.sh must not treat guest-exec exitcode 0 as missing"
 fi
-if ! grep -q 'coda-slot install --disk' "${root}/scripts/qemu-install-e2e.sh"; then
-  log_fail "qemu-install-e2e.sh must call coda-slot install --disk (subcommand first)"
+if ! grep -q 'coda-update core --from-iso --disk' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must call coda-update core --from-iso --disk (offline hook)"
 fi
-if ! grep -q 'coda-slot boot-test --disk' "${root}/scripts/qemu-install-e2e.sh"; then
-  log_fail "qemu-install-e2e.sh must call coda-slot boot-test --disk"
+if ! grep -q 'coda-update core --promote' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must call coda-update core --promote"
+fi
+if ! grep -q 'CODA_E2E_CORE_FROM' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must expose CODA_E2E_CORE_FROM for later Arch-repo abox"
 fi
 
 for gui_rt in wayland libxkbcommon libx11 libxext libxrandr libxcursor; do

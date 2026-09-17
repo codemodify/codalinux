@@ -14,7 +14,7 @@ After install the disk looks like this:
 
 At boot, UEFI starts systemd-boot, which boots the **active** core slot. That core mounts `coda-data`, then `coda-desktop-mount` merges the desktop onto `/` so you get a normal Hyprland session. Your files and sandboxes live on data, so flipping A↔B does not wipe them.
 
-The **live ISO** is still one full desktop root (handy to try and to install from). The **split** only happens when you install or run `coda-slot`.
+The **live ISO** is still one full desktop root (handy to try and to install from). The **split** only happens at first install (`coda-install`). Later OS updates use `coda-update`.
 
 ---
 
@@ -36,24 +36,30 @@ That **wipes the disk** and lays out ESP + A + B + data. Offline (no network): i
 
 ## How to update the OS (core + desktop session)
 
-OS updates are **A/B slot swaps**, not “pacman -Syu on the running root and hope.” Today the practical path is from a **newer live ISO** (or the same machine with that ISO’s airootfs available):
+OS updates are **A/B slot swaps**, not `sudo pacman -Syu` on the running root.
 
 ```bash
-# From live ISO, pointing at the installed disk:
-coda-slot status --disk /dev/vda
-coda-slot install --disk /dev/vda          # write core into inactive slot; refresh desktop on data
-coda-slot boot-test --disk /dev/vda        # oneshot boot into the new slot (old default kept)
-# If that boot looks good:
-coda-slot promote --disk /dev/vda          # make the new slot the default
+coda-update status
+coda-update core                 # Arch repos → inactive slot; oneshot next reboot
+# reboot; if the new slot looks good:
+coda-update core --promote       # only after you are already running on that slot
+
+coda-update desktop              # Arch repos → /coda/data/desktop; /home stays
 ```
 
 What that does:
 
-- **`install`** fills the **inactive** slot with a fresh core and refreshes `/coda/data/desktop`. It does **not** mutate the slot you are running.
-- **`boot-test`** uses `bootctl set-oneshot`, so a bad boot falls back to the previous default.
-- **`promote`** sets the new slot as the lasting default.
+- **`coda-update core`** refuses to write the **running** slot. It pulls **core** packages from official Arch repos into the inactive slot (`pacman --root` on that slot, not on `/`), refreshes that slot’s kernel/ESP entry, and sets a systemd-boot **oneshot**. The boot **default** stays put. A failed boot consumes the oneshot and keeps the previous default.
+- **`coda-update core --promote`** swaps the default only when this boot **is** the new slot (after a successful oneshot). Promote is **not** immediate on the first command.
+- **`coda-update desktop`** updates Hyprland/AGS/session packages on `coda-data`. It does not write core slots (except mounting data if needed). `/home` is left alone. Vendored `/usr/local` AGS/hyprbars are kept (not deleted).
 
-Desktop bits on data are refreshed with the slot write; `/home` and sandbox trees stay. The longer-term target is gated host `pacman` that only writes the inactive slot; that gating is **not** shipped yet, so prefer `coda-slot` for real OS updates rather than casually upgrading the live core in place.
+Offline / no-network hook (live ISO, current QEMU e2e — **no NIC**):
+
+```bash
+coda-update core --from-iso --disk /dev/vda    # old ISO-split path; not the product default
+```
+
+`coda-slot` is still there as a low-level helper (`install` / `boot-test` / `promote`) for e2e and recovery. Prefer `coda-update`. Host `pacman -Syu` on the running root is **not** the OS update path.
 
 ---
 
@@ -95,4 +101,4 @@ Shared pacman cache lives under `~/.coda/cache/pacman`, so downloads are reused 
 
 ## Short mental model
 
-Install once with `coda-install`, flip OS versions with `coda-slot`, put apps in `coda-sandbox`, keep your life on `coda-data`. Host `pacman` on the running core is still possible today because slots are writable, but the design intent is core via slots and everything else via sandboxes.
+Install once with `coda-install`, update the OS with `coda-update`, put apps in `coda-sandbox`, keep your life on `coda-data`. Host `pacman` on the running core is still possible today because slots are writable, but that is **not** the product update path.

@@ -94,7 +94,7 @@ From the CodaLinux live ISO (no network required at install time):
 coda-install
 ```
 
-That helper keeps Bozeman locale/timezone/keymap and only asks for the disk. `CODA_INSTALL_DISK=/dev/vda coda-install` (or `auto` for the first disk) partitions ESP + OS-A + OS-B + data, splits the live airootfs into **core on OS-A** and **desktop on `coda-data`**, and enables greetd autologin for **`user` / `1`**. Automated QEMU loop (local ISO only): `./scripts/qemu-install-e2e.sh`. See [`install/`](install/README.md).
+That helper keeps Bozeman locale/timezone/keymap and only asks for the disk. `CODA_INSTALL_DISK=/dev/vda coda-install` (or `auto` for the first disk) partitions ESP + OS-A + OS-B + data, splits the live airootfs into **core on OS-A** and **desktop on `coda-data`**, and enables greetd autologin for **`user` / `1`**. After install, OS updates are `coda-update core` / `coda-update desktop`. Automated QEMU loop (local ISO only): `./scripts/qemu-install-e2e.sh`. See [`install/`](install/README.md).
 
 ### Extra software (sandboxes)
 
@@ -111,7 +111,7 @@ coda-sandbox destroy <env>
 
 Trees live under `~/.coda/sandbox/<env>/` (user-owned; no sudo). One name is one Arch root that can hold many packages. Shared cache: `~/.coda/cache/pacman`. Live ISO overlay is **`cow_spacesize=4G`** so `create` is not capped at the stock 256M COW (see [docs/sandbox.md](docs/sandbox.md#live-iso-space)).
 
-See [architecture.md](architecture.md) · [how-it-works.md](how-it-works.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and `coda-slot` updates are implemented (core on A/B, desktop on data). The running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
+See [architecture.md](architecture.md) · [how-it-works.md](how-it-works.md) and [docs/sandbox.md](docs/sandbox.md). ESP+A+B+data install and **`coda-update`** (core from Arch into the inactive slot; desktop on `coda-data`) are implemented. Do not `sudo pacman -Syu` on the running root. The running slot is still writable (RO remount is later). The live ISO includes the Hyprland + AGS desktop (`bubblewrap` + `coda-sandbox` are on that image).
 
 ## What this repo does not contain
 

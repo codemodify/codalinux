@@ -603,6 +603,18 @@ record SKIP "apply session.lock" "would lock the live session"
 record SKIP "apply power.suspend" "e2e never suspends"
 record SKIP "apply power.hibernate" "e2e never hibernates"
 
+# --- coda-update CLI (no pacman; host-safe surface only) ---
+echo "=== coda-update smoke ==="
+if ! command -v coda-update >/dev/null 2>&1; then
+  record SKIP "coda-update --help" "not on PATH"
+else
+  if coda-update --help >/dev/null 2>&1; then
+    record PASS "coda-update --help"
+  else
+    record FAIL "coda-update --help"
+  fi
+fi
+
 # --- sandbox ---
 echo "=== coda-sandbox smoke ==="
 if ! command -v coda-sandbox >/dev/null 2>&1; then

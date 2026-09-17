@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Host-side QEMU + QGA e2e for install layout + A/B update (abox).
 # Local ISO only. No GitHub artifacts. No system-config host tests.
+# Teaches coda-update (offline --from-iso hook). Arch-repo pull is later.
 #
 # One command, no prompts:
 #   ./scripts/qemu-install-e2e.sh
@@ -42,10 +43,13 @@ Steps (--phase all, default):
   2. Auto-partition ESP + OS-A + OS-B + data
   3. Offline core install into OS-A; desktop onto coda-data
   4. Reboot from disk → Hyprland as user/1 on slot A (from data)
-  5. Write core + kernel/boot into inactive slot B; refresh desktop
-  6. Oneshot-boot slot B and verify Hyprland (default still A)
-  7. Promote B as systemd-boot default
+  5. coda-update core --from-iso into B (oneshot; default stays A)
+  6. Reboot oneshot slot B and verify Hyprland (default still A)
+  7. coda-update core --promote
   8. Reboot and confirm running from B
+
+  Offline by default (no NIC). Arch-repo pull is the product path:
+    CODA_E2E_CORE_FROM=repos  # later abox with a NIC; not claimed green here
 
   --phase install   stop after step 4
   --build           ./scripts/build-iso.sh if no local ISO exists
@@ -515,7 +519,8 @@ fi
 log "ISO ${iso}"
 log "phase ${phase}  disk ${disk_size}  ram ${ram}  cpus ${cpus}"
 log "artifacts ${out_dir}"
-log "offline: QEMU has no NIC (install + slot write use the ISO only)"
+log "offline: QEMU has no NIC (install + coda-update --from-iso use the ISO only)"
+log "product coda-update core (Arch repos) needs a NIC; hook: CODA_E2E_CORE_FROM=repos"
 
 if [[ "${dry_run}" -eq 1 ]]; then
   start_qemu live
@@ -531,12 +536,12 @@ guest_need_new_iso() {
   local i
   # Overlay/QGA can race just after wait_qga; retry ~120s.
   for i in $(seq 1 24); do
-    if qga_exec 'test -x /usr/local/bin/coda-slot && test -x /usr/local/lib/codalinux/coda-install-ab.sh && test -x /usr/local/lib/codalinux/coda-install-layout.py' 10; then
+    if qga_exec 'test -x /usr/local/bin/coda-update && test -x /usr/local/bin/coda-slot && test -x /usr/local/lib/codalinux/coda-install-ab.sh && test -x /usr/local/lib/codalinux/coda-install-layout.py' 10; then
       return 0
     fi
     sleep 5
   done
-  die "live ISO is missing the A/B installer (coda-slot / coda-install-ab.sh). Rebuild on abox: ./scripts/build-iso.sh"
+  die "live ISO is missing coda-update / coda-slot / coda-install-ab.sh. Rebuild on abox: ./scripts/build-iso.sh"
 }
 
 parse_first_disk() {
@@ -583,20 +588,29 @@ if [[ "${phase}" == install ]]; then
   exit 0
 fi
 
-# 5 write inactive slot from live ISO
-step "5 upgrade inactive slot B from live ISO (kernel + root, not running A)"
+# 5 write inactive slot via coda-update (offline ISO hook; Arch pull needs NIC)
+step "5 coda-update core into inactive slot B (not running A)"
 stop_qemu
 start_qemu live
 wait_qga
-qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot install --disk ${first_disk} --slot b" "${timeout_install}"
+qga_exec 'test -x /usr/local/bin/coda-update' 10 \
+  || die "live ISO missing coda-update (rebuild: ./scripts/build-iso.sh)"
+qga_exec 'for f in /usr/local/lib/codalinux/coda-install-lib.sh /usr/share/codalinux/install/coda-install-lib.sh; do echo "LIB $f"; ls -l "$f" 2>&1 || true; wc -c "$f" 2>&1 || true; grep -c "coda_need_root()" "$f" 2>&1 || true; done' 15 || true
+# Default e2e is offline. CODA_E2E_CORE_FROM=repos is the later abox hook
+# for `coda-update core` (Arch pacman into the inactive slot). Do not claim
+# that path green here — this VM has no NIC.
+if [[ "${CODA_E2E_CORE_FROM:-iso}" == repos ]]; then
+  qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-update core --disk ${first_disk} --slot b" "${timeout_install}"
+else
+  qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-update core --from-iso --disk ${first_disk} --slot b" "${timeout_install}"
+fi
+qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-update status --disk ${first_disk}" 30 || true
 qga_exec "test -f /mnt/coda-slot/boot/coda/b/vmlinuz-linux && test -f /mnt/coda-slot/boot/coda/b/initramfs-linux.img" 30 \
   || qga_exec "mkdir -p /mnt/coda-esp && mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp && test -f /mnt/coda-esp/coda/b/vmlinuz-linux && test -f /mnt/coda-esp/coda/b/initramfs-linux.img && umount /mnt/coda-esp" 60
 
 step "6 oneshot-boot slot B (default remains A) and verify desktop"
-# Ground truth (4dd58cfa): install can leave the first load path empty/stub.
-# Log helper files so a load failure is diagnosable.
-qga_exec 'for f in /usr/local/lib/codalinux/coda-install-lib.sh /usr/share/codalinux/install/coda-install-lib.sh; do echo "LIB $f"; ls -l "$f" 2>&1 || true; wc -c "$f" 2>&1 || true; grep -c "coda_need_root()" "$f" 2>&1 || true; done' 15 || true
-qga_exec "export CODA_INSTALL_DISK=${first_disk}; /usr/local/bin/coda-slot boot-test --disk ${first_disk} --slot b" 60
+# coda-update core already set oneshot unless the guest is an old ISO.
+# Re-assert oneshot so a skipped boot-test is visible in the serial log.
 # Proof that failure would keep A: default is still coda-a.conf after oneshot.
 qga_exec 'esp=/mnt/coda-slot/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-a.conf" $esp/loader/loader.conf' 30
 stop_qemu
@@ -607,8 +621,8 @@ qga_exec 'for i in $(seq 1 60); do test -f /etc/coda/slot && break; sleep 2; don
 qga_exec 'grep -q "default coda-a.conf" /boot/loader/loader.conf' 30
 log "slot B boot-test OK; default still A"
 
-step "7 promote slot B (systemd-boot default)"
-qga_exec '/usr/local/bin/coda-slot promote --slot b' 60
+step "7 coda-update core --promote (running on B)"
+qga_exec '/usr/local/bin/coda-update core --promote' 60
 qga_exec 'sync; grep -q "default coda-b.conf" /boot/loader/loader.conf' 30
 qga_exec 'esp=/boot; if [[ ! -f $esp/loader/loader.conf ]]; then mkdir -p /mnt/coda-esp; mount /dev/disk/by-partlabel/coda-esp /mnt/coda-esp; esp=/mnt/coda-esp; fi; grep -q "default coda-b.conf" $esp/loader/loader.conf; sync; if mountpoint -q /mnt/coda-esp; then umount /mnt/coda-esp; fi' 30
 

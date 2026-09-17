@@ -145,6 +145,10 @@ prepare_overlay() {
     "${overlay}/usr/local/share/codalinux/packages/base.txt"
   install -m 0644 "${root}/packages/core-slot.txt" \
     "${overlay}/usr/local/share/codalinux/packages/core-slot.txt"
+  for _pkg in desktop.txt apps.txt hardware.txt network.txt sandbox.txt; do
+    install -m 0644 "${root}/packages/${_pkg}" \
+      "${overlay}/usr/local/share/codalinux/packages/${_pkg}"
+  done
   install -d "${overlay}/usr/local/share/codalinux"
   install -m 0644 "${root}/branding/os-release" \
     "${overlay}/usr/local/share/codalinux/os-release"
@@ -213,6 +217,8 @@ prepare_overlay() {
     "${overlay}/usr/local/bin/coda-install"
   install -m 0755 "${root}/scripts/coda-slot" \
     "${overlay}/usr/local/bin/coda-slot"
+  install -m 0755 "${root}/scripts/coda-update" \
+    "${overlay}/usr/local/bin/coda-update"
   install -m 0755 "${root}/scripts/coda-hyprland" \
     "${overlay}/usr/local/bin/coda-hyprland"
   install -m 0755 "${root}/scripts/coda-settings" \
@@ -237,8 +243,8 @@ prepare_overlay() {
   chmod 0755 "${overlay}/usr/local/bin/coda-"* || true
   local wrap
   for wrap in coda-hyprpaper coda-wallpaper coda-ags coda-hyprland \
-              coda-hyprlock coda-hypr-ws coda-install coda-slot coda-settings \
-              coda-sandbox coda-sync-desktop-from-host; do
+              coda-hyprlock coda-hypr-ws coda-install coda-slot coda-update \
+              coda-settings coda-sandbox coda-sync-desktop-from-host; do
     if [[ ! -x "${overlay}/usr/local/bin/${wrap}" ]]; then
       echo "build-iso: ${overlay}/usr/local/bin/${wrap} is not executable" >&2
       exit 1

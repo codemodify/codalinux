@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+# User-facing OS update CLI. Locked surface (2026-09-17):
+#   coda-update core     — Arch repos → inactive A/B slot, oneshot boot-test
+#   coda-update desktop  — Arch repos → /coda/data/desktop (not the core slot)
+#   coda-update status   — active / inactive / boot default
+# Promote is a second step: coda-update core --promote after a good oneshot boot.
+# Do not sudo pacman -Syu on the running root.
+# coda-slot remains the low-level A/B helper (ISO offline write, e2e).
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+coda_update_lib_candidates() {
+  local p
+  if [[ -n "${CODA_UPDATE_LIB_PATHS:-${CODA_SLOT_LIB_PATHS:-}}" ]]; then
+    # shellcheck disable=SC2086
+    for p in ${CODA_UPDATE_LIB_PATHS:-${CODA_SLOT_LIB_PATHS:-}}; do
+      printf '%s\n' "${p}"
+    done
+    return 0
+  fi
+  [[ -n "${CODA_INSTALL_LIB:-}" ]] && printf '%s\n' "${CODA_INSTALL_LIB}"
+  printf '%s\n' \
+    /usr/local/lib/codalinux/coda-install-lib.sh \
+    /usr/share/codalinux/install/coda-install-lib.sh \
+    "${here}/coda-install-lib.sh"
+}
+
+coda_update_load_lib() {
+  # Name kept for check-wrapper-modes. Real load is the top-level loop.
+  true
+}
+
+unset CODA_INSTALL_LIB_SOURCED
+unset -f coda_need_root 2>/dev/null || true
+_coda_update_lib=""
+_coda_update_lib_ok=0
+while IFS= read -r _coda_update_lib; do
+  [[ -n "${_coda_update_lib}" && -f "${_coda_update_lib}" && -s "${_coda_update_lib}" ]] || continue
+  grep -q 'coda_need_root()' "${_coda_update_lib}" 2>/dev/null || continue
+  unset CODA_INSTALL_LIB_SOURCED
+  unset -f coda_need_root 2>/dev/null || true
+  # shellcheck source=coda-install-lib.sh
+  . "${_coda_update_lib}"
+  if declare -F coda_need_root >/dev/null 2>&1; then
+    _coda_update_lib_ok=1
+    break
+  fi
+done < <(coda_update_lib_candidates)
+if [[ "${_coda_update_lib_ok}" -ne 1 ]]; then
+  printf 'coda-update: coda-install-lib.sh did not provide coda_need_root\n' >&2
+  exit 1
+fi
+unset _coda_update_lib _coda_update_lib_ok
+CODA_INSTALL_LOG_PREFIX=coda-update
+
+usage() {
+  cat <<'EOF'
+Usage: coda-update <command> [options]
+
+Locked product CLI for CodaLinux updates. Do not `sudo pacman -Syu`
+on the running root — that is not the OS update path.
+
+Commands:
+  status                 show running / inactive / boot default
+  core                   update the core OS on the inactive A/B slot
+  desktop                update Hyprland/AGS/session on coda-data
+
+core (happy path):
+  coda-update core                 # Arch repos → inactive slot, then oneshot
+  # reboot; if the new slot looks good:
+  coda-update core --promote       # only after you are running on that slot
+  coda-update desktop              # Arch repos → /coda/data/desktop; leave /home
+
+  Promote is not immediate. `core` schedules a systemd-boot oneshot for
+  the next reboot (old default kept if that boot fails). `--promote`
+  flips the default only when this boot is already the new slot.
+
+Options:
+  --disk DEV             GPT disk with coda-* PARTLABELs (required from live)
+  --target DIR           mount root (default /mnt/coda-slot)
+  --slot a|b             target slot (default: inactive; hidden plumbing)
+  --from-iso             offline live-ISO split (e2e / no network). Not the
+                         product path — Arch repo pull is.
+  --from DIR             override ISO source (implies --from-iso)
+  --no-boot-test         write the inactive slot, do not oneshot
+  --promote              swap default boot to the running slot
+  --dry-run              parse + plan only (no root, no pacman, no mounts)
+
+From a running installed system, --disk is optional. From the live ISO,
+pass --disk /dev/vda (or CODA_INSTALL_DISK=auto).
+
+Desktop stays on /coda/data/desktop. /home is never replaced.
+Day-to-day apps stay in coda-sandbox.
+
+Low-level A/B helper (e2e / recovery): coda-slot
+EOF
+}
+
+disk="${CODA_INSTALL_DISK:-}"
+target="${CODA_SLOT_TARGET:-/mnt/coda-slot}"
+slot=""
+src_override=""
+cmd=""
+do_promote=0
+from_iso=0
+no_boot_test=0
+dry_run="${CODA_UPDATE_DRY_RUN:-0}"
+
+# Accept both `coda-update core --disk DEV` and `coda-update --disk DEV core`.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help|help) usage; exit 0 ;;
+    --disk) disk="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --slot) slot="$2"; shift 2 ;;
+    --from)
+      src_override="$2"
+      from_iso=1
+      shift 2
+      ;;
+    --from-iso) from_iso=1; shift ;;
+    --no-boot-test) no_boot_test=1; shift ;;
+    --promote) do_promote=1; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    status|core|desktop)
+      if [[ -n "${cmd}" ]]; then
+        coda_die "duplicate command: $1 (already ${cmd})"
+      fi
+      cmd="$1"
+      shift
+      ;;
+    *) coda_die "unknown argument: $1" ;;
+  esac
+done
+
+coda_update_active_slot() {
+  if [[ -n "${CODA_UPDATE_TEST_ACTIVE:-}" ]]; then
+    if [[ "${CODA_UPDATE_TEST_ACTIVE}" == none || "${CODA_UPDATE_TEST_ACTIVE}" == live ]]; then
+      return 1
+    fi
+    printf '%s' "${CODA_UPDATE_TEST_ACTIVE}"
+    return 0
+  fi
+  coda_active_slot
+}
+
+resolve_disk_quiet() {
+  if [[ -n "${disk}" ]]; then
+    case "${disk}" in
+      auto|first|AUTO|FIRST)
+        disk="$(coda_first_disk)" || return 1
+        ;;
+    esac
+    return 0
+  fi
+  if disk="$(coda_resolve_coda_disk 2>/dev/null)"; then
+    return 0
+  fi
+  return 1
+}
+
+cmd_status() {
+  resolve_disk_quiet || true
+  echo "CodaLinux update status"
+  echo "  (coda-update core writes the inactive slot from Arch; then oneshot)"
+  coda_print_slot_status "${target}" "${disk:-}"
+  local desk=""
+  if [[ -d /coda/data/desktop ]]; then
+    desk=/coda/data/desktop
+  elif [[ -d "${target}/coda/data/desktop" ]]; then
+    desk="${target}/coda/data/desktop"
+  fi
+  if [[ -n "${desk}" && -f "${desk}/.coda-desktop-payload" ]]; then
+    echo "desktop: ${desk} (payload present)"
+  elif [[ -n "${desk}" ]]; then
+    echo "desktop: ${desk}"
+  else
+    echo "desktop: (not mounted — pass --disk from live, or run on an installed system)"
+  fi
+}
+
+plan_core() {
+  local active="$1" inactive="$2"
+  if [[ "${from_iso}" -eq 1 ]]; then
+    echo "coda-update: would write inactive slot ${inactive} from live ISO (--from-iso)"
+  else
+    echo "coda-update: would sync core packages from Arch into inactive slot ${inactive}"
+  fi
+  echo "coda-update: would refresh kernel/ESP for slot ${inactive}"
+  if [[ "${no_boot_test}" -eq 1 ]]; then
+    echo "coda-update: would skip oneshot (--no-boot-test)"
+  else
+    echo "coda-update: would boot-test (oneshot) slot ${inactive}; default unchanged"
+    echo "coda-update: after reboot, run: coda-update core --promote"
+  fi
+  if [[ -n "${active}" ]]; then
+    echo "coda-update: running slot ${active} would not be written"
+  fi
+}
+
+cmd_core_promote() {
+  local active
+  active="$(coda_update_active_slot 2>/dev/null || true)"
+  if [[ -z "${active}" ]]; then
+    coda_die "promote after you reboot into the new slot (oneshot first). Not from the live ISO."
+  fi
+  if [[ -n "${slot}" && "${slot}" != "${active}" ]]; then
+    coda_die "refusing to promote slot ${slot} while running on ${active} (oneshot that slot first)"
+  fi
+  if [[ "${dry_run}" -eq 1 ]]; then
+    echo "coda-update: would promote running slot ${active} as the boot default"
+    return 0
+  fi
+  coda_need_root
+  resolve_disk_quiet || true
+  coda_promote_slot "${active}" "${target}" "${disk:-}"
+}
+
+cmd_core() {
+  if [[ "${do_promote}" -eq 1 ]]; then
+    cmd_core_promote
+    return
+  fi
+
+  local active inactive
+  active="$(coda_update_active_slot 2>/dev/null || true)"
+  inactive="$(coda_pick_inactive_slot "${slot}" "${active}")"
+  coda_refuse_running_slot "${inactive}" "${active}"
+
+  if [[ "${dry_run}" -eq 1 ]]; then
+    plan_core "${active}" "${inactive}"
+    return 0
+  fi
+
+  coda_need_root
+  resolve_disk_quiet || coda_die "cannot find coda disk (pass --disk)"
+
+  if [[ "${from_iso}" -eq 1 ]]; then
+    local slot_bin
+    slot_bin="$(coda_find_slot_bin)" || coda_die "coda-slot not found (needed for --from-iso)"
+    local -a iso_args=(install --target "${target}" --slot "${inactive}")
+    [[ -n "${disk}" ]] && iso_args+=(--disk "${disk}")
+    [[ -n "${src_override}" ]] && iso_args+=(--from "${src_override}")
+    coda_log "offline ISO path (--from-iso): ${slot_bin} ${iso_args[*]}"
+    coda_log "product path is Arch repos (omit --from-iso when you have network)"
+    "${slot_bin}" "${iso_args[@]}"
+  else
+    local slot_dev
+    slot_dev="$(coda_wait_partlabel "coda-${inactive}")"
+    coda_log "formatting inactive slot coda-${inactive} (${slot_dev})"
+    coda_umount_tree "${target}"
+    mkfs.ext4 -F -L "coda-${inactive}" "${slot_dev}" >/dev/null
+    coda_mount_slot_for_update "${target}" "${inactive}"
+    if [[ -n "${active}" ]]; then
+      coda_clone_running_slot "${target}" "${active}" || \
+        coda_log "clone of running slot skipped; bootstrapping from Arch only"
+    else
+      coda_log "no running slot (live ISO): bootstrap core packages from Arch"
+    fi
+    coda_sync_core_from_arch "${target}" "${inactive}"
+    coda_create_user "${target}"
+    coda_chroot "${target}" systemd-machine-id-setup >/dev/null 2>&1 || true
+    if [[ -x "${target}/usr/bin/locale-gen" || -x "${target}/usr/sbin/locale-gen" ]]; then
+      coda_chroot "${target}" locale-gen >/dev/null 2>&1 || true
+    fi
+    coda_install_boot_files "${target}" "${inactive}" "${target}/boot"
+    coda_write_loader_entry "${target}/boot" "${inactive}" \
+      "CodaLinux (slot ${inactive^^})"
+    coda_log "inactive slot ${inactive} updated from Arch (default boot entry unchanged)"
+  fi
+
+  if [[ "${no_boot_test}" -eq 1 ]]; then
+    coda_log "skipped oneshot (--no-boot-test). Next: coda-update core (without --no-boot-test) or coda-slot boot-test"
+    return 0
+  fi
+  coda_boot_test_slot "${inactive}" "${target}" "${disk:-}"
+}
+
+cmd_desktop() {
+  if [[ "${do_promote}" -eq 1 ]]; then
+    coda_die "--promote is for coda-update core, not desktop"
+  fi
+  if [[ "${dry_run}" -eq 1 ]]; then
+    local n
+    n="$(coda_desktop_package_names | wc -l | tr -d ' ')"
+    echo "coda-update: would sync ${n} desktop packages from Arch onto coda-data"
+    echo "coda-update: /home and core slots would not be written"
+    if [[ "${from_iso}" -eq 1 ]]; then
+      echo "coda-update: --from-iso would refresh desktop from the live airootfs instead"
+    fi
+    return 0
+  fi
+
+  coda_need_root
+  local data=""
+  if [[ -d /coda/data && -d /coda/data/home ]]; then
+    data=/coda/data
+  else
+    resolve_disk_quiet || coda_die "cannot find coda disk (pass --disk)"
+    mkdir -p "${target}/coda/data"
+    if ! mountpoint -q "${target}/coda/data"; then
+      mount "$(coda_wait_partlabel coda-data)" "${target}/coda/data"
+    fi
+    data="${target}/coda/data"
+  fi
+  mkdir -p "${data}/home" "${data}/var" "${data}/desktop"
+  [[ -d "${data}/home" ]] || coda_die "refusing desktop update without ${data}/home"
+
+  if [[ "${from_iso}" -eq 1 ]]; then
+    local src
+    if [[ -n "${src_override}" ]]; then
+      src="${src_override}"
+    else
+      src="$(coda_find_source)"
+    fi
+    coda_log "offline desktop refresh from ${src} → ${data}/desktop (slots untouched)"
+    local work desktop_list core_list
+    work="$(mktemp -d /tmp/coda-desktop-iso.XXXXXX)"
+    desktop_list="${work}/desktop.list"
+    core_list="${work}/core.list"
+    python3 "$(coda_find_split)" \
+      --root "${src}" \
+      --core-list "${core_list}" \
+      --desktop-list "${desktop_list}" \
+      || coda_die "coda-install-split.py failed (need live pacman db)"
+    coda_rsync_filelist "${src}" "${data}/desktop" "${desktop_list}" 1
+    coda_wipe_live_bits "${data}/desktop"
+    coda_write_extension_release "${data}/desktop"
+    rm -rf "${work}"
+  else
+    coda_sync_desktop_from_arch "${data}"
+  fi
+  coda_log "desktop update done. Core slots were not written."
+}
+
+case "${cmd}" in
+  ""|-h|--help) usage; exit 0 ;;
+  status) cmd_status ;;
+  core) cmd_core ;;
+  desktop) cmd_desktop ;;
+  *) coda_die "unknown command: ${cmd} (try --help)" ;;
+esac

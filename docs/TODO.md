@@ -55,11 +55,12 @@ Scaffolding only. Each item is work for a later change. Do not treat stubs as fi
 Picture: [architecture.md](../architecture.md) (target A/B vs current). Shipped now: `packages/sandbox.txt` (`bubblewrap`), `scripts/coda-sandbox`, docs. Desktop (Hyprland + AGS) stays on the **live ISO**. Installed desktop lives on `coda-data`.
 
 - [x] Installer disk layout: ESP + OS-A + OS-B + data (`/home` includes `~/.coda/sandbox`). Slots are **core-only** (4 GiB floor). Desktop is on `coda-data` (8 GiB data floor).
-- [x] Inactive-slot writer + oneshot boot-test + promote (`coda-slot`). Host e2e: `scripts/qemu-install-e2e.sh` (local ISO only).
+- [x] Inactive-slot writer + oneshot boot-test + promote. Product CLI: `coda-update core` / `desktop` / `status` (Arch repos → inactive slot / coda-data). `coda-slot` remains low-level. Host e2e: `scripts/qemu-install-e2e.sh` (local ISO only; `--from-iso`).
+- [ ] QEMU **network** e2e of `coda-update core` (Arch pacman into the inactive slot). Hook: `CODA_E2E_CORE_FROM=repos`. Not claimed green (current e2e has no NIC).
 - [x] Offline split: core packages → slot; Hyprland/AGS/session → `/coda/data/desktop`; boot merge via `coda-desktop-mount`.
 - [ ] Read-only remount of the **running** slot and gated host `pacman`. Documented in DESIGN.md; **not implemented**.
 - [ ] Core-only (~1.1 GiB) *live ISO* (desktop as a session on top of a minimal squashfs). The live image is still the full desktop.
-- [ ] A/B the desktop payload (today `coda-slot install` refreshes `/coda/data/desktop` in place).
+- [ ] A/B the desktop payload (today `coda-update desktop` refreshes `/coda/data/desktop` in place).
 - [ ] Optional Distrobox / Podman **alongside** `coda-sandbox`, not as a replacement.
 - [ ] Flatpak alongside bwrap (still official-repo / documented policy only).
 - [ ] GUI entry from the AGS Settings hub (list / shell / destroy).

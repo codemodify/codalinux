@@ -2,7 +2,7 @@
 """Classify a live airootfs into core (OS slot) vs desktop (coda-data).
 
 Offline only: reads the live pacman local db and explicit path lists.
-Never pacstrap. Used by coda-install / coda-slot.
+Never pacstrap. Used by coda-install / coda-slot / coda-update --from-iso.
 
 Core seeds = packages/base.txt + packages/core-slot.txt, then recursive
 depends from the live db. Everything else installed is desktop.
@@ -20,6 +20,7 @@ from pathlib import Path
 CORE_EXTRA_PREFIXES = (
     "/usr/local/bin/coda-install",
     "/usr/local/bin/coda-slot",
+    "/usr/local/bin/coda-update",
     "/usr/local/lib/codalinux/coda-install",
     "/usr/local/lib/codalinux/coda-install-lib.sh",
     "/usr/local/lib/codalinux/coda-install-post.sh",

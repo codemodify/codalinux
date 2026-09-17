@@ -1,6 +1,6 @@
 """Leftover finish hook. First install is coda-install-ab.sh, not archinstall.
 
-`coda-install` / `coda-slot` run `coda-install-post.sh` on the live ISO
+`coda-install` / `coda-slot` / `coda-update --from-iso` run `coda-install-post.sh` on the live ISO
 against the target mount (default `/mnt`). This module is the same hook:
 `python3 codalinux.py --target /mnt --user user`.
 """
