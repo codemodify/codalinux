@@ -49,7 +49,7 @@ coda-update desktop              # Arch repos → /coda/data/desktop; /home stay
 
 What that does:
 
-- **`coda-update core`** refuses to write the **running** slot. It pulls **core** packages from official Arch repos into the inactive slot (`pacman --root` on that slot, not on `/`), refreshes that slot’s kernel/ESP entry, and sets a systemd-boot **oneshot**. The boot **default** stays put. A failed boot consumes the oneshot and keeps the previous default.
+- **`coda-update core`** refuses to write the **running** slot (and, from the live ISO, the current boot-default slot — that is the fallback if oneshot fails). It pulls **core** packages from official Arch repos into the inactive slot (`pacman --root` on that slot, not on `/`), refreshes that slot’s kernel/ESP entry, and sets a systemd-boot **oneshot**. The boot **default** stays put. A failed boot consumes the oneshot and keeps the previous default. A failed write umounts and leaves the old slot bootable.
 - **`coda-update core --promote`** swaps the default only when this boot **is** the new slot (after a successful oneshot). Promote is **not** immediate on the first command.
 - **`coda-update desktop`** updates Hyprland/AGS/session packages on `coda-data`. It does not write core slots (except mounting data if needed). `/home` is left alone. Vendored `/usr/local` AGS/hyprbars are kept (not deleted).
 

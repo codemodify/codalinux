@@ -195,33 +195,25 @@ cmd_install() {
   local live_helper_snap="${CODA_LIVE_HELPER_SNAP:-/tmp/coda-live-helpers}"
   coda_snapshot_live_helpers "${live_helper_snap}"
   resolve_disk_if_needed || coda_die "cannot find coda disk (pass --disk)"
-  local active inactive
+  trap coda_update_cleanup_trap EXIT
+  coda_register_update_cleanup "${target}"
+
+  local active inactive default_slot="" esp
   active="$(coda_active_slot 2>/dev/null || true)"
+  coda_preflight_partlabels
+  coda_preflight_space_floors
+  if esp="$(coda_ensure_esp_mounted "${target}" "${disk:-}" 2>/dev/null)"; then
+    default_slot="$(coda_default_slot_letter "$(coda_read_default_entry "${esp}")" 2>/dev/null || true)"
+  fi
   if [[ -n "${slot}" ]]; then
     inactive="${slot}"
-  elif [[ -n "${active}" ]]; then
-    inactive="$(coda_other_slot "${active}")" || coda_die "cannot infer inactive slot"
   else
-    # Live ISO: prefer empty B, else the non-running formatted slot.
-    if [[ -e /dev/disk/by-partlabel/coda-b ]]; then
-      local tmp
-      tmp="$(mktemp -d)"
-      mount /dev/disk/by-partlabel/coda-b "${tmp}"
-      if [[ -f "${tmp}/etc/coda/empty" || ! -d "${tmp}/usr" ]]; then
-        inactive=b
-      else
-        inactive=b
-      fi
-      umount "${tmp}"
-      rmdir "${tmp}"
-    else
-      inactive=b
+    inactive="$(coda_pick_inactive_slot "" "${active}" "${default_slot}")"
+    if [[ -z "${active}" ]]; then
+      coda_log "live ISO: installing into slot ${inactive} (not mutating a running slot)"
     fi
-    coda_log "live ISO: installing into slot ${inactive} (not mutating a running slot)"
   fi
-  if [[ -n "${active}" && "${inactive}" == "${active}" ]]; then
-    coda_die "refusing to install into the running slot (${active})"
-  fi
+  coda_preflight_core_write "${inactive}" "${active}" "${default_slot}"
 
   local src
   if [[ -n "${src_override}" ]]; then
@@ -231,23 +223,20 @@ cmd_install() {
   fi
   coda_log "offline source for slot ${inactive}: ${src}"
 
-  local slot_dev data_dev
-  slot_dev="$(coda_wait_partlabel "coda-${inactive}")"
+  local data_dev
   data_dev="$(coda_wait_partlabel coda-data)"
-
-  # Do not mutate the running root. Format the inactive slot only.
-  coda_log "formatting inactive slot coda-${inactive} (${slot_dev})"
-  coda_umount_tree "${target}"
-  mkfs.ext4 -F -L "coda-${inactive}" "${slot_dev}" >/dev/null
+  coda_format_inactive_slot "${inactive}" "${active}" "${target}"
 
   mkdir -p "${target}"
-  mount "${slot_dev}" "${target}"
+  mount "$(coda_wait_partlabel "coda-${inactive}")" "${target}"
   mkdir -p "${target}/boot" "${target}/coda/data"
   mount "$(coda_wait_partlabel coda-esp)" "${target}/boot"
   mount "${data_dev}" "${target}/coda/data"
   mkdir -p "${target}/coda/data/home" "${target}/coda/data/var"
 
   # Core → inactive slot; desktop → coda-data. Never replace /home.
+  # Desktop refresh failure after this point must not touch the old slot
+  # or the loader default (cleanup umounts; default stays).
   coda_split_offline "${src}" "${target}" "${target}/coda/data" 0
   mkdir -p "${target}/home" "${target}/var"
   coda_wipe_live_bits "${target}"
@@ -286,6 +275,7 @@ cmd_install() {
   coda_log "inactive slot ${inactive} installed (default boot entry unchanged)"
   coda_log "next: coda-update core (oneshot) or coda-slot boot-test --slot ${inactive}"
   coda_log "after a good reboot: coda-update core --promote"
+  coda_release_update_cleanup
 }
 
 cmd_boot_test() {
@@ -298,52 +288,24 @@ cmd_boot_test() {
       s=b
     fi
   fi
-  local esp
-  if esp="$(coda_pick_esp "${target}")"; then
-    :
-  else
-    resolve_disk_if_needed || coda_die "cannot find coda disk (pass --disk)"
-    mkdir -p "${target}/boot"
-    if ! mountpoint -q "${target}/boot"; then
-      mount "$(coda_wait_partlabel coda-esp)" "${target}/boot"
-    fi
-    esp="${target}/boot"
-  fi
-  [[ -f "${esp}/loader/entries/coda-${s}.conf" ]] || coda_die "missing coda-${s}.conf on ${esp}"
-  [[ -f "${esp}/coda/${s}/vmlinuz-linux" ]] || coda_die "slot ${s} has no kernel; run coda-slot install first"
-  local before
-  before="$(read_default_entry "${esp}")"
-  bootctl set-oneshot "coda-${s}.conf" --esp-path="${esp}"
-  coda_log "oneshot coda-${s}.conf (default remains ${before:-coda-a.conf})"
-  coda_log "a failed boot consumes the oneshot and keeps ${before:-the previous default}"
+  resolve_disk_if_needed || true
+  coda_boot_test_slot "${s}" "${target}" "${disk:-}"
 }
 
 cmd_promote() {
   coda_need_root
   local s="${slot}"
+  local active
+  active="$(coda_active_slot 2>/dev/null || true)"
   if [[ -z "${s}" ]]; then
-    s="$(coda_active_slot 2>/dev/null || true)"
+    s="${active}"
   fi
   [[ -n "${s}" ]] || coda_die "pass --slot a|b (cannot infer current slot)"
-  local esp
-  if esp="$(coda_pick_esp "${target}")"; then
-    :
-  else
-    resolve_disk_if_needed || coda_die "pass --disk"
-    mkdir -p "${target}/boot"
-    if ! mountpoint -q "${target}/boot"; then
-      mount "$(coda_wait_partlabel coda-esp)" "${target}/boot"
-    fi
-    esp="${target}/boot"
+  if [[ -n "${active}" && "${s}" != "${active}" ]]; then
+    coda_die "refusing to promote slot ${s} while running on ${active} (oneshot that slot first)"
   fi
-  [[ -f "${esp}/loader/entries/coda-${s}.conf" ]] || coda_die "missing coda-${s}.conf"
-  bootctl set-default "coda-${s}.conf" --esp-path="${esp}"
-  coda_write_loader_conf "${esp}" "${s}"
-  sync "${esp}/loader/loader.conf" 2>/dev/null || sync
-  if ! grep -q "^default coda-${s}.conf" "${esp}/loader/loader.conf"; then
-    coda_die "ESP ${esp}/loader/loader.conf default is not coda-${s}.conf after promote"
-  fi
-  coda_log "default boot entry is now coda-${s}.conf (verified on ESP)"
+  resolve_disk_if_needed || true
+  coda_promote_slot "${s}" "${target}" "${disk:-}"
 }
 
 case "${cmd}" in

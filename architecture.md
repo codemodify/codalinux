@@ -156,7 +156,9 @@ Documented UI: [`coda-update`](scripts/coda-update). It never writes the **runni
 
 [`coda-slot`](scripts/coda-slot) remains the low-level A/B helper (`install` / `boot-test` / `promote`) used by `--from-iso` and e2e. Prefer `coda-update` in docs and the happy path.
 
-**Implemented:** CLI, refuse-running-slot, Arch `pacman --root` into the inactive slot / desktop staging tree, oneshot then `--promote`, ISO wiring, host CLI tests. **Not claimed green:** full QEMU **network** pacman e2e of `coda-update core` (this tree’s e2e VM has no NIC). Hook: `CODA_E2E_CORE_FROM=repos` in [`qemu-install-e2e.sh`](scripts/qemu-install-e2e.sh). Vendored AGS/hyprbars are **not** replaced by `coda-update desktop` (delete=0 on `/usr/local`).
+**Implemented:** CLI, refuse-running-slot (letter **and** PARTLABEL of `/`), refuse writing the live ISO **boot-default** slot (so a post-promote live update does not re-format B), PARTLABEL/space preflight, ESP ready-check (entry + vmlinuz + initramfs) before oneshot, oneshot must leave `loader.conf` default, promote verifies `loader.conf` and is idempotent, mount cleanup on mid-update failure, Arch `pacman --root` into the inactive slot / desktop staging tree, oneshot then `--promote`, ISO wiring, host CLI tests. **Not claimed green:** full QEMU **network** pacman e2e of `coda-update core` (this tree’s e2e VM has no NIC). Hook: `CODA_E2E_CORE_FROM=repos` in [`qemu-install-e2e.sh`](scripts/qemu-install-e2e.sh). Vendored AGS/hyprbars are **not** replaced by `coda-update desktop` (delete=0 on `/usr/local`).
+
+**Follow-ups (not blockers):** read-only remount of the running slot; A/B’ing the desktop payload as a second pair (today `coda-update desktop` refreshes `/coda/data/desktop` in place).
 
 From a running installed system, `--disk` is optional. From the live ISO, pass `--disk /dev/vda` (or `CODA_INSTALL_DISK=auto`).
 

@@ -181,7 +181,8 @@ cmd_status() {
 }
 
 plan_core() {
-  local active="$1" inactive="$2"
+  local active="$1" inactive="$2" default_slot="${3:-}"
+  echo "coda-update: would preflight PARTLABELs + space floors"
   if [[ "${from_iso}" -eq 1 ]]; then
     echo "coda-update: would write inactive slot ${inactive} from live ISO (--from-iso)"
   else
@@ -197,6 +198,9 @@ plan_core() {
   if [[ -n "${active}" ]]; then
     echo "coda-update: running slot ${active} would not be written"
   fi
+  if [[ -n "${default_slot}" ]]; then
+    echo "coda-update: boot-default slot ${default_slot} would stay the fallback"
+  fi
 }
 
 cmd_core_promote() {
@@ -210,6 +214,7 @@ cmd_core_promote() {
   fi
   if [[ "${dry_run}" -eq 1 ]]; then
     echo "coda-update: would promote running slot ${active} as the boot default"
+    echo "coda-update: would verify loader.conf default + ESP kernel/initramfs"
     return 0
   fi
   coda_need_root
@@ -223,18 +228,37 @@ cmd_core() {
     return
   fi
 
-  local active inactive
+  local active inactive default_slot=""
   active="$(coda_update_active_slot 2>/dev/null || true)"
-  inactive="$(coda_pick_inactive_slot "${slot}" "${active}")"
+  if [[ "${dry_run}" -eq 1 ]]; then
+    default_slot="${CODA_UPDATE_TEST_DEFAULT:-}"
+  fi
+  inactive="$(coda_pick_inactive_slot "${slot}" "${active}" "${default_slot}")"
   coda_refuse_running_slot "${inactive}" "${active}"
+  coda_refuse_live_default_slot "${inactive}" "${active}" "${default_slot}"
 
   if [[ "${dry_run}" -eq 1 ]]; then
-    plan_core "${active}" "${inactive}"
+    plan_core "${active}" "${inactive}" "${default_slot}"
     return 0
   fi
 
   coda_need_root
   resolve_disk_quiet || coda_die "cannot find coda disk (pass --disk)"
+  trap coda_update_cleanup_trap EXIT
+  coda_register_update_cleanup "${target}"
+  coda_preflight_partlabels
+  coda_preflight_space_floors
+
+  local esp
+  if [[ -z "${default_slot}" ]]; then
+    if esp="$(coda_ensure_esp_mounted "${target}" "${disk:-}" 2>/dev/null)"; then
+      default_slot="$(coda_default_slot_letter "$(coda_read_default_entry "${esp}")" 2>/dev/null || true)"
+    fi
+  fi
+  if [[ -z "${slot}" && -z "${active}" && -n "${default_slot}" ]]; then
+    inactive="$(coda_pick_inactive_slot "" "${active}" "${default_slot}")"
+  fi
+  coda_preflight_core_write "${inactive}" "${active}" "${default_slot}"
 
   if [[ "${from_iso}" -eq 1 ]]; then
     local slot_bin
@@ -246,11 +270,7 @@ cmd_core() {
     coda_log "product path is Arch repos (omit --from-iso when you have network)"
     "${slot_bin}" "${iso_args[@]}"
   else
-    local slot_dev
-    slot_dev="$(coda_wait_partlabel "coda-${inactive}")"
-    coda_log "formatting inactive slot coda-${inactive} (${slot_dev})"
-    coda_umount_tree "${target}"
-    mkfs.ext4 -F -L "coda-${inactive}" "${slot_dev}" >/dev/null
+    coda_format_inactive_slot "${inactive}" "${active}" "${target}"
     coda_mount_slot_for_update "${target}" "${inactive}"
     if [[ -n "${active}" ]]; then
       coda_clone_running_slot "${target}" "${active}" || \
@@ -272,14 +292,19 @@ cmd_core() {
 
   if [[ "${no_boot_test}" -eq 1 ]]; then
     coda_log "skipped oneshot (--no-boot-test). Next: coda-update core (without --no-boot-test) or coda-slot boot-test"
+    coda_release_update_cleanup
     return 0
   fi
   coda_boot_test_slot "${inactive}" "${target}" "${disk:-}"
+  coda_release_update_cleanup
 }
 
 cmd_desktop() {
   if [[ "${do_promote}" -eq 1 ]]; then
     coda_die "--promote is for coda-update core, not desktop"
+  fi
+  if [[ -n "${slot}" ]]; then
+    coda_die "coda-update desktop does not take --slot (desktop lives on coda-data, not A/B)"
   fi
   if [[ "${dry_run}" -eq 1 ]]; then
     local n
@@ -306,6 +331,7 @@ cmd_desktop() {
   fi
   mkdir -p "${data}/home" "${data}/var" "${data}/desktop"
   [[ -d "${data}/home" ]] || coda_die "refusing desktop update without ${data}/home"
+  coda_refuse_slot_as_desktop_dest "${data}"
 
   if [[ "${from_iso}" -eq 1 ]]; then
     local src

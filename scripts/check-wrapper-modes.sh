@@ -233,6 +233,19 @@ fi
 if ! grep -q 'coda_update_lib_candidates' "${root}/scripts/coda-update"; then
   log_fail "coda-update must list load paths via coda_update_lib_candidates"
 fi
+if ! grep -q 'coda_install_load_lib' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must load helpers via coda_install_load_lib"
+fi
+if ! grep -q 'coda_install_lib_candidates' "${root}/scripts/coda-install"; then
+  log_fail "coda-install must list load paths via coda_install_lib_candidates"
+fi
+if ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
+    "${root}/scripts/coda-install"; then
+  log_fail "coda-install must fall back to /usr/share/codalinux/install/coda-install-lib.sh"
+fi
+if ! grep -q 'coda_install_ab_lib_candidates' "${root}/scripts/coda-install-ab.sh"; then
+  log_fail "coda-install-ab.sh must list helper load paths (skip empty /usr/local stub)"
+fi
 if ! grep -q '/usr/share/codalinux/install/coda-install-lib.sh' \
     "${root}/scripts/coda-update"; then
   log_fail "coda-update must fall back to /usr/share/codalinux/install/coda-install-lib.sh"
@@ -243,6 +256,33 @@ if ! grep -q 'refusing to write the running slot' "${root}/scripts/coda-update" 
 fi
 if ! grep -q 'coda_refuse_running_slot' "${root}/scripts/coda-update"; then
   log_fail "coda-update core must call coda_refuse_running_slot"
+fi
+if ! grep -q 'coda_refuse_live_default_slot' "${root}/scripts/coda-update"; then
+  log_fail "coda-update core must refuse writing the live boot-default slot"
+fi
+if ! grep -q 'coda_preflight_core_write' "${root}/scripts/coda-update"; then
+  log_fail "coda-update core must preflight PARTLABELs + space floors"
+fi
+if ! grep -q 'coda_format_inactive_slot' "${root}/scripts/coda-update"; then
+  log_fail "coda-update core must format via coda_format_inactive_slot"
+fi
+if ! grep -q 'coda_update_cleanup_trap' "${root}/scripts/coda-update"; then
+  log_fail "coda-update core must register a mount cleanup trap"
+fi
+if ! grep -q 'coda_assert_esp_slot_ready' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must require ESP entry + vmlinuz + initramfs before oneshot"
+fi
+if ! grep -q 'coda_running_partlabel' "${root}/scripts/coda-install-lib.sh"; then
+  log_fail "coda-install-lib.sh must detect the running PARTLABEL of /"
+fi
+if ! grep -q 'coda_refuse_wipe_running_disk' "${root}/scripts/coda-install-ab.sh"; then
+  log_fail "coda-install-ab.sh must refuse to wipe the running disk"
+fi
+if ! grep -q 'coda_format_inactive_slot' "${root}/scripts/coda-slot"; then
+  log_fail "coda-slot install must format via coda_format_inactive_slot"
+fi
+if ! grep -q 'desktop does not take --slot' "${root}/scripts/coda-update"; then
+  log_fail "coda-update desktop must refuse --slot"
 fi
 if ! grep -q 'coda-update core --promote' "${root}/scripts/coda-update"; then
   log_fail "coda-update usage must document core --promote"
@@ -370,6 +410,16 @@ if ! grep -q 'coda-update core --promote' "${root}/scripts/qemu-install-e2e.sh";
 fi
 if ! grep -q 'CODA_E2E_CORE_FROM' "${root}/scripts/qemu-install-e2e.sh"; then
   log_fail "qemu-install-e2e.sh must expose CODA_E2E_CORE_FROM for later Arch-repo abox"
+fi
+if ! grep -q 'live helpers lost coda_need_root after coda-update core --from-iso' \
+    "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must require live helpers before step 6"
+fi
+if ! grep -q 'coda-update core --promote --slot a' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must assert promote refuses the wrong slot"
+fi
+if ! grep -q 'default coda-a.conf' "${root}/scripts/qemu-install-e2e.sh"; then
+  log_fail "qemu-install-e2e.sh must assert default stays A after oneshot"
 fi
 
 for gui_rt in wayland libxkbcommon libx11 libxext libxrandr libxcursor; do
