@@ -105,6 +105,28 @@ coda_need_root() {
   fi
 }
 
+coda_refuse_wipe_running_disk() {
+  local want="$1"
+  local want_real="" src="" pk="" root_disk=""
+  [[ -n "${want}" ]] || return 0
+  want_real="$(readlink -f "${want}" 2>/dev/null || printf '%s' "${want}")"
+  if [[ -n "${CODA_TEST_RUNNING_DISK:-}" ]]; then
+    if [[ "${CODA_TEST_RUNNING_DISK}" == "${want}" \
+       || "${CODA_TEST_RUNNING_DISK}" == "${want_real}" ]]; then
+      coda_die "refusing to wipe the running disk (${want})"
+    fi
+    return 0
+  fi
+  src="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+  [[ -n "${src}" ]] || return 0
+  pk="$(lsblk -ndo PKNAME "$(readlink -f "${src}" 2>/dev/null || printf '%s' "${src}")" 2>/dev/null || true)"
+  [[ -n "${pk}" ]] || return 0
+  root_disk="/dev/${pk}"
+  if [[ "${root_disk}" == "${want_real}" || "${root_disk}" == "${want}" ]]; then
+    coda_die "refusing to wipe the running disk (${want})"
+  fi
+}
+
 coda_pick_esp() {
   # Prefer an ESP that already has coda-*.conf. Live ISO /boot/loader is
   # the ISO's systemd-boot, not the installed disk.
@@ -1093,6 +1115,17 @@ coda_bind_data() {
 coda_umount_tree() {
   local dest="$1"
   local m
+  [[ -n "${dest}" ]] || return 0
+  case "${dest}" in
+    /|/boot|/home|/var|/coda/data)
+      coda_log "refusing to umount ${dest}"
+      return 0
+      ;;
+  esac
+  if coda_same_inode / "${dest}" 2>/dev/null; then
+    coda_log "refusing to umount the live root"
+    return 0
+  fi
   for m in \
     "${dest}/home" \
     "${dest}/var" \
@@ -1103,9 +1136,13 @@ coda_umount_tree() {
     "${dest}/sys" \
     "${dest}/proc"
   do
-    umount "${m}" 2>/dev/null || true
+    if mountpoint -q "${m}" 2>/dev/null; then
+      umount "${m}" 2>/dev/null || umount -l "${m}" 2>/dev/null || true
+    fi
   done
-  umount "${dest}" 2>/dev/null || true
+  if mountpoint -q "${dest}" 2>/dev/null; then
+    umount "${dest}" 2>/dev/null || umount -l "${dest}" 2>/dev/null || true
+  fi
 }
 
 coda_find_post() {
@@ -1122,17 +1159,54 @@ coda_find_post() {
   return 1
 }
 
-coda_active_slot() {
-  if [[ -f /etc/coda/slot ]]; then
-    tr -d '[:space:]' </etc/coda/slot
+coda_running_partlabel() {
+  # Ground truth for "do not format this": PARTLABEL of `/`.
+  # Host tests: CODA_TEST_RUNNING_PARTLABEL=coda-a|coda-b|none
+  if [[ -n "${CODA_TEST_RUNNING_PARTLABEL:-}" ]]; then
+    case "${CODA_TEST_RUNNING_PARTLABEL}" in
+      none|live|"") return 1 ;;
+    esac
+    printf '%s' "${CODA_TEST_RUNNING_PARTLABEL}"
     return 0
   fi
-  local src
+  local src pl
   src="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
-  case "${src}" in
-    *coda-a*) printf 'a'; return 0 ;;
-    *coda-b*) printf 'b'; return 0 ;;
+  [[ -n "${src}" ]] || return 1
+  pl="$(lsblk -ndo PARTLABEL "${src}" 2>/dev/null || true)"
+  case "${pl}" in
+    coda-a|coda-b)
+      printf '%s' "${pl}"
+      return 0
+      ;;
   esac
+  case "${src}" in
+    *coda-a*) printf 'coda-a'; return 0 ;;
+    *coda-b*) printf 'coda-b'; return 0 ;;
+  esac
+  return 1
+}
+
+coda_active_slot() {
+  # Prefer the PARTLABEL of `/` over /etc/coda/slot (file can be copied wrong).
+  local from_disk="" from_file="" pl
+  if pl="$(coda_running_partlabel 2>/dev/null)"; then
+    from_disk="${pl#coda-}"
+    case "${from_disk}" in
+      a|b)
+        printf '%s' "${from_disk}"
+        return 0
+        ;;
+    esac
+  fi
+  if [[ -f /etc/coda/slot ]]; then
+    from_file="$(tr -d '[:space:]' </etc/coda/slot)"
+    case "${from_file}" in
+      a|b)
+        printf '%s' "${from_file}"
+        return 0
+        ;;
+    esac
+  fi
   return 1
 }
 
@@ -1257,14 +1331,66 @@ coda_default_slot_letter() {
 }
 
 coda_refuse_running_slot() {
-  local want="$1" active="$2"
+  local want="$1" active="${2:-}"
+  if [[ -n "${want}" ]]; then
+    case "${want}" in
+      a|b) ;;
+      *) coda_die "slot must be a or b (got ${want})" ;;
+    esac
+  fi
+  if [[ -z "${active}" ]]; then
+    active="$(coda_active_slot 2>/dev/null || true)"
+  fi
   if [[ -n "${active}" && -n "${want}" && "${want}" == "${active}" ]]; then
     coda_die "refusing to write the running slot (${active})"
+  fi
+  local running_pl
+  if running_pl="$(coda_running_partlabel 2>/dev/null)"; then
+    if [[ -n "${want}" && "${running_pl}" == "coda-${want}" ]]; then
+      coda_die "refusing to write the running PARTLABEL (${running_pl})"
+    fi
+  fi
+}
+
+coda_refuse_live_default_slot() {
+  # From the live ISO neither A nor B is mounted as `/`. Still refuse to
+  # format the current loader default — that slot is the fallback if a
+  # oneshot fails. After promote-to-B, implicit inactive must be A.
+  local want="$1" active="${2:-}" default_slot="${3:-}"
+  if [[ -n "${active}" ]]; then
+    return 0
+  fi
+  if [[ -n "${default_slot}" && -n "${want}" && "${want}" == "${default_slot}" ]]; then
+    coda_die "refusing to write boot-default slot ${default_slot} from the live ISO (failed oneshot must keep that slot)"
+  fi
+}
+
+coda_refuse_format_device() {
+  local want="$1"
+  local want_real="" root_real="" src="" pl="" running_pl=""
+  [[ -n "${want}" ]] || coda_die "format device required"
+  want_real="$(readlink -f "${want}" 2>/dev/null || printf '%s' "${want}")"
+  if [[ -n "${CODA_TEST_RUNNING_ROOTDEV:-}" ]]; then
+    if [[ "${CODA_TEST_RUNNING_ROOTDEV}" == "${want}" \
+       || "${CODA_TEST_RUNNING_ROOTDEV}" == "${want_real}" ]]; then
+      coda_die "refusing to format the running root device (${want})"
+    fi
+  fi
+  src="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+  root_real="$(readlink -f "${src}" 2>/dev/null || printf '%s' "${src}")"
+  if [[ -n "${root_real}" && -n "${want_real}" && "${root_real}" == "${want_real}" ]]; then
+    coda_die "refusing to format the running root device (${want})"
+  fi
+  pl="$(lsblk -ndo PARTLABEL "${want_real}" 2>/dev/null || true)"
+  if running_pl="$(coda_running_partlabel 2>/dev/null)"; then
+    if [[ -n "${pl}" && "${pl}" == "${running_pl}" ]]; then
+      coda_die "refusing to format the running PARTLABEL (${pl})"
+    fi
   fi
 }
 
 coda_pick_inactive_slot() {
-  local explicit="${1:-}" active="${2:-}"
+  local explicit="${1:-}" active="${2:-}" default_slot="${3:-}"
   if [[ -n "${explicit}" ]]; then
     case "${explicit}" in
       a|b) printf '%s' "${explicit}"; return 0 ;;
@@ -1275,7 +1401,143 @@ coda_pick_inactive_slot() {
     coda_other_slot "${active}"
     return
   fi
+  if [[ -n "${default_slot}" ]]; then
+    case "${default_slot}" in
+      a|b)
+        coda_other_slot "${default_slot}"
+        return
+        ;;
+    esac
+  fi
   printf 'b'
+}
+
+coda_required_partlabels() {
+  printf '%s\n' coda-esp coda-a coda-b coda-data
+}
+
+coda_partlabel_floor_bytes() {
+  case "$1" in
+    coda-esp) printf '%s' "$((900 * 1024 * 1024))" ;;
+    coda-a|coda-b) printf '%s' "$((3500 * 1024 * 1024))" ;;
+    coda-data) printf '%s' "$((7 * 1024 * 1024 * 1024))" ;;
+    *) return 1 ;;
+  esac
+}
+
+coda_assert_size_floor() {
+  local have="$1" floor="$2" name="$3"
+  if [[ "${have}" -lt "${floor}" ]]; then
+    coda_die "${name} is ${have} bytes (< ${floor} floor)"
+  fi
+}
+
+coda_preflight_partlabels() {
+  local label missing=0
+  for label in coda-esp coda-a coda-b coda-data; do
+    if [[ ! -e "/dev/disk/by-partlabel/${label}" ]]; then
+      coda_log "missing PARTLABEL=${label}"
+      missing=1
+    fi
+  done
+  if [[ "${missing}" -ne 0 ]]; then
+    coda_die "GPT is missing coda-* PARTLABELs (need coda-esp, coda-a, coda-b, coda-data)"
+  fi
+}
+
+coda_preflight_space_floors() {
+  local label have floor
+  command -v blockdev >/dev/null 2>&1 || return 0
+  for label in coda-esp coda-a coda-b coda-data; do
+    [[ -e "/dev/disk/by-partlabel/${label}" ]] || continue
+    have="$(blockdev --getsize64 "/dev/disk/by-partlabel/${label}" 2>/dev/null || true)"
+    [[ -n "${have}" ]] || continue
+    floor="$(coda_partlabel_floor_bytes "${label}")" || continue
+    coda_assert_size_floor "${have}" "${floor}" "${label}"
+  done
+}
+
+coda_preflight_core_write() {
+  local slot="$1" active="${2:-}" default_slot="${3:-}"
+  coda_refuse_running_slot "${slot}" "${active}"
+  coda_refuse_live_default_slot "${slot}" "${active}" "${default_slot}"
+  coda_preflight_partlabels
+  coda_preflight_space_floors
+}
+
+coda_format_inactive_slot() {
+  local slot="$1" active="${2:-}" dest="${3:-}"
+  local slot_dev
+  coda_refuse_running_slot "${slot}" "${active}"
+  slot_dev="$(coda_wait_partlabel "coda-${slot}")"
+  coda_refuse_format_device "${slot_dev}"
+  if [[ -n "${dest}" ]]; then
+    coda_umount_tree "${dest}"
+  fi
+  coda_log "formatting inactive slot coda-${slot} (${slot_dev})"
+  mkfs.ext4 -F -L "coda-${slot}" "${slot_dev}" >/dev/null
+}
+
+coda_cleanup_update_mounts() {
+  local dest="${1:-}"
+  [[ -n "${dest}" ]] || return 0
+  coda_umount_tree "${dest}"
+}
+
+coda_register_update_cleanup() {
+  CODA_UPDATE_CLEANUP_TARGET="${1:-}"
+  CODA_UPDATE_CLEANUP_NEEDED=1
+}
+
+coda_release_update_cleanup() {
+  local dest="${CODA_UPDATE_CLEANUP_TARGET:-}"
+  CODA_UPDATE_CLEANUP_NEEDED=0
+  if [[ "${CODA_UPDATE_KEEP_MOUNTS:-0}" != 1 && -n "${dest}" ]]; then
+    coda_cleanup_update_mounts "${dest}"
+  fi
+}
+
+coda_update_cleanup_trap() {
+  if [[ "${CODA_UPDATE_CLEANUP_NEEDED:-0}" -eq 1 && -n "${CODA_UPDATE_CLEANUP_TARGET:-}" ]]; then
+    coda_cleanup_update_mounts "${CODA_UPDATE_CLEANUP_TARGET}"
+    coda_log "cleared update mounts under ${CODA_UPDATE_CLEANUP_TARGET} (old slot left bootable)"
+  fi
+}
+
+coda_esp_slot_ready() {
+  local esp="$1" slot="$2"
+  [[ -n "${esp}" && -n "${slot}" ]] || return 1
+  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] || return 1
+  [[ -f "${esp}/coda/${slot}/vmlinuz-linux" ]] || return 1
+  [[ -f "${esp}/coda/${slot}/initramfs-linux.img" ]] || return 1
+  return 0
+}
+
+coda_assert_esp_slot_ready() {
+  local esp="$1" slot="$2"
+  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] \
+    || coda_die "missing coda-${slot}.conf on ${esp} (ESP entry required before oneshot)"
+  [[ -f "${esp}/coda/${slot}/vmlinuz-linux" ]] \
+    || coda_die "slot ${slot} has no vmlinuz-linux on ESP; refusing boot-test"
+  [[ -f "${esp}/coda/${slot}/initramfs-linux.img" ]] \
+    || coda_die "slot ${slot} has no initramfs-linux.img on ESP; refusing boot-test"
+}
+
+coda_assert_loader_default() {
+  local esp="$1" expect="$2"
+  local have
+  have="$(coda_read_default_entry "${esp}")"
+  if [[ "${have}" != "${expect}" ]]; then
+    coda_die "ESP ${esp}/loader/loader.conf default is ${have:-empty} (want ${expect})"
+  fi
+}
+
+coda_refuse_slot_as_desktop_dest() {
+  local dest="$1"
+  [[ -n "${dest}" ]] || return 0
+  if [[ -f "${dest}/etc/coda/slot" && ( -d "${dest}/usr" || -d "${dest}/boot" ) ]]; then
+    coda_die "refusing desktop update onto a core slot (${dest})"
+  fi
 }
 
 coda_pacman_cache() {
@@ -1415,7 +1677,9 @@ coda_mount_slot_for_update() {
   # Slot + ESP + data. Do not bind data /var over the slot (shared pacman db).
   local dest="$1" slot="$2"
   local slot_dev esp_dev data_dev
+  coda_refuse_running_slot "${slot}"
   slot_dev="$(coda_wait_partlabel "coda-${slot}")"
+  coda_refuse_format_device "${slot_dev}"
   esp_dev="$(coda_wait_partlabel coda-esp)"
   data_dev="$(coda_wait_partlabel coda-data)"
   coda_umount_tree "${dest}"
@@ -1430,28 +1694,34 @@ coda_mount_slot_for_update() {
 
 coda_clone_running_slot() {
   local dest="$1" active="$2"
-  local src_mnt src_dev
+  local src_dev
   [[ -n "${active}" ]] || return 1
   src_dev="$(coda_wait_partlabel "coda-${active}")"
-  src_mnt="$(mktemp -d /tmp/coda-running.XXXXXX)"
-  mount -o ro "${src_dev}" "${src_mnt}"
   coda_log "clone running slot ${active} → inactive (core files only)"
-  rsync -aHAX --numeric-ids \
-    --exclude=/proc \
-    --exclude=/sys \
-    --exclude=/dev \
-    --exclude=/run \
-    --exclude=/tmp \
-    --exclude=/mnt \
-    --exclude=/media \
-    --exclude=/lost+found \
-    --exclude=/boot \
-    --exclude=/home \
-    --exclude=/var \
-    --exclude=/coda \
-    "${src_mnt}/" "${dest}/"
-  umount "${src_mnt}"
-  rmdir "${src_mnt}"
+  # Subshell EXIT trap so a failed rsync does not leak the ro mount, and
+  # does not overwrite the caller's update-cleanup EXIT trap.
+  (
+    set -euo pipefail
+    local src_mnt
+    src_mnt="$(mktemp -d /tmp/coda-running.XXXXXX)"
+    # shellcheck disable=SC2064
+    trap "umount '${src_mnt}' 2>/dev/null || umount -l '${src_mnt}' 2>/dev/null || true; rmdir '${src_mnt}' 2>/dev/null || true" EXIT
+    mount -o ro "${src_dev}" "${src_mnt}"
+    rsync -aHAX --numeric-ids \
+      --exclude=/proc \
+      --exclude=/sys \
+      --exclude=/dev \
+      --exclude=/run \
+      --exclude=/tmp \
+      --exclude=/mnt \
+      --exclude=/media \
+      --exclude=/lost+found \
+      --exclude=/boot \
+      --exclude=/home \
+      --exclude=/var \
+      --exclude=/coda \
+      "${src_mnt}/" "${dest}/"
+  ) || return 1
   mkdir -p "${dest}/boot" "${dest}/home" "${dest}/var" "${dest}/coda/data"
 }
 
@@ -1487,6 +1757,9 @@ coda_sync_desktop_from_arch() {
   if [[ ! -d "${data}" ]]; then
     coda_die "coda-data is not mounted at ${data}"
   fi
+  [[ -d "${data}/home" ]] || coda_die "refusing desktop update without ${data}/home"
+  coda_refuse_slot_as_desktop_dest "${data}"
+  coda_refuse_slot_as_desktop_dest "${desktop}"
   mkdir -p "${staging}" "${desktop}" "${data}/home"
   if coda_same_inode / "${staging}"; then
     coda_die "refusing desktop staging on the running root"
@@ -1535,31 +1808,53 @@ coda_ensure_esp_mounted() {
 
 coda_boot_test_slot() {
   local slot="$1" target="$2" disk="${3:-}"
-  local esp before
+  local esp before after restore_slot
   esp="$(coda_ensure_esp_mounted "${target}" "${disk}")"
-  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] \
-    || coda_die "missing coda-${slot}.conf on ${esp}"
-  [[ -f "${esp}/coda/${slot}/vmlinuz-linux" ]] \
-    || coda_die "slot ${slot} has no kernel; run coda-update core first"
+  coda_assert_esp_slot_ready "${esp}" "${slot}"
   before="$(coda_read_default_entry "${esp}")"
+  [[ -n "${before}" ]] || coda_die "ESP ${esp}/loader/loader.conf has no default; refusing oneshot"
+  if [[ "${CODA_TEST_SKIP_BOOTCTL:-0}" == 1 ]]; then
+    coda_assert_loader_default "${esp}" "${before}"
+    coda_log "oneshot skipped (CODA_TEST_SKIP_BOOTCTL); default remains ${before}"
+    return 0
+  fi
   bootctl set-oneshot "coda-${slot}.conf" --esp-path="${esp}"
-  coda_log "oneshot coda-${slot}.conf (default remains ${before:-coda-a.conf})"
-  coda_log "a failed boot consumes the oneshot and keeps ${before:-the previous default}"
+  after="$(coda_read_default_entry "${esp}")"
+  if [[ "${after}" != "${before}" ]]; then
+    restore_slot="$(coda_default_slot_letter "${before}" 2>/dev/null || printf 'a')"
+    coda_write_loader_conf "${esp}" "${restore_slot}"
+    if command -v bootctl >/dev/null 2>&1; then
+      bootctl set-default "${before}" --esp-path="${esp}" >/dev/null 2>&1 || true
+    fi
+    coda_die "oneshot changed loader.conf default from ${before} to ${after:-empty}; restored ${before}"
+  fi
+  coda_log "oneshot coda-${slot}.conf (default remains ${before})"
+  coda_log "a failed boot consumes the oneshot and keeps ${before}"
   coda_log "after a good reboot on slot ${slot}: coda-update core --promote"
 }
 
 coda_promote_slot() {
   local slot="$1" target="$2" disk="${3:-}"
-  local esp
+  local esp current
   esp="$(coda_ensure_esp_mounted "${target}" "${disk}")"
-  [[ -f "${esp}/loader/entries/coda-${slot}.conf" ]] \
-    || coda_die "missing coda-${slot}.conf"
+  coda_assert_esp_slot_ready "${esp}" "${slot}"
+  current="$(coda_read_default_entry "${esp}")"
+  if [[ "${current}" == "coda-${slot}.conf" ]]; then
+    coda_log "already default coda-${slot}.conf (idempotent promote)"
+    coda_assert_loader_default "${esp}" "coda-${slot}.conf"
+    return 0
+  fi
+  if [[ "${CODA_TEST_SKIP_BOOTCTL:-0}" == 1 ]]; then
+    coda_write_loader_conf "${esp}" "${slot}"
+    sync "${esp}/loader/loader.conf" 2>/dev/null || sync
+    coda_assert_loader_default "${esp}" "coda-${slot}.conf"
+    coda_log "default boot entry is now coda-${slot}.conf (verified on ESP)"
+    return 0
+  fi
   bootctl set-default "coda-${slot}.conf" --esp-path="${esp}"
   coda_write_loader_conf "${esp}" "${slot}"
   sync "${esp}/loader/loader.conf" 2>/dev/null || sync
-  if ! grep -q "^default coda-${slot}.conf" "${esp}/loader/loader.conf"; then
-    coda_die "ESP ${esp}/loader/loader.conf default is not coda-${slot}.conf after promote"
-  fi
+  coda_assert_loader_default "${esp}" "coda-${slot}.conf"
   coda_log "default boot entry is now coda-${slot}.conf (verified on ESP)"
 }
 
