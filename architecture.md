@@ -1,42 +1,176 @@
 # CodaLinux architecture
 
-Canonical picture of **how the entire system looks**: partitions → layers → `/` folders → sandboxes → **system-config** → updates.
+How the installed system is laid out: **disk → what lives where → mounts → boot → updates**.
 
-- **Target** is the locked product intent (required). `coda-a` / `coda-b` are the **bootable Arch core only**. Hyprland, AGS/Astal, greetd session chrome, and the rest of the live desktop live on **`coda-data`** so they survive slot swaps.
-- **Current tree** is what this repository actually builds today. Be honest: the **live ISO** is still a full desktop root (do not rip it out). The **install / `coda-slot` path** is what implements the core-vs-desktop split. Read-only remount of the running slot is still target.
-- Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md). `system-config` is locked here as **greenfield**; the Go daemons/clients are implemented and ISO-wired.
+Locked product model: `coda-a` / `coda-b` are the **bootable Arch core only**. Hyprland, AGS/Astal, greetd session chrome, portals, and `system-config*` live on **`coda-data`** so they survive slot swaps.
 
-Do **not** claim a read-only running slot, a core-only live ISO, or gated host `pacman` work until those are built. Do **not** claim slots still ship the full live desktop — that was Current before the install split; it is no longer the required install model.
+The **live ISO** is still a full desktop root (do not rip it out). The **install / `coda-slot` path** is what splits that image into core vs desktop. Read-only remount of the running slot is still later.
 
-## Target vs current (read this first)
+Locked *choices* (Hyprland, no NetworkManager, official repos only, …) stay in [DESIGN.md](DESIGN.md). Commands: [docs/sandbox.md](docs/sandbox.md). `system-config` is locked here as **greenfield**.
 
-| Piece | Target (required) | Current tree |
+Do **not** claim a read-only running slot, a core-only live ISO, or gated host `pacman` until those are built. Do **not** claim slots still ship the full live desktop.
+
+## Locked model vs live ISO
+
+| Piece | Locked install model | What this tree does today |
 | --- | --- | --- |
-| Disk | ESP + OS-A + OS-B + data | **Implemented:** GPT `coda-esp` + `coda-a` + `coda-b` + `coda-data`. First install is OS-A. Slots stay **writable** (RO remount is still target). |
-| Core OS | Bootable Arch core only on A/B (`base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot). ~4 GiB slot floor. RO while running (later). | **Live ISO:** still a **full desktop root** (core + Hyprland + AGS on one `/`). **Install / `coda-slot`:** offline split of that airootfs — core files → slot, desktop files → `/coda/data/desktop`. Not a second pacstrap. |
-| Desktop | Hyprland + AGS + greetd chrome + the rest of the session on **`coda-data`**, merged onto `/` at boot | **Live:** Hyprland + vendored AGS on the ISO (do not rip it out). **Installed:** `/coda/data/desktop` + `coda-desktop-mount.service` (overlay / `systemd-sysext`). |
-| Sandboxes | User-owned disposable Arch roots (`pacman --root` + upstream `bwrap`) | **Implemented:** `coda-sandbox` + `bubblewrap` on live and install lists |
+| Disk | GPT: `coda-esp` + `coda-a` + `coda-b` + `coda-data` | **Implemented.** First install writes core into A. Slots stay **writable** (RO remount is later). |
+| Core OS | Bootable Arch core on A/B only | **Install / `coda-slot`:** offline split of the live airootfs — core files → slot, desktop files → `/coda/data/desktop`. Not a second pacstrap. **Live ISO:** still a full desktop root. |
+| Desktop | Hyprland + AGS + greetd chrome on **`coda-data`**, merged at boot | **Installed:** `/coda/data/desktop` + `coda-desktop-mount.service`. **Live:** same desktop on the ISO `/` (do not rip it out). |
+| Sandboxes | User-owned disposable Arch roots (`pacman --root` + `bwrap`) | **Implemented:** `coda-sandbox` + `bubblewrap` on live and install lists. |
 | Host `pacman` | Core / OS only; gated; writes the **inactive** slot | Ordinary rolling pacman on the mutable root (not gated). `/var` (including the pacman db) already lives on `coda-data`. |
-| Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | **Implemented:** `coda-install` asks for one disk (or `CODA_INSTALL_DISK` / `auto`). Offline airootfs split into OS-A (core) + `coda-data/desktop`. No pacstrap/mirrors at install time. |
-| Updates | OS slot swap (core); desktop stays on data; apps via sandbox `pacman` | **Implemented:** `coda-slot install` writes **core** into the inactive slot and refreshes `/coda/data/desktop` from the same live ISO. Kernel + initramfs on the ESP under `/boot/coda/{a,b}`. `boot-test` is oneshot; `promote` flips the default. |
-| System config | `system-configd` + report + apply; CLI/TUI/GUI talk to D only | **Shipped on live ISO:** Go module `core/system-config/` (binaries + systemd user/system units). **Desktop Settings is `system-config-gui` only.** On an installed disk those binaries travel with the **desktop payload** on data. AGS session chrome calls `coda-wallpaper` / `coda-hypr-ws` / `nwg-look` / `hyprctl` directly. `coda-settings` is a hidden helper, not a Settings app. No migrate. |
+| Installer | Pick **disk only**; locale/timezone/keymap fixed (Bozeman) | **Implemented:** `coda-install` asks for one disk (or `CODA_INSTALL_DISK` / `auto`). Offline split. No pacstrap/mirrors at install time. |
+| Updates | Core slot swap; desktop stays on data; apps via sandbox `pacman` | **Implemented:** `coda-slot install` / `boot-test` / `promote` (see [Updates](#updates-coda-slot)). |
+| System config | `system-configd` + report + apply; clients talk to D only | **Shipped on live ISO** (`core/system-config/`). On an installed disk those binaries travel with the **desktop payload** on data. |
 
-Shipped and tryable now: **Hyprland + AGS desktop** on the live ISO, **`bubblewrap`**, **`coda-sandbox`** under `~/.coda/sandbox/<env>/`, **`system-config`** daemons/clients, **ESP+A+B+data offline install**, **`coda-slot`** inactive-slot write / oneshot boot-test / promote, **core-only slots + desktop on `coda-data`**. Not shipped: read-only running slot, a core-only (~1.1 GiB) *live ISO*, gated host pacman. Before this split, `coda-install` / `coda-slot` copied the **full** live airootfs into every OS slot — that is no longer the required model.
+Shipped now: Hyprland + AGS on the live ISO, sandboxes, `system-config`, ESP+A+B+data offline install, `coda-slot`, **core-only slots + desktop on `coda-data`**. Not shipped: RO running slot, a core-only (~1.1 GiB) *live ISO*, gated host pacman.
 
-## Partitions (target)
+---
 
-UEFI-only. systemd-boot. Default filesystems: FAT32 ESP, ext4 OS slots and data.
+## Partition layout
 
-| Partition | Size (intent) | FS | Mount / role |
+UEFI-only. One disk. GPT. systemd-boot. Filesystems: FAT32 ESP, ext4 slots and data.
+
+Planner: [`scripts/coda-install-layout.py`](scripts/coda-install-layout.py). Extra disk always goes to **data**, not larger slots.
+
+| PARTLABEL | FS | Planner floor | Role |
 | --- | --- | --- | --- |
-| ESP | **~1 GiB** (locked; not 2 GiB) | FAT32 | `/boot` — systemd-boot, A/B boot entries, UKI/kernel/initramfs |
-| OS-A | **~4 GiB floor** | ext4 | Bootable **Arch core only** (`base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot). **Not** Hyprland / AGS / greetd chrome. **Read-only** when this slot is running (later) |
-| OS-B | **~4 GiB floor** | ext4 | Inactive twin of OS-A. Gated OS updates write here, then flip the boot entry |
-| data | remainder (**≥ 8 GiB floor**) | ext4 | `/coda/data` — bind `/home` + `/var`, plus **`/coda/data/desktop`** (Hyprland + AGS + the rest of the session). Survives slot swaps |
+| `coda-esp` | FAT32 | **1024 MiB** | `/boot` — systemd-boot + A/B kernels |
+| `coda-a` | ext4 | **4096 MiB** | Bootable Arch **core** (first install) |
+| `coda-b` | ext4 | **4096 MiB** | Inactive twin (empty until `coda-slot install`) |
+| `coda-data` | ext4 | **8192 MiB** floor; **remainder** | Desktop + `/home` + `/var` |
 
-**Install:** operator picks the **disk** only. Locale `en_US.UTF-8`, timezone `America/Denver` (Bozeman), keymap `us` — **no region prompts**.
+GPT slack reserved at the end of the disk is **4 MiB**. Minimum disk is **17412 MiB** (~17 GiB = 1024 + 4096 + 4096 + 8192 + 4). Recommend **32 GiB** for QEMU. The planner refuses smaller disks.
 
-**Current tree:** `coda-install` creates this table. Slot floor is **4 GiB** because the slot payload is core-only (the old 8 GiB floor existed only when v1 copied the full live desktop into each slot). Data floor is **8 GiB** so the desktop tree + `/home` + `/var` fit. Minimum disk **~17 GiB** (1 + 4 + 4 + 8 + GPT slack). Recommend **32 GiB** for QEMU. `/home` and `/var` bind from `coda-data`. Desktop is **not** duplicated into every OS slot.
+**Measured payload today** (not planner floors): ~**54 MiB** on the ESP and ~**1.9 GiB** per core slot. **512 MiB ESP is enough for v1**, including future UKIs in the ~30–80 MiB range. The 1 GiB ESP size is a **conservative planner floor**, not a payload requirement. This document does not change the planner; `ESP_MIB = 1024` stays in code.
+
+**Install:** operator picks the **disk** only. Locale `en_US.UTF-8`, timezone `America/Denver` (Bozeman), keymap `us` — no region prompts.
+
+---
+
+## What each partition stores
+
+### `coda-esp` (`/boot`)
+
+| Path on ESP | What it is |
+| --- | --- |
+| systemd-boot EFI binaries | Firmware bootloader (`bootctl install`) |
+| `loader/loader.conf` | Default entry + timeout |
+| `loader/entries/coda-a.conf` | Slot A: `linux` / `initrd` / `root=PARTLABEL=coda-a` |
+| `loader/entries/coda-b.conf` | Slot B (placeholder until B has a kernel) |
+| `/boot/coda/{a,b}/vmlinuz-linux` | Kernel for that slot |
+| `/boot/coda/{a,b}/initramfs-linux.img` | Initramfs for that slot |
+| `/boot/coda/{a,b}/*-ucode.img` | CPU microcode, when present |
+
+A and B do **not** share one `vmlinuz-linux`. Loader entries point at `/coda/{a,b}/…` relative to the ESP root (same files as `/boot/coda/{a,b}/` once the ESP is mounted).
+
+### `coda-a` / `coda-b` (core)
+
+Bootable Arch core from [`packages/base.txt`](packages/base.txt) + [`packages/core-slot.txt`](packages/core-slot.txt), expanded through the live pacman db’s **recursive depends**. Written by [`coda-install-split.py`](scripts/coda-install-split.py). **Not** a second pacstrap.
+
+| On the slot | Examples |
+| --- | --- |
+| Kernel stack | `linux`, `linux-headers`, `linux-firmware`, `amd-ucode`, `intel-ucode` |
+| Init / boot | `systemd`, `mkinitcpio`, modules under `/usr/lib/modules` |
+| Disk / UEFI tools | `e2fsprogs`, `dosfstools`, `gptfdisk`, `parted`, `efibootmgr`, `rsync` |
+| Admin userland | `base` set: sudo, util-linux, iproute2, editors, … |
+| Remote / VM | `openssh`, `qemu-guest-agent` |
+| Slot-side Coda helpers | `coda-slot`, install libs (`coda-install-lib.sh`, `coda-install-ab.sh`, split/layout/verify), `coda-desktop-mount` + its unit |
+| Enablement | systemd-networkd, sshd, QGA enabled; os-release / locale hooks |
+| Slot marker | `/etc/coda/slot` (`a` or `b`) |
+
+**Not on the slot:** Hyprland, AGS/Astal, greetd **binaries**, session chrome, portals, `system-config*`. A greetd **unit + PAM** may live on the slot so systemd can start the greeter *after* the desktop merge; the greetd/Hyprland binaries stay on data.
+
+### `coda-data`
+
+| Path | What it is |
+| --- | --- |
+| `/coda/data/desktop` | Session payload: Hyprland, AGS, greetd chrome, portals, `system-config*`, Mesa/PipeWire/iwd/BlueZ, apps, `/usr/local` wrappers |
+| `/coda/data/home` | Bind-mounted at `/home` (users; `~/.coda/sandbox` lives here) |
+| `/coda/data/var` | Bind-mounted at `/var` (logs, caches, host pacman db) |
+| `/coda/data/desktop/.coda-desktop-payload` | Marker written by the installer |
+
+Desktop packages = everything installed on the live image that is **not** in the core seed (`hardware.txt`, `network.txt` extras such as iwd, `desktop.txt`, `apps.txt`, `sandbox.txt`, leftover unpackaged session files). Survives slot swaps. **Not** A/B’d in v1.
+
+---
+
+## Mounts at runtime (installed system)
+
+From [`coda_write_fstab`](scripts/coda-install-lib.sh) plus `coda-desktop-mount.service`:
+
+| Mount | Source | How |
+| --- | --- | --- |
+| `/` | Active slot (`PARTLABEL=coda-a` or `coda-b`) | ext4 root |
+| `/boot` | `PARTLABEL=coda-esp` | vfat ESP |
+| `/coda/data` | `PARTLABEL=coda-data` | ext4 |
+| `/home` | `/coda/data/home` | bind |
+| `/var` | `/coda/data/var` | bind |
+| `/usr` | core `/usr` + `/coda/data/desktop/usr` | `coda-desktop-mount`: `systemd-sysext` or RO overlay (desktop on top) |
+| session `/etc` bits | core `/etc` + `/coda/data/desktop/etc` | `systemd-confext` or RO overlay when the desktop tree has `etc/` |
+
+`/bin`, `/sbin`, `/lib` are stock Arch usr-merge symlinks into `/usr`. `/dev`, `/proc`, `/sys`, `/run`, `/tmp` are ordinary runtime.
+
+Desktop is **not** a fstab bind. `coda-desktop-mount.service` (core, on the slot) runs after `local-fs.target` / `coda-data.mount` and before greetd / `graphical.target`.
+
+The **live ISO** does not run this unit (no `coda-data`).
+
+---
+
+## Boot sequence
+
+What exists at each stage. Default entry is whatever `promote` last set (`coda-a.conf` after a fresh install).
+
+| Stage | What runs | What is available |
+| --- | --- | --- |
+| 1. UEFI | Firmware finds systemd-boot on `coda-esp` | Disk GPT only |
+| 2. systemd-boot | Loads the **default** entry (`loader/loader.conf`), unless a **oneshot** from `boot-test` is pending | A/B entries on the ESP |
+| 3. Kernel | `linux /coda/{a\|b}/vmlinuz-linux` + initramfs (+ microcode) from the ESP | Kernel in RAM; root not mounted |
+| 4. Root | `root=PARTLABEL=coda-{a\|b} rw rootfstype=ext4` | Active **core** is `/` |
+| 5. systemd (core) | PID 1 from the slot | getty, sshd, QGA, networkd — **no Hyprland yet** |
+| 6. Data + binds | fstab mounts `coda-data` at `/coda/data`, then bind `/home` and `/var` | User homes + host `/var` |
+| 7. `coda-desktop-mount` | sysext/confext, else RO overlay of desktop over `/usr` (and `/etc`) | Desktop files visible on `/` |
+| 8. Session | greetd → `coda-hyprland` → Hyprland + AGS | Full desktop |
+
+**If desktop merge fails** (missing `/coda/data/desktop/usr`, sysext/overlay error, or empty payload): the unit **exits successfully**. Core continues — **sshd, QGA, getty**. No greetd/Hyprland/AGS. Do not copy Hyprland back onto the slot to “make the session work.”
+
+| What broke | Still works | Does not |
+| --- | --- | --- |
+| `/coda/data/desktop` missing or empty | Slot boots; sshd; QGA; getty | greetd / Hyprland / AGS |
+| Desktop tree present but Hyprland/AGS broken | Same core services; `/usr` merge may still succeed | Graphical session |
+| `coda-desktop-mount` overlay/sysext fails | Core `/` unchanged (no merge) | Graphical session |
+| `coda-slot install` refreshed desktop, then B boot-test failed | Previous slot remains the boot **default**; that core still boots | Desktop on data is already the new payload (not A/B’d) |
+
+---
+
+## Updates (`coda-slot`)
+
+[`coda-slot`](scripts/coda-slot) never writes the **running** slot. Payload is the live ISO airootfs, split the same way as first install ([`coda-install-split.py`](scripts/coda-install-split.py)).
+
+| Command | What it does | Boot default |
+| --- | --- | --- |
+| `coda-slot install` | Format the **inactive** slot; write **core** there; refresh `/coda/data/desktop` from the live ISO split; install that slot’s kernel under `/boot/coda/{a\|b}/`; write `coda-{a\|b}.conf` | **Unchanged** |
+| `coda-slot boot-test` | `bootctl set-oneshot coda-{inactive}.conf` — next reboot tries the new slot once | **Unchanged**. A failed boot consumes the oneshot and keeps the previous default |
+| `coda-slot promote` | `bootctl set-default coda-{slot}.conf` after a successful boot-test | **Flips** to that slot |
+| `coda-slot status` | Active / inactive / `loader.conf` default | — |
+
+From a running installed system, `--disk` is optional. From the live ISO, pass `--disk /dev/vda` (or `CODA_INSTALL_DISK=auto`).
+
+Desktop refresh is **not** a third A/B pair. Apps / extras stay in `coda-sandbox`. User files stay on data (`/home`). Delivery of a *new* payload is still “boot the live ISO (or rebuild it).”
+
+---
+
+## How the active core is set
+
+| Moment | Active core | Inactive |
+| --- | --- | --- |
+| Fresh install (`coda-install` → [`coda-install-ab.sh`](scripts/coda-install-ab.sh)) | **A**: core written to `coda-a`; `bootctl set-default coda-a.conf` | **B**: formatted placeholder (`/etc/coda/empty`), `coda-b.conf` points at a kernel that is not there yet |
+| After `boot-test` | Next reboot is the oneshot slot **once** | Default entry is still the previous slot |
+| After `promote` | Default = the entry `promote` set | The other slot |
+| Any boot | **Running** slot = PARTLABEL of `/` (`coda-a` or `coda-b`; also `/etc/coda/slot`) | The other PARTLABEL |
+
+`coda-slot status` prints `active` from the running root (or “live ISO”), `inactive` as the other letter, and `boot-default` from `loader/loader.conf`.
+
+---
 
 ## Layers
 
@@ -47,57 +181,27 @@ UEFI-only. systemd-boot. Default filesystems: FAT32 ESP, ext4 OS slots and data.
 │  3. Sandboxes     disposable Arch roots + bwrap         │
 │                   many packages per named root          │
 ├─────────────────────────────────────────────────────────┤
-│  2. Desktop       Hyprland + AGS + branding (session)   │
+│  2. Desktop       Hyprland + AGS + branding (on data)   │
 ├─────────────────────────────────────────────────────────┤
-│  1. Core OS       bootable Arch (~1.1 GiB class)        │
+│  1. Core OS       bootable Arch on coda-a / coda-b      │
 │                   NOT the full Hyprland/AGS image       │
 └─────────────────────────────────────────────────────────┘
 ```
 
 | # | Layer | What it is | How it is updated |
 | --- | --- | --- | --- |
-| 1 | **Core OS** | Bootable Arch: `base` + `linux` + firmware + mkinitcpio + microcode + systemd + boot. **Not** a full Hyprland/AGS root. | Host `pacman` into the **inactive** slot (gated). Reboot into the new slot. |
-| 2 | **Desktop** | Hyprland + vendored AGS/Astal + greetd + branding + official settings apps. A **session**, not “the OS”. | **Required:** lives on `coda-data` (`/coda/data/desktop`), merged at boot. Live ISO still ships it on the same image (do not rip it out). |
+| 1 | **Core OS** | Bootable Arch core on A/B. **Not** a full Hyprland/AGS root. | `coda-slot install` into the **inactive** slot, then boot-test / promote. Host `pacman` later gated. |
+| 2 | **Desktop** | Hyprland + vendored AGS/Astal + greetd + branding + official settings. A **session**, not “the OS”. | On `coda-data` (`/coda/data/desktop`), merged at boot. Live ISO still ships it on the same image. |
 | 3 | **Sandboxes** | Disposable Arch filesystem trees. Isolation is **upstream bubblewrap** only. | `coda-sandbox install` (repeatable into the same env). Destroy and recreate. |
 | 4 | **User data** | `/home` (and later other data mounts). | Ordinary files. Sandbox trees live here so they survive OS slot swaps. |
 
 Do not collapse this back into “`pacman -S postgres` on the host.”
 
-## `/` mapping
-
-### Target (after A/B + data split)
-
-```
-Core (slot; RO while running — later)
-  /usr              Arch core userland (base, systemd, linux modules, firmware)
-  /boot             ESP: systemd-boot + A/B entries + kernel
-  /etc              Base OS config (fstab, coda slot marker, users, networkd)
-  /bin /sbin /lib   usr-merge symlinks into /usr (stock Arch)
-
-Data (writable, survives slot swaps)
-  /coda/data            data filesystem root
-  /coda/data/home       → bind /home   (users; ~/.coda/sandbox lives here)
-  /coda/data/var        → bind /var    (host logs, caches, pacman db)
-  /coda/data/desktop    desktop payload (Hyprland, AGS, greetd chrome, apps)
-                        merged onto /usr (and /etc session bits) at boot
-
-Runtime (not persisted as “the OS”)
-  /dev /proc /sys   kernel interfaces
-  /run /tmp         ephemeral
-
-Apps
-  Prefer coda-sandbox roots, not host /opt or host /usr pollution
-```
-
-### Current tree
-
-OS-A or OS-B is a writable **core** root (`/` + core `/usr` + core `/etc`). `coda-data` is mounted at `/coda/data` and bind-mounted at `/home` and `/var`. Desktop files live at `/coda/data/desktop` and are merged by `coda-desktop-mount.service` after `local-fs.target` (overlay on `/usr` and `/etc`, or `systemd-sysext` / `systemd-confext` when those tools work). Sandbox trees live under `~/.coda/sandbox/` on data. usr-merge is stock Arch. The running slot is **not** remounted read-only yet.
-
-The **live ISO** is unchanged: one full desktop airootfs. Only the offline install / `coda-slot` path splits it.
+---
 
 ## Desktop on coda-data (required)
 
-This is the locked install model. Prefer a simple bootable path over overlay cleverness.
+Prefer a simple bootable path over overlay cleverness.
 
 ### On-disk layout
 
@@ -132,17 +236,9 @@ Installer / `coda-slot` classify the live airootfs **offline** (no pacstrap):
 
 No initramfs rewrite in v1. Live ISO boot does **not** run this unit (no `coda-data`).
 
-### Failure modes
+Verify must see Hyprland under `/coda/data/desktop`, not as a slot-only file.
 
-| What broke | What still works | What does not |
-| --- | --- | --- |
-| `/coda/data/desktop` missing or empty | Slot boots; sshd; QGA; getty on tty | greetd / Hyprland / AGS |
-| Desktop tree present but Hyprland/AGS broken | Same core services; `/usr` merge may still succeed | Graphical session |
-| `coda-desktop-mount` overlay/sysext fails | Core `/` is unchanged (no merge) | Graphical session; `coda-install-verify --boot` Hyprland checks fail |
-| `coda-slot install` refreshes desktop, then B boot-test fails | Previous slot remains the boot **default**; core on A still boots | Desktop on data is already the new payload (not A/B’d). Session may not match the running core until you rewrite desktop or promote a matching slot. |
-| Slot has no Hyprland binary of its own | Expected. Verify must see Hyprland under `/coda/data/desktop`, not as a slot-only file. | — |
-
-Do not copy Hyprland/AGS back onto the slot “so the session works” — that reverts to full-desktop-in-slot.
+---
 
 ## Sandboxes (implemented)
 
@@ -180,7 +276,7 @@ Needs Arch/CodaLinux, official `core`/`extra`, a working keyring, network for th
 
 **Implemented** (Go) in [`core/system-config/`](core/system-config/README.md) and **wired onto the live ISO** (`/usr/local/bin/system-config*` plus user `system-configd`/`system-config-report` and root `system-config-apply`). Greenfield — **no migrate path** from `coda-settings` and **no compatibility layer** in v1.
 
-**Desktop cutover:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `/usr/share/applications/system-config-gui.desktop` launch **`system-config-gui`**. That client talks to `system-configd` only. Session chrome (wallpaper, workspaces, GTK, gaps) uses the dedicated helpers, not `coda-settings`. `coda-settings` remains on the image as `NoDisplay=true` for scripts; it is not a Settings app.
+**Desktop cutover:** AGS Control Center, bar audio/Wi-Fi/Bluetooth, and `/usr/share/applications/system-config-gui.desktop` launch **`system-config-gui`**. That client talks to `system-configd` only. Session chrome (wallpaper, workspaces, GTK, gaps) uses the dedicated helpers, not `coda-settings`. `coda-settings` remains on the image as `NoDisplay=true` for scripts; it is not a Settings app. On an installed disk these binaries travel with the **desktop payload** on data.
 
 Picture: [DESIGN.md](DESIGN.md#system-config) (locked one-liner). This section is the canonical architecture.
 
@@ -268,16 +364,7 @@ Add further submodels the same way: one domain, one path, observed + desired + L
 3. Apply never invents policy — it only executes D’s plan (closed allowlist, **no** arbitrary shell).
 4. From scratch — **no** deprecation or migrate tooling in v1.
 
-## Update model (target)
-
-| What | How |
-| --- | --- |
-| **OS / core** | Write the **inactive** slot (OS-A or OS-B) with **Arch core only**. Keep the running slot read-only (later). Flip systemd-boot to the new slot. Roll back by flipping back. |
-| **Desktop session** | On **`coda-data`** (`/coda/data/desktop`). Not a third A/B pair in v1. Survives slot swaps. A new live ISO refresh updates this tree when `coda-slot install` runs (see failure modes above). |
-| **Apps / extras** | `coda-sandbox install` only. Throw the root away if it is broken. Persist *data* under `$HOME` or `--bind`. |
-| **User files** | Stay on **data** (`/home`). Independent of slot swaps. |
-
-**Current tree:** `coda-slot install` writes **core** (offline, from the live airootfs split) into the inactive slot and refreshes `/coda/data/desktop`. Slot-specific kernels live under `/boot/coda/{a,b}`. `coda-slot boot-test` sets a systemd-boot **oneshot** so a failed boot leaves the previous default. `coda-slot promote` flips the default after a successful boot-test. The running slot is not remounted read-only. Delivery of a *new* payload is still “boot the live ISO (or rebuild it)”. Sandbox create/install/destroy is unchanged.
+---
 
 ## How to try what exists
 
